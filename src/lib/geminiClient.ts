@@ -6,7 +6,7 @@ export interface MediaPart {
   data: string; // base64
 }
 
-interface GeminiBody {
+export interface GeminiBody {
   contents: { parts: Array<{ text: string } | { inlineData: MediaPart }> }[];
   generationConfig: { temperature: number; responseMimeType: string; maxOutputTokens: number };
 }
