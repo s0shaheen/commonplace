@@ -4,13 +4,7 @@
     "priority": 1,
     "action": {
       "type": "modifyHeaders",
-      "requestHeaders": [
-        { "header": "referer", "operation": "set", "value": "https://www.tiktok.com/" },
-        { "header": "sec-fetch-site", "operation": "set", "value": "same-site" }
-      ],
-      "responseHeaders": [
-        { "header": "access-control-allow-origin", "operation": "set", "value": "*" }
-      ]
+      "requestHeaders": [{ "header": "referer", "operation": "set", "value": "https://www.tiktok.com/" }]
     },
     "condition": {
       "urlFilter": "/video/tos",

@@ -89,10 +89,14 @@ async function downloadViaFetch(n) {
   for (const item of items.slice(0, n)) {
     if (!item.playUrl) continue;
     try {
-      // credentials:"omit" → no cookies sent → wildcard ACAO (from our DNR rule) is legal,
-      // so JS can read the cross-origin bytes. Signed URL params authorize; cookies aren't needed.
-      const res = await fetch(item.playUrl, { credentials: "omit" });
-      if (!res.ok) {
+      // Mirror the page's own working video request: credentialed CORS + a byte-range header.
+      // The CDN returns proper ACAO (echoing www.tiktok.com) + Allow-Credentials for this origin,
+      // so JS can read the bytes. `bytes=0-` asks for the whole file. DNR sets the Referer.
+      const res = await fetch(item.playUrl, {
+        credentials: "include",
+        headers: { Range: "bytes=0-" },
+      });
+      if (!res.ok && res.status !== 206) {
         console.log("[attic-spike] fetch-download FAIL", item.id, `HTTP ${res.status}`);
         continue;
       }
