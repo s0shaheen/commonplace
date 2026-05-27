@@ -14,7 +14,7 @@ const realItem = {
     downloadAddr: "https://v16.../dl",
     cover: "https://p19.../cover",
     duration: 78,
-    subtitleInfos: [{ LanguageCodeName: "eng-US" }],
+    subtitleInfos: [{ LanguageCodeName: "eng-US", Url: "https://sub.../en.vtt" }],
   },
   music: { id: "123", title: "original sound", authorName: "persona" },
   challenges: [{ title: "ironman" }, { title: "avengers" }],
@@ -34,6 +34,7 @@ test("normalizeItem builds the canonical url, stats, music, hashtags, subtitle f
   assert.equal(out.playUrl, "https://v16.../play");
   assert.equal(out.durationSec, 78);
   assert.equal(out.hasSubtitles, true);
+  assert.equal(out.subtitleUrl, "https://sub.../en.vtt");
   assert.deepEqual(out.hashtags, ["ironman", "avengers"]);
   assert.equal(out.music.name, "original sound");
   assert.deepEqual(out.stats, { plays: 1000, likes: 50, comments: 5, shares: 2, collects: 9 });
