@@ -5,3 +5,6 @@ attic-favorites*.json
 attic-enriched*.json
 
 compare_*.json
+
+results/engine-*
+results/vault/
