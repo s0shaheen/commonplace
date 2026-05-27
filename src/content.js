@@ -81,6 +81,34 @@ async function runEnrichment() {
   console.log("[attic-spike] enrichment done → attic-enriched.json");
 }
 
+// Path 2: content-script fetch → blob → anchor download. Needs DNR to set Referer (fix 403)
+// AND Access-Control-Allow-Origin (so JS can read the cross-origin bytes). If this works, we can
+// also read video bytes for local Gemini visual enrichment.
+async function downloadViaFetch(n) {
+  const { items = [] } = await chrome.storage.local.get("items");
+  for (const item of items.slice(0, n)) {
+    if (!item.playUrl) continue;
+    try {
+      const res = await fetch(item.playUrl);
+      if (!res.ok) {
+        console.log("[attic-spike] fetch-download FAIL", item.id, `HTTP ${res.status}`);
+        continue;
+      }
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${(item.author || "x").replace(/[^\w.-]/g, "_")}_${item.id}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      console.log("[attic-spike] fetch-download ok", item.id, `${blob.size} bytes`);
+    } catch (e) {
+      console.log("[attic-spike] fetch-download FAIL", item.id, String(e));
+    }
+    await new Promise((r) => setTimeout(r, 900));
+  }
+}
+
 window.addEventListener("keydown", (e) => {
   if (!e.altKey || !e.shiftKey) return;
   if (e.code === "KeyA") autoScroll();
@@ -89,8 +117,16 @@ window.addEventListener("keydown", (e) => {
     console.log("[attic-spike] manual export triggered → attic-favorites.json");
   }
   if (e.code === "KeyE") runEnrichment();
+  if (e.code === "KeyD") {
+    chrome.runtime.sendMessage({ kind: "download_test", n: 3 });
+    console.log("[attic-spike] Path 1: chrome.downloads test (3 videos)");
+  }
+  if (e.code === "KeyF") {
+    console.log("[attic-spike] Path 2: fetch→blob download test (3 videos)");
+    downloadViaFetch(3);
+  }
 });
 
 console.log(
-  "[attic-spike] ready — Alt+Shift+A auto-scroll · Alt+Shift+S export now (manual) · Alt+Shift+E enrich"
+  "[attic-spike] ready — A:auto-scroll · S:export · E:enrich · D:download(chrome.downloads) · F:download(fetch)"
 );

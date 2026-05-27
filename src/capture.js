@@ -20,6 +20,7 @@ export function normalizeItem(it) {
     authorName: it.author?.nickname ?? null,
     url: author && id ? `https://www.tiktok.com/@${author}/video/${id}` : null,
     playUrl: video.playAddr ?? video.downloadAddr ?? null,
+    downloadUrl: video.downloadAddr ?? null,
     cover: video.cover ?? video.originCover ?? null,
     durationSec: video.duration ?? null,
     hasSubtitles: subs.length > 0,

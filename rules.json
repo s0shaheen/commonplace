@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "referer", "operation": "set", "value": "https://www.tiktok.com/" },
+        { "header": "sec-fetch-site", "operation": "set", "value": "same-site" }
+      ],
+      "responseHeaders": [
+        { "header": "access-control-allow-origin", "operation": "set", "value": "*" }
+      ]
+    },
+    "condition": {
+      "requestDomains": ["tiktok.com", "tiktokcdn.com", "tiktokcdn-us.com", "tiktokv.com", "ttwstatic.com"],
+      "resourceTypes": ["media", "other", "image", "xmlhttprequest"]
+    }
+  }
+]

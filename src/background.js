@@ -17,9 +17,35 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     exportData("attic-favorites.json", items);
   } else if (msg.kind === "export_enriched") {
     exportData("attic-enriched.json", msg.results);
+  } else if (msg.kind === "download_test") {
+    downloadFirst(msg.n || 3);
   }
   return true;
 });
+
+// Path 1: chrome.downloads (browser network stack, no CORS) + DNR-injected Referer.
+async function downloadFirst(n) {
+  const { items = [] } = await chrome.storage.local.get("items");
+  for (const item of items.slice(0, n)) {
+    const url = item.playUrl;
+    if (!url) continue;
+    chrome.downloads.download(
+      {
+        url,
+        filename: `attic-videos/${(item.author || "x").replace(/[^\w.-]/g, "_")}_${item.id}.mp4`,
+        conflictAction: "uniquify",
+      },
+      (id) => {
+        if (chrome.runtime.lastError) {
+          console.log("[attic-spike] download FAIL", item.id, chrome.runtime.lastError.message);
+        } else {
+          console.log("[attic-spike] download started", item.id, "id=", id);
+        }
+      }
+    );
+    await new Promise((r) => setTimeout(r, 900));
+  }
+}
 
 function exportData(filename, data) {
   // MV3 service workers lack FileReader / URL.createObjectURL, so build a base64 data: URL.
