@@ -9,7 +9,8 @@ import { toObsidianVault } from "../src/lib/exporters/obsidian.ts";
 
 const MODEL = "gemini-2.5-flash";
 const TEXT_PROMPT = readFileSync(new URL("../prompts/observe_video.text.md", import.meta.url), "utf8");
-const items = JSON.parse(readFileSync(process.argv[2] ?? "attic-favorites.json", "utf8")).slice(0, 30);
+const INPUT = process.argv[2] ?? new URL("../fixtures/sample-items.json", import.meta.url);
+const items = JSON.parse(readFileSync(INPUT, "utf8")).slice(0, 30);
 
 async function callGemini(body) {
   const r = await fetch(
