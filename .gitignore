@@ -1,0 +1,5 @@
+node_modules/
+src/secrets.js
+*.log
+attic-favorites*.json
+attic-enriched*.json

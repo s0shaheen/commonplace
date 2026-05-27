@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Attic Spike — TikTok Favorites Capture",
+  "version": "0.0.1",
+  "description": "Throwaway spike: captures the logged-in user's own TikTok Favorites via MAIN-world interception.",
+  "permissions": ["storage", "downloads"],
+  "host_permissions": ["*://*.tiktok.com/*", "https://generativelanguage.googleapis.com/*"],
+  "background": { "service_worker": "src/background.js", "type": "module" },
+  "content_scripts": [
+    {
+      "matches": ["*://*.tiktok.com/*"],
+      "js": ["src/main-world.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.tiktok.com/*"],
+      "js": ["src/content.js"],
+      "world": "ISOLATED",
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["prompts/observe_video.md", "src/gemini.js", "src/secrets.js"],
+      "matches": ["*://*.tiktok.com/*"]
+    }
+  ]
+}

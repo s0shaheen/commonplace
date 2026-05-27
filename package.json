@@ -1,0 +1,10 @@
+{
+  "name": "attic-extension-spike",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Throwaway Phase 0 kill-gate spike for the Attic pivot.",
+  "scripts": {
+    "test": "node --test"
+  }
+}
