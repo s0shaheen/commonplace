@@ -13,8 +13,8 @@
       ]
     },
     "condition": {
-      "requestDomains": ["tiktok.com", "tiktokcdn.com", "tiktokcdn-us.com", "tiktokv.com", "ttwstatic.com"],
-      "resourceTypes": ["media", "other", "image", "xmlhttprequest"]
+      "urlFilter": "/video/tos",
+      "resourceTypes": ["media", "other", "xmlhttprequest"]
     }
   }
 ]

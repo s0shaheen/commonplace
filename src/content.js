@@ -89,7 +89,9 @@ async function downloadViaFetch(n) {
   for (const item of items.slice(0, n)) {
     if (!item.playUrl) continue;
     try {
-      const res = await fetch(item.playUrl);
+      // credentials:"omit" → no cookies sent → wildcard ACAO (from our DNR rule) is legal,
+      // so JS can read the cross-origin bytes. Signed URL params authorize; cookies aren't needed.
+      const res = await fetch(item.playUrl, { credentials: "omit" });
       if (!res.ok) {
         console.log("[attic-spike] fetch-download FAIL", item.id, `HTTP ${res.status}`);
         continue;
