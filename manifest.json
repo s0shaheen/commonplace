@@ -32,7 +32,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["prompts/observe_video.md", "src/gemini.js", "src/secrets.js"],
+      "resources": ["prompts/observe_video.md"],
       "matches": ["*://*.tiktok.com/*"]
     }
   ]
