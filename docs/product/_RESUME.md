@@ -10,25 +10,21 @@
 - **Hard constraint:** corpus media (video/audio/subtitle-text) was never persisted (expired signed URLs) — the video benchmark needs a fresh founder-in-loop re-capture. Metadata (incl. `music{name,author}`) is intact.
 - **The full board:** an exhaustive **168-item branch map** across 8 workstreams → `docs/product/branch-map.json` + visual artifact: https://claude.ai/code/artifact/8804f895-137a-4644-beca-baab65d1fec1 — 3 done · 15 in-progress · 145 not-started · 5 blocked · **90 need founder input** · 16 open decisions · 27-step critical path · 7 risks.
 
-## PIVOT (2026-07-06) — validation DROPPED; Fable owns the build
+## STATE (2026-07-06) — validation dropped; Fable brief v4 is the single governing spec; Phase 1 done
 
-The founder called the Gate-0 consumer-validation track (wedge, recruiting, retrieval kill-test) **out of scope / over-engineered**. It's **dropped.** The `_GATE0-*.md` files stay as reference, off the path. New direction, founder-ratified:
+Gate-0 consumer-validation (wedge/recruiting/retrieval kill-test) is **dropped** (founder called it over-engineered). Direction: hand **Fable** the brief; it converges a **build-ready plan** (not code) for the **full v1**, with real feasibility spikes.
 
-- **Full v1, converge-to-plan, Fable-owned.** Founder pre-decided the big forks; Fable executes within the rails and converges to a **build-ready plan** (not code), backed by feasibility spikes on the two risky bets: **live IG capture** + **cross-device sync/backend**.
-- **Settled forks:** primary user = the "understand & use all my saves" prosumer (Seg 2); **horizontal**, not a vertical/wedge; open-core engine = moat/credibility spine; ad-hoc exporters = SEO funnel; **agency API + live IG + sync + from-scratch design system are all IN v1** (promoted from deferred). Artifact-first / career-leaning.
-- **The handoff is written → `docs/product/_FABLE-BRIEF.md`** (v3; supersedes the v2 brief + doc 09). Structured as the §7 hard-problems; validation stripped; current engine/repo state baked in. Doc 09 + the v2 brief are validation-flavored history now.
-- The **168-item branch map** and the dossier's 16 "open decisions" were mostly validation constructs → superseded by the brief. Dossier docs 01–08 remain the *substance* the brief draws on.
+- **`docs/product/_FABLE-BRIEF.md` (v4) is THE governing spec.** It folds the Phase-1 findings + all ratified decisions into one coherent doc (supersedes v3, the v2 brief, doc 09). Evidence trail = `_FABLE-PHASE1-findings.md`. Engine design = `_ENGINE-groundup` (now governing per D2). **Consume v4, not the scattered earlier docs.**
+- **Phase 1 ran** (6 Claude Fable 5 agents, `walqy2twr`): grounded + pressure-tested v3 vs 2026 reality → 18 holds / 11 shaky / 8 contradicted / 15 decisions. Verdict **GO for Phase 2** — spine holds, every gap has a cheap fix.
+- **Founder ratified:** D4 (IG = **ZIP-primary + spike-gated live**), D5 (agency = **split; personal MCP in v1, bulk API deferred**). **D9 THROWN OUT** — no timelines/effort estimates (build is agentic; the scarce resource is founder decisions, not hours). The ~9 evidence corrections folded into v4: 3.1-Flash-Lite economics (2.5 dies Oct 2026); **two-lane engine** (Qwen-local / Gemini-hosted); **drop TMDB+Spotify APIs → Wikidata+MusicBrainz**; moat = payload+published-accuracy (MCP is table-stakes; distribution demoted); Quiki = deepest competitor; extension-hosted library + code-SoT + View Transitions + Base UI; WXT + Edge/Firefox; in-house zero-knowledge sync; promptfoo eval + re-stratified golden set; telemetry = 3-plane + opt-in.
+- **Security:** the exposed-Gemini-key `web_accessible_resources` hole was **found + fixed + pushed** (`0cf04e3`). **Founder must ROTATE the key.** (Alt+Shift+E enrichment disabled as a result — a spike path being replaced.)
 
-**Repo hygiene DONE (2026-07-06):** live repo committed + pushed (5 clean commits; origin was 2 months stale). `attic-saas` + `attic-sandbox` **archived**; `attic-marketing` skipped (empty). Repo = `github.com/s0shaheen/attic` (private; rename to the brand when named).
+**Repo:** `github.com/s0shaheen/attic` (private, pushed). Corpus = real **4,661-item** source-tagged capture registered as the dev corpus. `attic-saas`/`attic-sandbox` archived.
 
-## Ball is in the founder's court — provisioning gates the Fable launch (brief §10)
+## Next move: Phase 2 — build the plan from v4
 
-Nothing blocks Fable *writing/running* the spec; its run needs provisioning in parallel:
-- 🔴 Fresh **corpus capture** (media expired) + logged-in **TikTok/IG/X** sessions + an **IG "Download Your Data" ZIP**.
-- 🔴 (~30 sec each) Enable GitHub **"Include private contributions on my profile"**; confirm **risk #7** (rotate leaked Supabase/OpenAI keys + back up un-versioned vault) still applies.
-- 🟡 Grounding-KB keys (TMDB/Spotify free, **Places = billing card**); an OSS-inference account; a Twelve Labs free account; a **backend** sandbox for the sync/agency spike; CWS dev account + domain.
-- 🟢 Naming **delegated to Fable** (propose an availability-checked shortlist → founder picks); periodic design taste gut-checks.
+Fable Phase 2 (a gated multi-agent run, phase-per-workflow) opens by **running the three spikes** (live-IG interception · zero-knowledge sync · native-video-vs-VTT pipeline experiment), then converges the build-ready, dependency-sequenced plan + designs + name shortlist. Founder gate between each block.
 
-Still open: **`CLAUDE.md` standard review**. `_FABLE-BRIEF.md` + this resume update are **uncommitted** (offered to commit — founder's call).
+**Provisioning it needs (parallel; corrected per D3):** 🔴 rotate the Gemini key · a logged-in **IG session** + **DYD ZIP** for the spike. 🟡 **Google Places** key (billing, SKU-disciplined) · Twelve Labs free acct · OSS-inference acct once Fable pins the local model · a backend sandbox (Vercel+Supabase MCPs) · CWS dev acct + domain. **No TMDB/Spotify keys.** 🟢 name pick from Fable's shortlist + design taste gut-checks. (Optional hygiene: GitHub private-contrib toggle; `CLAUDE.md` standard review.)
 
 **No background workflows running.**
