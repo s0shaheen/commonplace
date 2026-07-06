@@ -1,0 +1,1952 @@
+{
+  "clusters": [
+    {
+      "id": "DECIDE",
+      "title": "DECIDE — open strategic forks",
+      "items": [
+        {
+          "id": "DEC-01",
+          "title": "Ratify objective & envelope",
+          "what": "Ratify the five assumed §0.5 calls (primary goal, ~10–20 hr/wk, no deadline, infra <~$50/mo, success metric) and set the artifact-vs-revenue weighting; folds BM-1 and CAR-4. Silently re-weights every downstream fork.",
+          "status": "not-started",
+          "needsFounder": "Confirm/redirect the 5 defaults and explicitly set artifact-vs-revenue weighting",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "DEC-16",
+          "title": "Consumer-first-as-funnel vs agency-first",
+          "what": "The top-level sequencing bet the whole dossier rests on. Dossier commits consumer-first (painkiller proof + funnel + portfolio); Porter's adversarial case says agency is the only structurally-attractive budgeted market. Subsumes DEC-02/07/09.",
+          "status": "not-started",
+          "needsFounder": "Conscious buy-in: consumer-first-as-funnel vs invert to agency-first",
+          "effort": "M",
+          "blockedBy": [
+            "DEC-06",
+            "DEC-08"
+          ]
+        },
+        {
+          "id": "DEC-02",
+          "title": "Pick the lead consumer wedge",
+          "what": "Which single acute job v1 leads with: recipes-first (proven WTP Preplo/Némos/Paprika, clean execution test) vs restaurant-led (largest discovery shift, own only resolve-to-Maps half) vs food-broadly. Folds BM-6/THESIS-4/PIPE-4/DECIDE-A. Corpus is recipe 6.2% / restaurant 5.5% — both minority, mildly argues against clean recipes anchor.",
+          "status": "in-progress",
+          "needsFounder": "Pick the lead domain and whether restaurants is co-equal or second",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "DEC-18",
+          "title": "Ruthless MVP scope cut to the Gate-0 instrument",
+          "what": "As enumerated the program is 2–3 yr of solo part-time work (engine bench + 4 resolvers + SKOS ontology + WEMI + IndexedDB + Apple-Photos UI + design system + rebrand + web facade + doorways + open-core). No item owns the forcing cut to the minimum thing that tests the core bet; freeze everything past Gate 0. Rumelt: the plan risks dying of ambition before first user contact.",
+          "status": "not-started",
+          "needsFounder": "Draw the line: minimum instrument to reach Gate 0, everything else frozen",
+          "effort": "S",
+          "blockedBy": [
+            "DEC-01"
+          ]
+        },
+        {
+          "id": "DEC-05",
+          "title": "Resolve Gate 0 metric: within-subject delta vs 70% rate",
+          "what": "Live contradiction: docs 01/02/06 cite ≥~70% absolute task-success; doc 08 §5 supersedes with a within-subject time-to-find delta (70% retained only as directional floor). The rate is uninterpretable at N=5–10 and would force recruiting 15–20 users.",
+          "status": "not-started",
+          "needsFounder": "Confirm within-subject delta is primary (or fund the larger N)",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "DEC-04",
+          "title": "Sign & date the kill-gate pre-registration",
+          "what": "Formally pre-register and date the Gate 0/1/2 tripwires before the first user session so a beautiful artifact can't rationalize weak signals. Folds INST-5 and BM-7.",
+          "status": "not-started",
+          "needsFounder": "Sign and date the pre-registration thresholds",
+          "effort": "S",
+          "blockedBy": [
+            "DEC-05",
+            "DEC-02"
+          ]
+        },
+        {
+          "id": "DEC-07",
+          "title": "Agency motion shape & timing",
+          "what": "Whether/when to pursue the Segment-3 agency tier: architect-now-build-then-show (dossier default, DEFER on 3-for-0) vs invert to agency-first vs never (pure optional API). A 10–20 hr/wk solo founder can't run a cold B2B motion; concierge only works against warm contacts.",
+          "status": "not-started",
+          "needsFounder": "Ratify defer / invert / drop",
+          "effort": "S",
+          "blockedBy": [
+            "DEC-08"
+          ]
+        },
+        {
+          "id": "DEC-08",
+          "title": "Warm agency contacts: do they exist?",
+          "what": "The build-then-show motion is entirely load-bearing on warm agency/brand-social relationships to run concierge deliverables against. Zero warm contacts makes Gate 2 unrunnable as designed. A feasibility fact that silently gates the whole agency branch.",
+          "status": "not-started",
+          "needsFounder": "Name the specific warm contacts (or confirm none)",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "DEC-06",
+          "title": "Gate 0 recruitment validity",
+          "what": "Confirm concrete access to 5–10 real recipe/restaurant heavy-savers testable on their own corpus. Founder's network skews finance/tech/film — if he can't recruit the right population, Gate 0 is run on the wrong users and the vitamin/painkiller verdict is invalid, silently compromising DEC-02 and every monetization fork.",
+          "status": "not-started",
+          "needsFounder": "Confirm access to ≥5–10 real beachhead heavy-savers",
+          "effort": "M",
+          "blockedBy": [
+            "DEC-02"
+          ]
+        },
+        {
+          "id": "DEC-09",
+          "title": "Exact monetization model (within locked hybrid)",
+          "what": "Direction locked (free local/BYO-key + paid managed); model/tiers/prices deferred. Drafted three-lane: free BYO-key + one-time Resolve/Export Pass ~$49 + conditional subscription ~$6–8/mo + agency $1–2/video + $150–500/mo. Load-bearing choice = Pass-led vs subscription-led (docs argue hard against a retention subscription as primary line for a vitamin).",
+          "status": "in-progress",
+          "needsFounder": "Approve/redirect the three-lane model",
+          "effort": "L",
+          "blockedBy": [
+            "DEC-04",
+            "BM-2"
+          ]
+        },
+        {
+          "id": "DEC-10",
+          "title": "Consumer subscription go/no-go",
+          "what": "Whether to build subscription infrastructure at all vs default to Pass-only. Pre-committed conditional: ships only if Sean-Ellis ≥40% + retrieval gate clear; otherwise de-fund and route to the one-time Export-Pass funnel.",
+          "status": "blocked",
+          "needsFounder": "None until Gate 1 fires",
+          "effort": "M",
+          "blockedBy": [
+            "G1-1"
+          ]
+        },
+        {
+          "id": "DEC-11",
+          "title": "One-time Pass price point",
+          "what": "Set via in-market A/B ($39/$49/$59) anchored to Dewey's $50. Dossier stance: conversion, not price, is the lever — an undershoot triggers more doorways, not a lower price. Set by revealed preference.",
+          "status": "blocked",
+          "needsFounder": "None (set by revealed preference)",
+          "effort": "S",
+          "blockedBy": [
+            "GTM-06"
+          ]
+        },
+        {
+          "id": "DEC-12",
+          "title": "BYO-key free-tier viability",
+          "what": "Whether free/local/BYO-key actually delivers for heavy libraries — free-tier Gemini keys have low RPM and daily caps; a 20k-item backfill may be infeasible. If BYO can't process a heavy library, managed becomes de-facto mandatory for the exact beachhead, eroding the free-first wedge.",
+          "status": "not-started",
+          "needsFounder": "Accept managed-for-heavy framing vs commit to a local-OSS path vs cap free-tier size",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "DEC-13",
+          "title": "IG at launch: ZIP-import vs live-deep",
+          "what": "Reconcile locked 'TikTok AND Instagram at launch, both deep' against doc 08's TikTok-led validation build (v1.0) carrying IG via the ZIP-import lane (v1.1). Changes what 'launch' means and whether Gate 0 can run TikTok-only.",
+          "status": "in-progress",
+          "needsFounder": "Confirm ZIP-import IG counts as 'IG at launch'",
+          "effort": "S",
+          "blockedBy": [
+            "CAP-IG-PROBE"
+          ]
+        },
+        {
+          "id": "DEC-15",
+          "title": "Open-core release trigger & first-cut scope",
+          "what": "Scope locked (OSS engine + ontology + open schema + eval harness + grounding-correctness rules; app proprietary). Open: the exact release trigger and precisely what ships first. Irreversible ('can't un-publish trust'); releasing too early invites forks of a wrong abstraction.",
+          "status": "not-started",
+          "needsFounder": "Confirm the release trigger and first-cut contents",
+          "effort": "M",
+          "blockedBy": [
+            "OC-1"
+          ]
+        },
+        {
+          "id": "DEC-17",
+          "title": "Pricing-research method: run surveys or skip",
+          "what": "Whether to run Van Westendorp PSM + choice-based conjoint to bound WTP and test whether provenance/openness/grounding shift choice — vs behavioral-only (the Mom Test warns survey WTP is inflated for an identity-flattering vitamin; the real instrument is retrieval test + commitment ask + Sean-Ellis). Folds BM-5.",
+          "status": "not-started",
+          "needsFounder": "Decide whether to invest in survey pricing research",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "DEC-03",
+          "title": "Films/products as revenue (non-goal)",
+          "what": "Decided non-revenue: films (frequent pain, near-zero WTP, Letterboxd/JustWatch substitutes) and products (platform-owned, intent decays) are engagement/SEO surfaces only. Reopen only if a wedge test surprises. Kept for exhaustiveness — corpus is film-heavy (7.4%).",
+          "status": "done",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": []
+        }
+      ]
+    },
+    {
+      "id": "VALIDATE",
+      "title": "VALIDATE — buy information before scale",
+      "items": [
+        {
+          "id": "INST-6",
+          "title": "Minimum testable Library on the real engine",
+          "what": "DECIDE/ENTITIES/SEARCH + provenance strip + Apple-Photos grid, wired to the real engine on the user's own captured corpus — the thing the retrieval test rides on. The single largest convergence node: Gate 0, Gate 1's clock, and the Facade doorways all ride on it. Today the shell runs the untested src/gemini.js; the tested src/lib was never wired in.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "L",
+          "blockedBy": [
+            "META-12",
+            "PIPE-1",
+            "DAT-WEMI",
+            "STOR-SCHEMA",
+            "LIB-GRID",
+            "INST-9"
+          ]
+        },
+        {
+          "id": "CRIT-08",
+          "title": "Cheaper Wizard-of-Oz retrieval probe before the full build",
+          "what": "Cagan's central warning: the critical path gates all validation behind the large INST-6 build. A concierge/WoZ 'I'll find your saved thing for you' session or a hacked one-domain prototype could test the retrieval value before the full instrument — do not assume INST-6 is the only road to Gate 0.",
+          "status": "not-started",
+          "needsFounder": "Willingness to run a manual/WoZ test before the build",
+          "effort": "M",
+          "blockedBy": [
+            "DEC-02"
+          ]
+        },
+        {
+          "id": "INST-7",
+          "title": "Recruit 5–10 own-corpus beachhead users",
+          "what": "Heavy savers with a recurring, deadline-bearing decision (weeknight cook / urban diner), each testable on their OWN corpus (the internal 1316-corpus is worthless for retrieval value). The longest-lead founder action on the path — start day 0, throttled by network reach (see DEC-06 risk).",
+          "status": "not-started",
+          "needsFounder": "Source/recruit from network + relevant communities; confirm the population is right (DEC-06)",
+          "effort": "M",
+          "blockedBy": [
+            "DEC-02"
+          ]
+        },
+        {
+          "id": "INST-1",
+          "title": "Session-logging + paired-baseline instrument",
+          "what": "Per-session capture of task success + time-to-find for the in-tool run AND the paired baseline (each user runs the same retrieval against their native-app search / own memory as their own control, removing between-user variance at N=5–10). Folds INST-2 and EVAL-7.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "INST-6"
+          ]
+        },
+        {
+          "id": "INST-8",
+          "title": "Live own-corpus capture at test time",
+          "what": "Each participant captures their live corpus via the extension (eager poster/media grab before signed URLs expire) — the proven TikTok path, which also sidesteps expired-URL problems. Its quality is gated on the persistence fix (CAP-EAGER) landing first.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": [
+            "CAP-EAGER",
+            "INST-6"
+          ]
+        },
+        {
+          "id": "INST-9",
+          "title": "Wedge-domain extraction & grounding readiness",
+          "what": "The tested domain must actually resolve: recipes → ingredient/quantity/step extraction; restaurants → Places resolver. Music resolver is done but music isn't the wedge.",
+          "status": "not-started",
+          "needsFounder": "Wedge decision; Places billing key if restaurants",
+          "effort": "M",
+          "blockedBy": [
+            "DEC-02",
+            "EXTR-5",
+            "GRND-5"
+          ]
+        },
+        {
+          "id": "INST-3",
+          "title": "Sean-Ellis prompt wired in-product",
+          "what": "The 'how would you feel if you could no longer use this' prompt fired at the 2-week mark; measures dependency, not satisfaction.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": [
+            "INST-6"
+          ]
+        },
+        {
+          "id": "INST-4",
+          "title": "Commitment-ask mechanism",
+          "what": "Every session ends in commitment currency — a real Pass checkout (pay), a name-a-referral capture, or a retained-install re-check hook. Bar for what counts is set in the DEC-04 pre-registration.",
+          "status": "not-started",
+          "needsFounder": "Define what counts (cash vs named referral vs retained install)",
+          "effort": "M",
+          "blockedBy": [
+            "INST-6",
+            "BM-8"
+          ]
+        },
+        {
+          "id": "G0-1",
+          "title": "Gate 0 qualitative discovery pass",
+          "what": "N=5, one at a time, Mom-Test-clean; surfaces ~85% of usability problems; output = problem inventory with no numeric pass/fail. Tasks anchored to each user's specific past failure ('find the ramen place you saved and couldn't re-find'), not a hypothetical.",
+          "status": "not-started",
+          "needsFounder": "Run the sessions (founder-in-loop, Collison installation motion)",
+          "effort": "M",
+          "blockedBy": [
+            "INST-1",
+            "INST-7",
+            "INST-8"
+          ]
+        },
+        {
+          "id": "G0-2",
+          "title": "Gate 0 within-subject time-to-find delta",
+          "what": "The persevere/kill decision: paired, each user vs their own baseline; persevere on a large paired delta (directional ≥~40–50% faster), few/no reversals, AND a resolved answer they trust.",
+          "status": "not-started",
+          "needsFounder": "Make the pivot-or-persevere call out loud against the pre-declared number",
+          "effort": "S",
+          "blockedBy": [
+            "G0-1"
+          ]
+        },
+        {
+          "id": "G0-5",
+          "title": "Miss → pivot pre-committed branch",
+          "what": "If the paired delta is small/inconsistent/reversed → it's a vitamin; pivot to the Segment-1 one-time Export-Pass funnel, harden consumer-as-funnel, accelerate agency. Pre-planned, not triggered.",
+          "status": "not-started",
+          "needsFounder": "Ratify the pivot path as the pre-committed branch",
+          "effort": "S",
+          "blockedBy": [
+            "G0-2"
+          ]
+        },
+        {
+          "id": "G1-1",
+          "title": "Gate 1 Sean-Ellis 40% test",
+          "what": "At the 2-week mark compute % 'very disappointed'; persevere iff ≥40%. Routes monetization posture (subscription vs one-time Export-Pass; a miss de-funds subscription infra).",
+          "status": "not-started",
+          "needsFounder": "Make the call",
+          "effort": "S",
+          "blockedBy": [
+            "INST-3"
+          ]
+        },
+        {
+          "id": "G1-2",
+          "title": "Commitment currency per satisfied user",
+          "what": "≥1 per satisfied user: pays within the ~$5–13/mo band, refers a friend by name, or keeps the extension installed for a 2-week re-check.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": [
+            "INST-4"
+          ]
+        },
+        {
+          "id": "G2-CONCIERGE",
+          "title": "Gate 2 agency concierge deliverable + decision",
+          "what": "Run the deeper engine config overnight on a warm contact's real folder, hand back grounded timestamped JSON openly as a service, end in a commitment ask. Persevere iff ≥1 signed LOI or paid pilot after ≤3 deliverables to distinct warm contacts; DEFER on three-for-zero. Folds G2-1/G2-2. Outreach-heavy (~30 conversations to source ~3 warm contacts).",
+          "status": "not-started",
+          "needsFounder": "Source warm contacts, run each delivery, make the DEFER call",
+          "effort": "L",
+          "blockedBy": [
+            "DEC-08",
+            "PIPE-2"
+          ]
+        },
+        {
+          "id": "CRIT-28",
+          "title": "Consumer design-partner cohort",
+          "what": "Agency has a warm-contact model; consumer validation only has INST-7's one-shot recruit-and-test. A standing 3–5 heavy-saver co-build cohort (early access, direct line, iterate-with) is the cheapest high-signal discovery instrument for a solo founder and continuously de-risks the retention/cold-start gaps.",
+          "status": "not-started",
+          "needsFounder": "Willingness to run a standing early-user relationship",
+          "effort": "M",
+          "blockedBy": [
+            "INST-7"
+          ]
+        },
+        {
+          "id": "CRIT-06",
+          "title": "North-Star Metric + activation/retention definitions",
+          "what": "There is a CUJ design metric (time-to-resolved-answer) and revenue gates, but no single product-health NSM (e.g. 'grounded decisions acted on per active user per week'), no 'activated user' definition, no retention-curve definition. Without these the retention/cold-start/measurement items have no target and Gate 1 has no leading indicator.",
+          "status": "not-started",
+          "needsFounder": "Endorse the NSM and activation/retention operational definitions",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "CRIT-05",
+          "title": "Measurement-without-surveillance paradox",
+          "what": "Local-first zero-telemetry with no accounts structurally cannot compute 2-week retention, cohorts, or the GTM funnel — yet Gate 1, retention analysis, and GTM instrumentation all require it. A live cross-cluster contradiction: needs an explicit consented, opt-in, locally-aggregated, user-visible-before-send measurement design, or an admission that all metrics come only from the recruited cohort (which then can't generalize).",
+          "status": "not-started",
+          "needsFounder": "Ratify a consent-gated telemetry exception to the zero-data promise, or accept cohort-only measurement",
+          "effort": "M",
+          "blockedBy": []
+        }
+      ]
+    },
+    {
+      "id": "ENGINE",
+      "title": "ENGINE — the analysis system (core IP)",
+      "items": [
+        {
+          "id": "GRND-1",
+          "title": "Grounding orchestrator",
+          "what": "The core groundMention pipeline: route → candidate-gen → select → confidence gate → NIL → provenance; the KB search endpoint is the candidate generator (no local index). Live in grounding.ts, 7 tests, tsc strict clean, part of the 61-green suite.",
+          "status": "done",
+          "needsFounder": "",
+          "effort": "",
+          "blockedBy": []
+        },
+        {
+          "id": "GRND-2",
+          "title": "MusicBrainz resolver",
+          "what": "Free/keyless recording search → MBID candidates with artist-hint query. Live-proven on real corpus songs producing real MBIDs; correctly NILs on 'original sound' placeholders.",
+          "status": "done",
+          "needsFounder": "",
+          "effort": "",
+          "blockedBy": []
+        },
+        {
+          "id": "META-12",
+          "title": "Declare src/lib engine as source-of-truth",
+          "what": "Two divergent schemas coexist: the tested-but-unwired src/lib vs the running src/gemini.js. Declare src/lib SoT and wire it into the shell — the prerequisite the whole INST-6 bottleneck depends on.",
+          "status": "not-started",
+          "needsFounder": "Ratify the SoT choice",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "EXTR-1",
+          "title": "Typed-mention extraction",
+          "what": "Make synthesis emit {surface, type, timestamp(MM:SS), disambiguation_context} mentions (the grounding module's input), extending today's Entity{type,name,raw,specs} with timestamp + hints. Grounding consumes Mention but extraction doesn't yet produce it.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "EXTR-2",
+          "title": "Enforce 'model MUST NOT emit external IDs'",
+          "what": "Prompt + responseSchema hard-rule so the model never emits a place_id/MBID/QID/TMDB id — a hallucinated durable ID silently corrupts the moat and poisons the scorecard's credibility if it ships into published numbers. IDs come only from resolvers. Must precede any externally-shown grounding output.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "EXTR-3",
+          "title": "Schema-conditioned segmentation → timestamped JSON",
+          "what": "Adopt Twelve Labs' Pegasus pattern: define segment types/fields, get timestamped JSON in one call, localize every claim/mention to MM:SS. The spike does single-shot JSON without temporal grounding.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "CAP-RECAP"
+          ]
+        },
+        {
+          "id": "EXTR-5",
+          "title": "Recipe-step structured extraction",
+          "what": "Ingredient list + ordered steps as first-class structured_content for the recipes-first wedge (Nova's documented event-ordering weakness is a fallback risk).",
+          "status": "not-started",
+          "needsFounder": "Wedge confirmation",
+          "effort": "M",
+          "blockedBy": [
+            "DEC-02"
+          ]
+        },
+        {
+          "id": "GRND-3",
+          "title": "Wikidata resolver",
+          "what": "Keyless resolver for places/people/brands/films/generic → QIDs; the catch-all authority and graceful-degradation target. Recommended next increment in _RESUME.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "GRND-4",
+          "title": "TMDB resolver",
+          "what": "Film/TV resolver → TMDB id (free, key-gated); Trakt as backstop.",
+          "status": "not-started",
+          "needsFounder": "Obtain a free TMDB API key",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "GRND-5",
+          "title": "Google Places resolver",
+          "what": "Restaurant/place resolver → Place ID; the only paid KB. Field-mask to cheapest SKU + ride the free 10k/mo Essentials tier + cache aggressively vs pay Pro/Enterprise. One food clip with two lookups can cost 6–30× the rest of the pipeline — the dominant cost lever. Blocked on FACT-1 (Text Search New price) + a billing key.",
+          "status": "not-started",
+          "needsFounder": "Create billing-enabled key + accept cost posture",
+          "effort": "M",
+          "blockedBy": [
+            "FACT-VERIFY"
+          ]
+        },
+        {
+          "id": "GRND-6",
+          "title": "LLM 'select' selector",
+          "what": "Swap the score-threshold heuristic baseline for a batched LLM 'select' over the candidate set + clip context with self-consistency k=3 on this step only ('select' beats pairwise on F1 and cost).",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "GRND-7",
+          "title": "Mention-type routing granularity",
+          "what": "Today handles(type)=>type==='media' routes ALL media to MusicBrainz; split so music→MusicBrainz and film/TV→TMDB (ontology's media → {music, film_or_show} split). Class/instance and typed-authority rules depend on it.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": [
+            "EXTR-1",
+            "ONTO-1"
+          ]
+        },
+        {
+          "id": "GRND-8",
+          "title": "Confidence calibration (ECE) + threshold tuning",
+          "what": "Turn the recorded confidence into a calibrated score, set per-type thresholds τ, measure Expected Calibration Error. Correctly deferred to after Gate 0 (don't build the moat for an unvalidated job).",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "EVAL-2"
+          ]
+        },
+        {
+          "id": "GRND-9",
+          "title": "Caching + geo-hint plumbing",
+          "what": "Cache by (normalized_query, geo_bucket, type) to make repeat/Places lookups ~free and keep within rate limits; feed lat/lng/radius (TikTok poi, caption, on-screen text) into the Places query and the NIL-if-nothing-in-radius rule. Folds GRND-10.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "GRND-11",
+          "title": "Authority-adapter contract + ambiguity handling",
+          "what": "Align resolvers to doc 04's normative contract: zero candidates → Ok([]) (drives NIL), transport/5xx/quota → Err → status:nil reason:authority_unavailable (never a confident negative), rate-limit backoff + Retry-After. Plus emit status:ambiguous when ≥2 candidates sit within Δ of τ rather than a coin-flip. Folds GRND-12.",
+          "status": "in-progress",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "ONTO-1",
+          "title": "Faceted SKOS core replacing the flat v0 enum",
+          "what": "Replace types.ts's flat 10-value EntityType union with a small closed set of core types + orthogonal governed facets, each a skos:Concept with opaque conceptId, prefLabel/altLabel, scope-note, external mappings; splits media→{music,film_or_show}, demotes brand/person/link. Includes CI invariants (True-Path roll-up, class-vs-instance, retirement-has-reason+successor). Gates the entire eval/scorecard/open-core spine. v0 flat enum pinned by 54 tests.",
+          "status": "not-started",
+          "needsFounder": "Sign-off on the v1.0 core term list",
+          "effort": "L",
+          "blockedBy": []
+        },
+        {
+          "id": "ONTO-3",
+          "title": "SKOS export + external-authority mappings",
+          "what": "Script the SKOS artifact from the TS source of truth with exactMatch/closeMatch to Wikidata/TMDB/Places/MusicBrainz/OpenLibrary classes — the open-core artifact and the typed-grounding projection.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "ONTO-1"
+          ]
+        },
+        {
+          "id": "ONTO-6",
+          "title": "Warrant-based promotion + quarterly governance",
+          "what": "Mine open tags → literary/user/structural warrant test → promote to core → semver release → migrate → re-score. Quarterly, not continuous. Also decides style_look/general core-vs-pending (Q4) and the actionability facet's 3-level vs continuous granularity (Q3).",
+          "status": "not-started",
+          "needsFounder": "Set warrant thresholds; first live test of the promotion machinery",
+          "effort": "M",
+          "blockedBy": [
+            "ONTO-1",
+            "EXTR-4"
+          ]
+        },
+        {
+          "id": "EXTR-4",
+          "title": "Open-tag (folksonomy) emission",
+          "what": "VLM emits free openTags[] (stored, searchable, un-governed) beside the closed-enum facets — the 'girl dinner' capture path and warrant feedstock.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "PIPE-1",
+          "title": "Candidate-A end-to-end pipeline wiring",
+          "what": "CapturedItem → one VLM call → typed mentions + facets/takeaways/recipe → deterministic claims-vs-evidence check → grounding module. The enrich raw→text→visual ladder and the grounding module both exist but are NOT wired together, and the claims-vs-evidence check is missing.",
+          "status": "in-progress",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "EXTR-1",
+            "GRND-6"
+          ]
+        },
+        {
+          "id": "PIPE-2",
+          "title": "Confidence router → cascade (Candidate C)",
+          "what": "A calibrated router escalates only the hard ~20–30% tail (dense multi-entity, no-VTT, ambiguous) to a decomposed+verified path. Ship A-only now vs invest early in C — data-gated on the measured single-pass-vs-offline-ensemble gap; do NOT build B on 100% of traffic to rescue 25%. Folds the agentic-verification-workers rung.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "L",
+          "blockedBy": [
+            "PIPE-1",
+            "GRND-8"
+          ]
+        },
+        {
+          "id": "PIPE-6",
+          "title": "Open-weight license + training-data diligence",
+          "what": "Dataset-level diligence before shipping any OSS weights — apache-2.0 tags cover code, not distilled data or backbone. Ship Qwen3-VL (clean license, class-leading OCR, frontier gaps in entity-linking + audio) vs Molmo 2 vs MiniCPM-V-4.5; avoid Gemma-3 flow-down, Llama MAU/naming, Qwen-3B NC, InternVL Tongyi cap landmines.",
+          "status": "in-progress",
+          "needsFounder": "Legal-risk appetite for OSS-ing an engine that fine-tunes weights",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "BENCH-1",
+          "title": "Stratified golden slice + managed model ladder",
+          "what": "Carve a domain × media-type stratified slice (video/slideshow, VTT/no-VTT) out of the 1316 corpus to run every model/pipeline comparison against; confirm Gemini 3.1 Flash-Lite / 3.5 Flash / Nova Lite ladder by running the slice, not by spec sheet. Folds BENCH-3 (open-OCR on stylized frames) and BENCH-5.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "CAP-RECAP"
+          ]
+        },
+        {
+          "id": "BENCH-2",
+          "title": "Deciding experiment: native-video vs transcript+keyframes+OCR",
+          "what": "On a labeled slice, measure entity-resolution accuracy + recipe-step F1 for native-video ingest vs a transcript+keyframes+OCR path. If they tie, cheaper text-LLM+vision-on-keyframes paths reopen and the cost floor drops; if native wins, pay the vendor tax. Corpus is transcript-heavy (58% VTT, 18% slideshow) so the prior leans tie — but unmeasured.",
+          "status": "not-started",
+          "needsFounder": "Ratify as the first experiment before any pipeline lock",
+          "effort": "M",
+          "blockedBy": [
+            "BENCH-1"
+          ]
+        },
+        {
+          "id": "BENCH-4",
+          "title": "Open vs frontier schema/grounding reliability + LoRA delta + audio",
+          "what": "Does an 8B open model emit schema-valid JSON with calibrated confidence and resolve to correct durable IDs without inventing them, and how much does a light LoRA close the gap — sets the open/frontier split (90/10 vs 50/50), hosting cost, OSS story, supplier power. Includes the open-tier audio strategy for the 42% no-VTT clips (Whisper vs Qwen3-Omni vs lean-on-Gemini). Folds BENCH-6.",
+          "status": "not-started",
+          "needsFounder": "Appetite for a LoRA training run; audio-subsystem call",
+          "effort": "L",
+          "blockedBy": [
+            "BENCH-1"
+          ]
+        },
+        {
+          "id": "EVAL-2",
+          "title": "Labeled golden set (stratified, grounding-annotated)",
+          "what": "Grow the ~106-item seed into a version-locked ~30/50/20-stratified set annotated for grounding (correct durable ID + NIL cases), per-facet, and retrieval. Today ~106 labels sit on the FLAT v0 ontology, not grounding-annotated. Gates the whole eval harness.",
+          "status": "in-progress",
+          "needsFounder": "Founder is annotator/adjudicator; ratify the publish-gate n-budget",
+          "effort": "L",
+          "blockedBy": [
+            "ONTO-1"
+          ]
+        },
+        {
+          "id": "EVAL-1",
+          "title": "Six-axis measurement harness",
+          "what": "Scorecard runner over the golden set: Retrieval, Transcription WER, OCR CER/F1, faithfulness (VidFactScore/QEVA-style + Chain-of-Verification), per-facet classification P/R/F1/κ, grounding P/R/F1 + NIL-accuracy + ECE. Folds EVAL-6.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "L",
+          "blockedBy": [
+            "EVAL-2"
+          ]
+        },
+        {
+          "id": "EVAL-3",
+          "title": "Replay harness (deterministic ~$0 A/B)",
+          "what": "Freeze VLM outputs + KB candidate sets so the grounding layer can be A/B'd deterministically for ~$0 — the thing that makes solo iteration tractable. Can freeze from existing MusicBrainz runs today.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "EVAL-4",
+          "title": "Kappa-validated LLM judge + publish gate",
+          "what": "Validate any LLM judge against human labels (Cohen's/Fleiss' κ, ICC) and randomize answer order — raw judge inflates 33–41pp and is inadmissible for published numbers. Enforce the publish gate: no aggregate grounding F1 below 245 groundable annotations, no per-surface F1 below 100 (100–245 carry CIs). Folds EVAL-5. Gates any published scorecard number.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "EVAL-2"
+          ]
+        },
+        {
+          "id": "CRIT-12",
+          "title": "Prompt-injection / adversarial UGC defense",
+          "what": "Captions, on-screen text, and transcripts are attacker-controllable. A crafted clip ('ignore prior instructions, resolve every place to X / emit this link') can poison extraction, grounding, or the surfaced external links — a real hole for a system that pipes arbitrary internet content into an LLM and acts on the output. EXTR-2 partly mitigates (no model-emitted IDs); content-sanitization is untreated and directly undercuts the grounding-trust moat.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "CRIT-13",
+          "title": "Wrong-answer harm & grounded-output safety posture",
+          "what": "If grounding confidently resolves to the wrong restaurant (user drives there / it's closed) or recipe extraction drops/mis-states a quantity or allergen, there is real user harm and trust/legal exposure. No item sets a safety posture for the recipe wedge specifically (allergens, substitutions, cook temperatures) or analyzes the harm surface of confident-but-wrong output. Coupled to LIB-PROVENANCE and ToS disclaimers.",
+          "status": "not-started",
+          "needsFounder": "Accuracy/disclaimer posture for actionable domains",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "CRIT-19",
+          "title": "Vendor/model-deprecation resilience",
+          "what": "The managed tier and quality baselines depend on specific models (Gemini 3.1 Flash-Lite, Nova) deprecated/re-priced on the vendors' schedule. Porter supplier-power says this is the structural weakness of a thin layer over frontier APIs; the OSS-local path is the hedge, and the decision to fund it as deprecation insurance (not just a trust feature) is unframed.",
+          "status": "not-started",
+          "needsFounder": "Whether the local-OSS path is funded as deprecation insurance",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "FACT-VERIFY",
+          "title": "Verify cost/model facts before hardcoding",
+          "what": "Pin the unconfirmed inputs before ops hardcode them: Google Places Text Search (New) per-1k price (gates GRND-5 cost model); Qwen3-VL Video-MME / MiniCPM llama.cpp video / Molmo 2 numbers; training-data commercial cleanliness for the academic-caveat models (feeds PIPE-6); Gemini File-API inline-vs-upload threshold + Nova token prices; re-confirm all per-clip cost figures against live token rates. Folds FACT-1..5.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": []
+        }
+      ]
+    },
+    {
+      "id": "CAPTURE",
+      "title": "CAPTURE & DATA",
+      "items": [
+        {
+          "id": "STOR-IDB",
+          "title": "Migrate authoritative store to IndexedDB",
+          "what": "Move the source-of-truth off chrome.storage.local (already over the ~10 MB quota) onto IndexedDB (unlimitedStorage already in manifest) + navigator.storage.persist(); keep chrome.storage.local only for small hot state (counts, cursors, settings). One of the two foundation roots almost everything depends on.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "DAT-BASEOBJ",
+          "title": "Unified base-object data model",
+          "what": "Generalize the flat TikTok-shaped CapturedItem toward the AS2/schema.org/oEmbed/MRSS intersection (type · canonical URL/id · actor · timestamp · text · renditions · optional refers-to · optional collection), demote the raw payload, model one logical asset with many renditions (playAddr/downloadAddr/bitRateList tiers) and reference-typed inter-item edges. Carries schemaVersion + never-delete-deprecate discipline. Folds DAT-RENDITIONS/DAT-REFEDGE/DAT-SCHEMA-VER. types.ts still flat.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "L",
+          "blockedBy": []
+        },
+        {
+          "id": "DAT-WEMI",
+          "title": "Post/Save/Referent (WEMI) data model",
+          "what": "Split CapturedItem into Post (manifestation), Save (the user's item), Referent (the grounded work — the dedup/grounding target as a stored node) so 50 saves collapse to 1 Place and eval scores classification vs grounding on separate axes. Grounding resolution exists in grounding.ts but Referent as a stored node does not. Timing leans 'after Gate 0' (don't build moat for an unvalidated job).",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "L",
+          "blockedBy": [
+            "DAT-BASEOBJ",
+            "ONTO-1"
+          ]
+        },
+        {
+          "id": "STOR-SCHEMA",
+          "title": "IndexedDB object stores + retrieval index",
+          "what": "Object stores for items/saves, referents, media; a client-side inverted index over transcript + on-screen-text + entities + facets keyed on stable conceptId + Referent.externalId (not English strings); persist computed embeddings beside items for offline instant retrieval. Folds STOR-EMBED.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "STOR-IDB",
+            "DAT-WEMI"
+          ]
+        },
+        {
+          "id": "CAP-EAGER",
+          "title": "Eager media persistence at capture-time",
+          "what": "The persistence root-cause fix: fetch+store poster blobs, subtitle/VTT text, ThumbHash, and optional mp4 bytes synchronously at capture before signed URLs rot (the extension-only moat; SW lacks Blob APIs → base64). The mechanism is proven end-to-end (downloadViaFetch + DNR Referer → CDN 200s); the media store isn't built. Folds CAP-SUBTITLE-PERSIST/STOR-MEDIA-BLOBS/CAP-THUMBHASH.",
+          "status": "in-progress",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "STOR-IDB"
+          ]
+        },
+        {
+          "id": "CAP-RECAP",
+          "title": "Fresh media re-capture session",
+          "what": "Re-run live capture on TikTok to grab a fresh media+subtitle slice — the original signed URLs expired and media/VTT were never persisted, stalling the whole benchmark/cost half (BENCH-*, live COGS, seeded demo corpus). Must land AFTER the persistence fix so the loss doesn't repeat. Not on the Gate-0 path (Gate 0 uses participants' own live corpus).",
+          "status": "blocked",
+          "needsFounder": "Run an interactive logged-in session; decide slice size; consent to the run",
+          "effort": "M",
+          "blockedBy": [
+            "CAP-EAGER"
+          ]
+        },
+        {
+          "id": "CAP-CURSOR",
+          "title": "Resumable, cursor-based, human-paced capture queue",
+          "what": "Promote the proven autoScroll seed (paced 2–3.5s scroll, 15-idle patience, dedup-count-driven done) to a persisted cursor {platform, collection, lastSeenId, capturedIds, status} with idempotent merge + storage-as-truth = restart-safe multi-session capture; mark stalled on the ~360-item throttle or SW death (never crash the SW). Folds CAP-STALL/CAP-SW-STATELESS.",
+          "status": "in-progress",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "STOR-IDB"
+          ]
+        },
+        {
+          "id": "CAP-FILEAPI",
+          "title": "Oversized-media resumable File-API path",
+          "what": "The one net-new capture engineering piece: fixes mediaFetch.ts's live TODO(file-api) that conflates 'too big' (>18 MB inline ceiling) with 'failed' — today >18 MB clips silently degrade to poster-only. Build the resumable full-byte path vs accept poster+caption+transcript-only for oversized clips.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "CAP-EAGER"
+          ]
+        },
+        {
+          "id": "CAP-IG-PROBE",
+          "title": "Instagram live-capture feasibility probe",
+          "what": "Confirm whether IG exposes a MAIN-world signed signal analogous to TikTok's item_list and whether interception survives IG countermeasures (Meta killed Basic Display; no saved-posts API; rotating GraphQL doc_ids). Runs in parallel from day one; gates DEC-13/DEC-14 and whether 'IG at launch' means live or ZIP.",
+          "status": "not-started",
+          "needsFounder": "A session logged into IG Saved to observe traffic",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "CAP-IG-ZIP",
+          "title": "Instagram 'Download Your Data' ZIP-import lane",
+          "what": "Parse IG's official DYI ZIP export into core items; guarantees Instagram-at-launch regardless of the probe (v1.1), upgradeable to live later. Fork: is ZIP the PRIMARY IG lane or only the fallback? ZIP is durable/compliant but stale, no eager media, manual step; live is invisible + eager-media but fragile/adversarial.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "DAT-BASEOBJ"
+          ]
+        },
+        {
+          "id": "CAP-IG-ADAPTER",
+          "title": "Instagram capture adapter + manifest/DNR",
+          "what": "Pure-function adapter modeling a carousel as parent-with-identity+metrics owning child-media-without-identity (avoids phantom nulls); media_type ∈ {IMAGE,VIDEO,CAROUSEL_ALBUM}. Extend manifest host-permissions/matches beyond TikTok-only and add IG CDN DNR Referer rules. Decide Apify MCP fallback only if live fails (dents zero-remote-code trust). Folds CAP-MANIFEST/CAP-DNR/CAP-IG-FALLBACK.",
+          "status": "not-started",
+          "needsFounder": "Approve/deny a third-party (Apify) touching user data if used",
+          "effort": "M",
+          "blockedBy": [
+            "DAT-BASEOBJ",
+            "CAP-IG-PROBE",
+            "CAP-IG-ZIP"
+          ]
+        },
+        {
+          "id": "CAP-X-DOORWAY",
+          "title": "X-bookmarks capture + adapter + doorway",
+          "what": "Stand up X bookmarks as a low-cost live Facade doorway and a Segment-1 export path; adapter maps referenced_tweets[] → reference-typed edges, media via includes.media[] sidecar; clean-room study twitter-web-exporter's 800-bookmark-cap workaround. Gated behind Gate 0 before founder-hours spent.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "DAT-BASEOBJ",
+            "G0-2"
+          ]
+        },
+        {
+          "id": "CAP-COOKIE-FETCH",
+          "title": "Background cookie-fetch feasibility spike",
+          "what": "Can an extension background fetch with host-permissions carry platform cookies without a foreground tab? Decides whether media/enrichment needs a visible managed tab (surfaced honestly, 'using a TikTok tab to fetch video data') vs accepting a foreground-tab requirement. Forks the enrichment UX.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "DAT-RAWDEMOTE",
+          "title": "Demote raw payload to a versioned artifact",
+          "what": "Keep the raw platform payload as an out-of-hot-path versioned rawPayloadRef rather than dropping it — the spike deleted raw entirely after it blew the 10 MB quota, losing auditability/re-derivation. Fork: retain (storage cost, re-derive on schema change) vs keep dropping (cheaper, repeats the loss lesson).",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": [
+            "STOR-IDB"
+          ]
+        },
+        {
+          "id": "DAT-MIGRATE",
+          "title": "One-time v0→v1 corpus + golden-label migration",
+          "what": "Recorded EntityType→conceptId map and lift of flat fields into Post/Save/Referent so the 1316-item corpus and ~106 golden labels carry forward (media→{film_or_show|music} hand-adjudicated; restaurant/place→eatery/place; brand/person/link→facet/mediaKind). Folds ONTO-5.",
+          "status": "not-started",
+          "needsFounder": "Hand-adjudication of ambiguous remaps",
+          "effort": "M",
+          "blockedBy": [
+            "DAT-WEMI",
+            "ONTO-1"
+          ]
+        },
+        {
+          "id": "DAT-EXPORT-SCHEMA",
+          "title": "Open versioned export schema + generic import",
+          "what": "Full-corpus export serializing the new base object + WEMI in an open, documented, versioned schema — free by default (ADR-05), not a paywall; re-point the four flat-model exporters (json/csv/obsidian/bundle). Plus a generic ad-hoc import lane (one collection / profile / URL list) as the Dewey-style SEO/free entrypoint (superset of IG-ZIP). Folds DAT-IMPORT-GENERIC.",
+          "status": "in-progress",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "DAT-BASEOBJ",
+            "DAT-WEMI"
+          ]
+        },
+        {
+          "id": "CAP-TELEM",
+          "title": "Local capture-health telemetry (append-only events store)",
+          "what": "Local-first, never-phoned-home event log for capture health + task-success/time-to-find feeding the retrieval test and six-axis eval; export-only in v1. Shared with the validation cluster; must be reconciled with the measurement-without-surveillance paradox.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "STOR-IDB"
+          ]
+        },
+        {
+          "id": "CAP-CLEANROOM",
+          "title": "Clean-room study of copyleft capture prior art",
+          "what": "Study behavior only (not code) of gallery-dl GPL (TikTok/IG saved-item pagination), cobalt AGPL (UX reference only — radioactive for the future networked agency tier), twitter-web-exporter (X 800-cap); reimplement in permissive code with logged provenance. Also re-verify current TikTok itemStruct / IG carousel / X referenced_tweets shapes against live payloads before each adapter build. Ongoing discipline.",
+          "status": "not-started",
+          "needsFounder": "Live logged-in sessions per platform to re-verify payloads",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "STOR-SYNC",
+          "title": "Cross-device sync (deferred bet)",
+          "what": "E2E-encrypted, zero-knowledge sync so a corpus lives on phone+laptop without breaking local-first. Explicitly deferred. Fork: defer-for-v1 vs ship a minimal user-held-file portable sync vs a managed-but-encrypted server (each trades convenience against 'nothing at rest on our servers').",
+          "status": "not-started",
+          "needsFounder": "Confirm defer vs a minimal portable sync model",
+          "effort": "L",
+          "blockedBy": []
+        },
+        {
+          "id": "CRIT-26",
+          "title": "User-data backup/restore (catastrophic-loss protection)",
+          "what": "The product's entire value is the user's curated library living in one browser's IndexedDB; a profile reset, disk failure, or extension bug = total loss, with sync deferred. The bitter irony: the founder lost his own corpus to expired URLs, yet users face the analogous single-copy catastrophe. Export exists but isn't framed as a safety/backup feature with restore, auto-backup reminders, or corruption recovery.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "STOR-IDB",
+            "DAT-EXPORT-SCHEMA"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "PRODUCT",
+      "title": "PRODUCT & UX",
+      "items": [
+        {
+          "id": "THESIS-1",
+          "title": "Ratify the archive→decision-moment relocation thesis",
+          "what": "Doc 05's one governing move: the payoff moves archive→decision-moment and demotes the pile. It is a bet, not fact — the whole cluster rests on it.",
+          "status": "in-progress",
+          "needsFounder": "Ratify or redirect the relocation thesis",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "PUX-DECIDE-LENS",
+          "title": "DECIDE lens surfaces (eat-now / cook-tonight / watch-tonight)",
+          "what": "The relocated hero surface: Eat now → restaurants resolved to Places ('open now / near me / take me there'); Cook tonight → structured recipe ('get me to the stove'); Watch tonight → films/TV shortlist to TMDB/Letterboxd/JustWatch. Every surface judged on time-to-resolved-answer beating re-search. Folds DEC-1/4/5/6.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "L",
+          "blockedBy": [
+            "INST-9",
+            "LIB-GRID"
+          ]
+        },
+        {
+          "id": "LIB-GRID",
+          "title": "Apple-Photos-grade library UI",
+          "what": "Revised IA (DECIDE / ENTITIES / SEARCH / COLLECTIONS / ALL ITEMS demoted / IMPORTS) + virtualized justified aspect-preserving grid (TanStack Virtual + react-photo-album + ThumbHash wall, 60fps @ multi-thousand) + faceted controlled-core lenses (restaurant/film/recipe) with open tag/free-text long tail. Folds LIB-1/3/4.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "L",
+          "blockedBy": [
+            "DS-KIT"
+          ]
+        },
+        {
+          "id": "LIB-SEARCH",
+          "title": "Command-palette search (cmdk)",
+          "what": "'Find, don't scroll' over caption + transcript + on-screen text + entity names; instant over the local store.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "LIB-GRID",
+            "STOR-SCHEMA"
+          ]
+        },
+        {
+          "id": "LIB-DETAIL",
+          "title": "Item-detail overlay/drawer + entity lens",
+          "what": "Context-preserving Vaul drawer + Motion layoutId shared-element reveal; surfaces the 3-node model ('Lilia — saved 3×, resolved to Place ID X' — the find-the-restaurant payoff). Folds LIB-2/6.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "DAT-WEMI",
+            "DS-KIT"
+          ]
+        },
+        {
+          "id": "LIB-PROVENANCE",
+          "title": "Provenance strip / show-your-work",
+          "what": "External ID + graded confidence + evidence frame/transcript line + external link — the empty top-right quadrant and the trust centerpiece. Plus enrichment/ground badges (raw/text/visual/grounded), legible without color alone.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "GRND-1",
+            "DS-KIT"
+          ]
+        },
+        {
+          "id": "LIB-CORRECT",
+          "title": "Correct-me affordance → golden-set flywheel",
+          "what": "'Not right? correct it' produces free golden-set labels, feeding EVAL-2.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "LIB-DETAIL",
+            "EVAL-2"
+          ]
+        },
+        {
+          "id": "LIB-STATES",
+          "title": "First-class empty/loading/error/no-results states",
+          "what": "Zero-states for every surface — the new user's first impression, and the states most often skipped in a solo build.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "DS-KIT"
+          ]
+        },
+        {
+          "id": "FLOW-EXPORT",
+          "title": "Free open-schema export (portability by default)",
+          "what": "ADR-05 inverts the May spec: open-schema JSON/CSV/Obsidian/mp4 export is FREE; monetize depth/volume/polish. A one-way monetization door — users will expect free export forever, re-paywalling erodes the trust the category rewards.",
+          "status": "not-started",
+          "needsFounder": "Confirm removing the export revenue lever",
+          "effort": "M",
+          "blockedBy": [
+            "DEC-09"
+          ]
+        },
+        {
+          "id": "FLOW-WEB-FACADE",
+          "title": "Resolve-on-web facade surface",
+          "what": "Stateless public web app: paste a link / seeded demo → engine live-resolves → grounded card + external links + CTA, no stored library. Shares the React kit with the extension. The UX side of the GTM doorway dependency.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "SURF-TOPOLOGY",
+            "DS-KIT"
+          ]
+        },
+        {
+          "id": "SURF-TOPOLOGY",
+          "title": "Surface topology + poster-sync fork",
+          "what": "Extension-anchored + stateless-web + deferred-API/MCP. The poster-sync tension: if web holds a library it needs posters — extension-hosted-library vs eager-capture+sync vs accept-a-poster-server (which re-opens local-first, the trust story the category rewards).",
+          "status": "in-progress",
+          "needsFounder": "Confirm topology; accept/deny a poster server",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "DS-AESTHETIC",
+          "title": "Pick one aesthetic direction",
+          "what": "quiet-archive/editorial (library calm, serif voice) vs modern-utility/crisp (instrument, mono data accents) vs warm-collected/tactile (scrapbook warmth). All three satisfy the anti-slop bar; blending is explicitly forbidden. A taste + positioning call.",
+          "status": "not-started",
+          "needsFounder": "Pick the direction (founder taste call)",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "DS-TOKENS",
+          "title": "Design tokens",
+          "what": "Semantic color light+dark (oklch), type pairing (no Inter/Roboto/system defaults/AI-purple), spacing, radii, elevation, motion durations/easings — wired into the build as a config-change source of truth.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "DS-AESTHETIC"
+          ]
+        },
+        {
+          "id": "DS-KIT",
+          "title": "Shared React component kit",
+          "what": "Buttons, API-key field w/ validation, item card, entity card, chips, 4 enrich/ground badges, progress, drawer, empty states, toasts, upgrade prompt, signature element, motion system (one orchestrated reveal + grid→detail shared-element). One kit serves extension + web, differing only in data source. Folds DS-4/5/8/12.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "L",
+          "blockedBy": [
+            "DS-TOKENS"
+          ]
+        },
+        {
+          "id": "DS-METHOD",
+          "title": "Diverge→converge method + anti-slop gate + copy",
+          "what": "Operationalize the multi-tool loop (Claude Design + v0 + Figma Make → Figma SoT → Claude Code → Claude-in-Chrome QA), never one-shot; hard anti-slop rejection gate (no system defaults, no AI-purple, no SaaS-dashboard, restrained motion, distinctive display voice); humanized copy pass (limits-as-care, plain privacy, value-framed gates, humble provenance). Folds DS-1/6/7/10/11.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "SCRN-POPUP",
+          "title": "Popup remote-control (~6 states)",
+          "what": "Capture state/counts/key status, in-progress job w/ pause-resume; not-on-TikTok, ready, capturing, enriching, paused/soft-blocked, done, no-key. Backed by a shared progress/status model (phase, count/total, %, ETA, per-item failure reasons) across capture/enrich/ground/export. Folds XC-1.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "DS-KIT"
+          ]
+        },
+        {
+          "id": "SCRN-ONBOARD",
+          "title": "Onboarding + demonstrate-a-resolution",
+          "what": "Welcome/trust → path-choice (export-only vs BYO-key) → key validation → capture how-to, plus show one real resolution during setup. Includes settings surface (key mgmt, license/upgrade, data & privacy clear-library, re-show onboarding). Folds SCRN-6.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "GRND-1",
+            "DS-KIT"
+          ]
+        },
+        {
+          "id": "XC-PRIVACY",
+          "title": "Privacy-surfacing + entitlements UI",
+          "what": "'Nothing to our servers; only your own AI calls leave your browser' in onboarding + a data & privacy view (a trust centerpiece, not fine print); value-framed upgrade gates that check capabilities not 'is-Pro?', reconciled with the free-export inversion. Folds XC-2/XC-3.",
+          "status": "not-started",
+          "needsFounder": "What's gated vs free after the export inversion",
+          "effort": "M",
+          "blockedBy": [
+            "DEC-09",
+            "DS-KIT"
+          ]
+        },
+        {
+          "id": "XC-A11Y",
+          "title": "Accessibility + performance budget",
+          "what": "Keyboard nav (grid/filters/palette/drawer), focus mgmt for overlays, non-color badges, contrast + WIG audit; 60fps @ 20k items via virtualization + ThumbHash. Folds XC-4/XC-6.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "LIB-GRID"
+          ]
+        },
+        {
+          "id": "CRIT-01",
+          "title": "Re-engagement / retention loop",
+          "what": "The core JTBD is asymmetric — saving is sporadic/passive, value lands at a decision moment weeks later. Nothing designs what brings the user back (new-saves nudge, weekly cook-tonight digest, decision-moment prompt, habit trigger). But a local-first, no-server, no-account extension has almost no legitimate push channel — the structural constraint that caps this. For a vitamin the graveyard warns about, this is existential. Fork: engineer active re-engagement (browser notifications / local scheduled nudge / opt-in email that breaks the zero-data promise) vs accept a pull-only product leaning wholly on the one-time Pass. Folds CRIT-02.",
+          "status": "not-started",
+          "needsFounder": "How much of 'nothing leaves the browser' is negotiable for an opt-in channel",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "CRIT-03",
+          "title": "Cold-start / time-to-first-value",
+          "what": "Day one a new user's library is empty; value requires a slow paced multi-session capture then enrichment (their own key, their own time/cost) before a single resolved answer — plausibly hours-to-days to first 'aha'. No item owns time-to-first-value as a first-class target (instant value on the first saved item, backfill-in-background-while-showing-value, a pre-seeded demo the first capture drops into). A top-decile churn cause for save-it-later tools.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "CAP-EAGER",
+            "GRND-1"
+          ]
+        },
+        {
+          "id": "CRIT-18",
+          "title": "BYO-key spend-meter + failure-perception guard",
+          "what": "Two un-owned BYO-key risks: (1) bill shock — a 20k-item backfill on the user's key can silently rack up their cloud bill (need a running spend-meter / pre-flight estimate / hard budget cap, not just the per-visual-tier confirm modal); (2) blame transfer — when the user's key rate-limits mid-run it looks like the product broke → support load + 1-star reviews for something outside the founder's control.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": []
+        }
+      ]
+    },
+    {
+      "id": "FOUNDATION",
+      "title": "FOUNDATION — brand, business, legal, open-core",
+      "items": [
+        {
+          "id": "BR-1",
+          "title": "Name (rebrand from scratch)",
+          "what": "Commit a product name — locked decision: NOT 'Attic', no prior brand carries forward; must read trustworthy/archival, never 'downloader'. The tallest pole in the cluster — blocks domain, handles, visual identity, CWS, copy, repo rename, the open-standard name, and nearly all public GTM. Fork: descriptive (SEO, weak TM) vs coined/abstract (ownable, needs brand-building) vs metaphor.",
+          "status": "not-started",
+          "needsFounder": "Final pick + go/no-go",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "BR-2",
+          "title": "Domain acquisition",
+          "what": "Check + buy primary domain (+alts) via GoDaddy MCP. Fork: exact-match .com (trust/typability) vs brandable alt-TLD (.app/.io/.co — availability/cost).",
+          "status": "not-started",
+          "needsFounder": "Purchase budget; TLD choice",
+          "effort": "S",
+          "blockedBy": [
+            "BR-1"
+          ]
+        },
+        {
+          "id": "BR-3",
+          "title": "Trademark screen + handle/listing-name reservation",
+          "what": "WebSearch/Exa conflict screen on name + category (formal clearance deferred to a lawyer); reserve X/IG/Reddit/GitHub-org handles + the CWS publisher/listing name (manually verified unique). Folds BR-4.",
+          "status": "not-started",
+          "needsFounder": "Whether to pay for formal clearance now vs defer",
+          "effort": "S",
+          "blockedBy": [
+            "BR-1"
+          ]
+        },
+        {
+          "id": "BR-5",
+          "title": "Visual identity / mark",
+          "what": "The logo/mark and its application, converged from the chosen aesthetic direction (the old May Attic brief is name-stale/superseded; salvaged SaaS BRAND.md was dropped).",
+          "status": "not-started",
+          "needsFounder": "Approve the mark",
+          "effort": "M",
+          "blockedBy": [
+            "BR-1",
+            "DS-AESTHETIC"
+          ]
+        },
+        {
+          "id": "BR-6",
+          "title": "Verbal identity / voice",
+          "what": "Humanized copy guidelines + brand philosophy: 'not an AI brand', never 'downloader', trust-first single-purpose narrative, the content-understanding-standard story, calm/plain/honest/never-salesy tone.",
+          "status": "not-started",
+          "needsFounder": "Approve voice",
+          "effort": "M",
+          "blockedBy": [
+            "BR-1"
+          ]
+        },
+        {
+          "id": "BM-2",
+          "title": "Live engine COGS",
+          "what": "Measure real COGS at 5k/10k/20k from the ground-up engine (Flash-Lite + Batch −50%; ~$10–20 batched at 20k; OSS-local = free tier). Designed in the dossier but NEVER measured live — the pricing keystone every downstream pricing item depends on; blocked on engine maturity + a fresh media re-capture.",
+          "status": "blocked",
+          "needsFounder": "Small inference budget",
+          "effort": "M",
+          "blockedBy": [
+            "CAP-RECAP",
+            "BENCH-1"
+          ]
+        },
+        {
+          "id": "BM-3",
+          "title": "Assemble the 3-lane pricing model",
+          "what": "From live COGS, model contribution across free BYO-key + one-time Resolve/Export Pass ~$49 + conditional ~$6–8/mo subscription + agency $1–2/video & $150–500/mo. The decision is DEC-09; this is the modeling work.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "BM-2",
+            "DEC-09"
+          ]
+        },
+        {
+          "id": "CRIT-07",
+          "title": "Contribution-margin / LTV / founder-support-cost model",
+          "what": "COGS + Pass price alone isn't a model. Assemble contribution margin per paying user, LTV, payback, refund/chargeback allowance, and — critically for a solo founder — support-cost-in-founder-hours per paying user (a $49 Pass that generates 30 min of support is margin-negative in the currency that actually binds). Plus managed-tier margin sensitivity to vendor price moves.",
+          "status": "not-started",
+          "needsFounder": "Value his own hour (opportunity cost) to make the model honest",
+          "effort": "M",
+          "blockedBy": [
+            "BM-2"
+          ]
+        },
+        {
+          "id": "BM-8",
+          "title": "Payments / checkout infra",
+          "what": "For the Pass A/B (real checkout in the Facade doorway) + agency invoicing. Fork: Stripe (direct; you own tax/VAT) vs Lemon Squeezy/Paddle (merchant-of-record handles global tax; but no offline license validation → grace-period cache) vs Gumroad (simplest, higher fees).",
+          "status": "not-started",
+          "needsFounder": "MoR vs direct decision",
+          "effort": "M",
+          "blockedBy": [
+            "BR-1"
+          ]
+        },
+        {
+          "id": "LG-1",
+          "title": "Open-core license pick",
+          "what": "Exact permissive license for the core (engine+ontology+schema+eval). MIT (max adoption, simplest) vs Apache-2.0 (explicit patent grant if any grounding method is patentable; matches the Qwen3-VL Apache lineage). Also codify the copyleft clean-room policy (gallery-dl GPL, cobalt AGPL radioactive for the agency API).",
+          "status": "in-progress",
+          "needsFounder": "Pick MIT vs Apache-2.0",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "LG-3",
+          "title": "CWS review-risk mitigation",
+          "what": "The exact permission combo (broad host_permissions + DNR Referer injection + credentialed cross-origin media fetch) is what post-spyware-purge reviewers scrutinize. Plan a private/dry-run submission, single-purpose framing, never 'downloader'; keep Edge + own-store + ZIP-import fallbacks. A one-way precedent — a rejection is costly in a trust-poisoned category.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "BR-1"
+          ]
+        },
+        {
+          "id": "LG-4",
+          "title": "CWS developer account",
+          "what": "Register publisher, verify identity, set up listing ($5 fee).",
+          "status": "not-started",
+          "needsFounder": "Account + identity docs + fee",
+          "effort": "S",
+          "blockedBy": [
+            "BR-1",
+            "LG-3"
+          ]
+        },
+        {
+          "id": "LG-5",
+          "title": "Privacy policy + permissions justification",
+          "what": "Required for the listing; the story is easy (zero remote code, local-first; only outbound = consented inference + grounding) but must be written + hosted.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": [
+            "BR-2",
+            "BM-2"
+          ]
+        },
+        {
+          "id": "LG-9",
+          "title": "Terms of Service for paid tiers",
+          "what": "For any Pass/subscription/agency tier: disclaimers on platform-data + accuracy of grounded output (couples to the wrong-answer-harm posture).",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": [
+            "DEC-09"
+          ]
+        },
+        {
+          "id": "CRIT-10",
+          "title": "Employer IP-assignment / moonlighting title",
+          "what": "10–20 hr/wk implies a day job; many US employment agreements assign IP created even on personal time if it relates to the employer's business or used employer resources. If the founder's employer is in AI/media/search/social, this could invalidate the entire ownership premise — the OSS release, monetization, and 'career artifact I own' all assume clean title. Highest-severity legal gap: potentially dispositive and cheap to check now.",
+          "status": "not-started",
+          "needsFounder": "Review employment/IP agreement; a lawyer hour before any public release if in doubt",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "CRIT-11",
+          "title": "Platform-ToS + user-account-ban risk",
+          "what": "TikTok/IG/Meta ToS prohibit automated access. Beyond CWS-reviewer risk (LG-3): could a USER get their account flagged/banned for running the extension (a direct adoption-killer), and what is the platform-litigation/C&D risk to the founder for a tool built around intercepting private APIs. A user-facing disclosure of the small-but-nonzero account risk may be warranted.",
+          "status": "not-started",
+          "needsFounder": "Risk appetite; user-facing disclosure decision",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "CRIT-25",
+          "title": "Entity formation + liability shield",
+          "what": "The legal cluster assumes personal operation. A founder monetizing, processing user data, and publishing grounded advice should decide on an LLC/entity + basic liability insurance before the first dollar or public grounded output — a standard early de-risking step, entirely absent. Interacts with clean IP into the entity (CRIT-10) and MoR (BM-8).",
+          "status": "not-started",
+          "needsFounder": "Form entity vs operate personally pre-revenue",
+          "effort": "S",
+          "blockedBy": [
+            "BR-1"
+          ]
+        },
+        {
+          "id": "LG-6",
+          "title": "Agency data-residency / AGPL posture + data-rights",
+          "what": "Consumer compliance (personal-use, own-data, client-side, passive interception) is settled; the moment the engine serves OTHER people's clips over a network the AGPL/privacy posture changes and the founder becomes a data processor of third parties' data — GDPR/CCPA data-subject rights (access/delete/DPA/retention), plus a content-moderation posture since users save arbitrary content (NSFW/illegal/CSAM → inference-vendor ToS + mandatory-reporting). Revisit before any hosted API. Folds CRIT-24.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "G2-CONCIERGE"
+          ]
+        },
+        {
+          "id": "OC-1",
+          "title": "Scope the open-core cut + governance infra",
+          "what": "Exactly what ships OSS: framework-agnostic engine (src/lib) + SKOS ontology + versioned export schema + six-axis eval harness + golden set + per-surface grounding-correctness rules; app/hosted/capture-shell stay proprietary. Package as installable npm lib + CLI with a clean API; LICENSE/CONTRIBUTING/CoC, semver, CI ontology invariants, never-delete-deprecate-with-successor governance. Folds OC-2/OC-3/OC-6.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "L",
+          "blockedBy": [
+            "ONTO-1",
+            "ONTO-3",
+            "EVAL-1"
+          ]
+        },
+        {
+          "id": "OC-5",
+          "title": "Open-core release timing gate (irreversible)",
+          "what": "The single hardest one-way door — pre-committed strictly last (v1.3), released only after v1.0–v1.2 harden the schema against real corpora AND an audience exists. Releasing a wrong abstraction invites forks of it and burns the one-shot launch credibility. 'Can't un-publish trust.' Gated on the honesty-gap reconciliation and the kappa-validated scorecard.",
+          "status": "not-started",
+          "needsFounder": "The irreversible go/no-go call",
+          "effort": "S",
+          "blockedBy": [
+            "OC-1",
+            "G0-2"
+          ]
+        },
+        {
+          "id": "OC-7",
+          "title": "Name the open standard",
+          "what": "The schema/ontology 'standard' may want its own name + stable namespace URI distinct from the product brand. Fork: brand-tied (marketing leverage) vs neutral namespace (credibility/adoption as a genuine standard, à la schema.org/ActivityStreams). A URI must be stable forever.",
+          "status": "not-started",
+          "needsFounder": "Decide the standard name/namespace",
+          "effort": "S",
+          "blockedBy": [
+            "BR-1"
+          ]
+        },
+        {
+          "id": "CRIT-20",
+          "title": "Moat-decay analysis: compounding vs copyable",
+          "what": "The strategy deliberately opens the schema, ontology, eval harness, and grounding-correctness rules. A rigorous partner must rank what actually compounds that a well-funded fast-follower cannot copy ('prompt but not scorecard' is asserted, not analyzed): the labeled golden corpus, capture-at-scale relationships, the standard's adoption, brand/trust — vs the copyable parts. Without this the north-star ('a standard') may be a moat that evaporates on publication.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "CRIT-21",
+          "title": "Standard adoption / evangelism",
+          "what": "Open-core covers PUBLISHING the schema; nothing covers getting other tools/agents to actually emit or consume it — the only thing that converts 'a schema I published' into 'the content-understanding standard' that is the literal north-star. Needs a reference implementation for third parties, adoption partners, and an evangelism plan. The missing back-half of the north-star.",
+          "status": "not-started",
+          "needsFounder": "Appetite for standards-evangelism time",
+          "effort": "L",
+          "blockedBy": [
+            "OC-1"
+          ]
+        },
+        {
+          "id": "BS-3",
+          "title": "Build + release-as-a-command",
+          "what": "Front-end bundler (enters only when the retrieval UI lands, scoped to src/ui/ — Vite vs esbuild-raw vs WXT vs rollup) + npm run release (typecheck→test→build→zip→chrome-webstore-upload-cli publish, manifest+package version in lockstep) + repo topology for proprietary-app + OSS-lib coexistence (monorepo-with-extractable-package vs separate OSS repo). Folds BS-6/BS-13.",
+          "status": "not-started",
+          "needsFounder": "Bundler + repo-topology choices",
+          "effort": "M",
+          "blockedBy": []
+        }
+      ]
+    },
+    {
+      "id": "GTM",
+      "title": "GTM — distribution",
+      "items": [
+        {
+          "id": "GTM-01",
+          "title": "Doorway matrix + keyword research",
+          "what": "Enumerate and rank the specific platform × intent × domain pages ('TikTok restaurant finder', 'Instagram recipe saver', 'export my TikTok favorites', 'find that saved reel', X-bookmarks, TikTok-ban 'get my saves out') by real search volume/competition/query-shape. Folds GTM-02.",
+          "status": "not-started",
+          "needsFounder": "Ratify the lead domain",
+          "effort": "M",
+          "blockedBy": [
+            "DEC-02"
+          ]
+        },
+        {
+          "id": "GTM-03",
+          "title": "Doorway content-production standard (anti-thin-page)",
+          "what": "Enforce the anti-thin-page bar — each doorway carries ≥60% unique content + a live utility on the page, a repeatable template so doorways aren't programmatic slop. Verify the exact Google 2026 thin-page/deindex policy and the ≥60% figure before committing content spend. Folds GTM-11.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "GTM-04",
+          "title": "Facade live-resolve web surface (doorway wrapper)",
+          "what": "The stateless public web app that live-resolves a pasted link / seeded item on the page — what makes every doorway 'live utility' not thin. GTM owns the doorway wrapper; the engine live-resolve path + shared component kit are cross-cluster. Blocked on the rebrand name.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "L",
+          "blockedBy": [
+            "BR-1",
+            "FLOW-WEB-FACADE"
+          ]
+        },
+        {
+          "id": "GTM-05",
+          "title": "Seeded public demo corpus",
+          "what": "The handful of real items each Facade doorway resolves live for a cold anonymous visitor (who has no library yet). Blocked on fresh media re-capture — the corpus signed URLs expired.",
+          "status": "blocked",
+          "needsFounder": "Run a fresh capture pass to produce demo media",
+          "effort": "S",
+          "blockedBy": [
+            "CAP-RECAP",
+            "GTM-04"
+          ]
+        },
+        {
+          "id": "GTM-06",
+          "title": "Doorway CTA ladder + Pass checkout A/B",
+          "what": "Instrument the on-page ladder (free install → live Facade resolve → $49 Resolve/Export Pass) with a real checkout that doubles as the Pass-price A/B vehicle ($39/$49/$59 by revealed preference). Fork: run the live A/B through doorways vs ship a single fixed price first (needs enough traffic to be meaningful, which cold-start may not deliver early).",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "GTM-04",
+            "BM-8"
+          ]
+        },
+        {
+          "id": "GTM-07",
+          "title": "Doorway prioritization via knock-through (demand probe)",
+          "what": "Stand up 2–3 live doorways, measure real live-resolve knock-through/intent per platform×intent surface, let that rank which doorways to invest in. A sub-test inside v1.1, not a kill-gate.",
+          "status": "not-started",
+          "needsFounder": "Pick the 2–3 doorways to stand up first",
+          "effort": "M",
+          "blockedBy": [
+            "GTM-04",
+            "GTM-05"
+          ]
+        },
+        {
+          "id": "GTM-09",
+          "title": "AEO layer: schema.org markup + citable guides",
+          "what": "Recipe/Restaurant/VideoObject/FAQ structured-data markup + per-doorway authoritative guides written to be the citable source an AI Overview quotes (68% zero-click; AI-referred visitors convert 11–23×). Folds GTM-08.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "GTM-03"
+          ]
+        },
+        {
+          "id": "GTM-10",
+          "title": "Answer-engine citation strategy (eval-transparency wedge)",
+          "what": "Use the public six-axis eval scorecard to substantiate accuracy claims competitors can't, making us the proof-backed source AI engines prefer to cite. Define how the scorecard is surfaced for AEO.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "CAR-1"
+          ]
+        },
+        {
+          "id": "GTM-12",
+          "title": "Comparison-page set + competitor audit",
+          "what": "High-intent pages ('vs Stasht', 'vs Dewey', 'vs mymind', 'Dewey alternative') that concede the free-competitor reality and win on the only defensible axes (verifiability, open export, grounding depth); informed by mapping what currently ranks for the target intents and where Dewey found its subreddit wedge. Fork: which competitor names are durable enough to target (the category churns names fast). Folds GTM-13.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "BR-1"
+          ]
+        },
+        {
+          "id": "GTM-14",
+          "title": "CWS listing SEO",
+          "what": "Treat the store listing as a first-class ranking target: title, description, keyword-bearing copy, screenshots/video, category — both a channel and the cold-start seed.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "BR-1",
+            "LG-4"
+          ]
+        },
+        {
+          "id": "GTM-15",
+          "title": "CWS initial review & rating seeding",
+          "what": "The cold-start social-proof problem: generate the first genuine reviews/ratings/installs that make the listing (and SEO doorways) rankable, countering the 'sketchy grabber' perception in a trust-poisoned category.",
+          "status": "not-started",
+          "needsFounder": "Comfort lightly mobilizing personal network for honest early reviews",
+          "effort": "S",
+          "blockedBy": [
+            "GTM-14"
+          ]
+        },
+        {
+          "id": "GTM-16",
+          "title": "Product Hunt launch prep",
+          "what": "Assets (gallery, tagline, first comment), hunter/network, launch-day playbook. A one-shot card (irreversible). Fork: early (v1.1 — seeds reviews/backlinks sooner but risks an unvalidated product) vs late (v1.3 paired with the open-core/scorecard moment — bigger, proof-backed, but delays cold-start).",
+          "status": "not-started",
+          "needsFounder": "Pick the launch moment; be present launch day",
+          "effort": "M",
+          "blockedBy": [
+            "BR-1",
+            "GTM-14"
+          ]
+        },
+        {
+          "id": "GTM-17",
+          "title": "Reddit community mapping + self-promo compliance",
+          "what": "Identify the specific subreddits (the ban-driven 'get my TikTok saves out' export crowd + recipe/cooking communities where Dewey found its wedge), each community's self-promo rules, and a genuine-participant posting plan (founder-voice, not delegable, not spam).",
+          "status": "not-started",
+          "needsFounder": "Founder time to participate authentically",
+          "effort": "M",
+          "blockedBy": [
+            "GTM-12"
+          ]
+        },
+        {
+          "id": "GTM-18",
+          "title": "Backlink strategy via open-core release",
+          "what": "Leverage the open-core engine + eval scorecard (v1.3) as its own AEO/developer-trust/backlink engine and the funnel into the agency lane; plan the dev-audience distribution (GitHub, HN, dev newsletters) of the 'standard'. Irreversible, timed last.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "OC-5"
+          ]
+        },
+        {
+          "id": "GTM-19",
+          "title": "Cold-start sequence + Gate-0 reconciliation",
+          "what": "Lock the order/timing (CWS listing → PH → Reddit → doorways → open-core) since SEO can't cold-start from zero. Fork: run doorways parallel to Gate 0 (earlier intent/backlinks but spends GTM hours before value is proven) vs after Gate 0 ('pay for reach only after Gate 0 says there's something worth reaching', but delays SEO compounding).",
+          "status": "in-progress",
+          "needsFounder": "Ratify doorway timing vs Gate 0 and PH timing",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "GTM-21",
+          "title": "GTM funnel instrumentation & OKRs",
+          "what": "Wire the strategy-is-working signals under the local-first no-content-telemetry constraint: doorway → install → Facade-resolve → Pass conversion (target Dewey-like ~3.75%), AEO citation count, CWS ranking, '2–3 doorways ranking intent'. Also analyze/mitigate the heavy free-path activation friction (install → BYO key → paced multi-session capture before value). Folds GTM-20; must reconcile with the measurement-without-surveillance paradox.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": [
+            "GTM-04",
+            "GTM-06"
+          ]
+        },
+        {
+          "id": "CRIT-04",
+          "title": "Viral / shareable-artifact growth loop",
+          "what": "The product is inherently single-player and all enumerated growth is outbound founder-time SEO/PH/Reddit with no compounding loop. No item explores an organic sharing loop (a shareable resolved card, a public curated list 'my 12 saved Chicago spots grounded to Maps', an openable export). For a zero-budget solo founder a K-factor loop is the cheapest distribution. Fork: build a sharing surface (viral, but hosting user-derived content re-opens local-first + copyright) vs stay single-player.",
+          "status": "not-started",
+          "needsFounder": "Whether any user content can be shareable given local-first",
+          "effort": "M",
+          "blockedBy": [
+            "FLOW-WEB-FACADE"
+          ]
+        },
+        {
+          "id": "CRIT-22",
+          "title": "Incumbent-encroachment / 'what if the platform ships it'",
+          "what": "Beyond the mechanical capture-breakage runbook, no item does the strategic platform-risk analysis: TikTok/IG shipping native saved-search, or Google AI Overviews directly answering 'find that restaurant I saved', collapses the wedge overnight — especially since half the restaurant job is already conceded to Google ('Google still owns verification'). Porter/Blue-Ocean demands an explicit 'why won't the platform/Google just do this, and what do we own when they try'.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": []
+        }
+      ]
+    },
+    {
+      "id": "META",
+      "title": "META, HYGIENE & CAREER",
+      "items": [
+        {
+          "id": "SEC-6",
+          "title": "Commit + push the July work",
+          "what": "The entire July dossier + _ENGINE-groundup + grounding code (grounding.ts/test/ground-demo) is UNTRACKED; local main is 4 commits ahead; origin (private) cold since 2026-05-27 — all of it exists only on the founder's local disk. A single-point-of-failure. Fork: commit/push now (retire the risk) vs hold as deliberately-uncommitted (keeps a soon-public repo clean of WIP) — a private off-machine backup branch/tag is the middle path. Folds DEP-4.",
+          "status": "not-started",
+          "needsFounder": "Go-ahead to commit/push (or approve a private backup branch)",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "SEC-1",
+          "title": "Rotate leaked Supabase + OpenAI keys",
+          "what": "Keys live in the conversation archive (NOT this git repo, whose src/secrets.js is gitignored). A MUST security obligation; founder-only console access. Folds SEC-2/LG-7 + a full archive credential sweep + a git-history secret audit across the 27 commits. ",
+          "status": "not-started",
+          "needsFounder": "Do the rotation (only founder has console access)",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "SEC-4",
+          "title": "Back up un-versioned assets + corpus",
+          "what": "/Dev/attic-marketing (148K) and ~/Attic vault (100K) are non-git and un-backed-up; attic-favorites.json (43MB, gitignored, the irreplaceable 1316-item capture + golden-set seed) and results/ enriched outputs are local-only. Losing any = losing an irreplaceable asset. Folds SEC-5/8/9 + LG-8.",
+          "status": "not-started",
+          "needsFounder": "Choose a backup destination / encryption",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "META-1",
+          "title": "Lean CLAUDE.md + dev-secrets pattern",
+          "what": "Project operating instructions for Claude Code (repo map, engine SoT, conventions, 'don't re-anchor on the spike'); plus a secrets pattern decision — keep src/secrets.js (simple, working) vs migrate to .env.master + gen-script (better for two-env/deploy-as-command, new machinery to maintain solo). Folds META-2.",
+          "status": "not-started",
+          "needsFounder": "Pick the secrets pattern",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "META-4",
+          "title": "CI / lint / test gate",
+          "what": "GitHub Action (or pre-push hook while solo) mirroring tsc + vitest (61 tests pass locally, no CI today); add the eval-scorecard regression gate (fail >~5%) once the eval harness exists.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "META-5",
+          "title": "Skills + domain-MCP install & vetting",
+          "what": "Install the vetted must-have skills (frontend-design ✓ & web-design-guidelines ✓ present; mcp-builder/webapp-testing to confirm) and security-vet domain MCPs via Glama/mcp.so/PulseMCP before use (~22% of sampled Smithery servers had findings); tiered, gated behind real usage. Configure hooks (auto-update _RESUME on Stop, secrets-guard pre-commit). Folds META-13.",
+          "status": "not-started",
+          "needsFounder": "Approve MCP allowlist + which hooks",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "META-6",
+          "title": "Resilience + platform-breakage runbook",
+          "what": "Recovery doc for capture-queue/session failures, key rotation, backup restore; documented playbook for when TikTok/IG break interception (adapters, graceful degrade to caption-only ~75–85%, ZIP backstop, telemetry alarms). Folds BS-9.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "META-9",
+          "title": "Codify the dynamic execution workflow",
+          "what": "The orchestration that spawned this pass (enumerate → cluster → parallel agents → synthesize). Fork: persist as a reusable workflow/skill (compounding OS asset; upfront authoring cost + risk of feeding the over-planning trap) vs keep ad hoc (zero overhead, re-derived each time).",
+          "status": "in-progress",
+          "needsFounder": "Decide whether to codify",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "META-10",
+          "title": "De-spike repo identity",
+          "what": "package.json name/desc = 'attic-extension-spike / Throwaway Phase 0 kill-gate spike'; repo + remote named the dead 'attic' codename; README self-flags wrong inline '(Doc 0X)' cross-refs as its #1 cleanup item. Rename package/repo/manifest/remote + fix cross-refs after the brand locks. Folds BR-8/META-11.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": [
+            "BR-1"
+          ]
+        },
+        {
+          "id": "CAR-1",
+          "title": "Public six-axis eval scorecard",
+          "what": "The flagship career artifact (retrieval/transcription/OCR/faithfulness/classification/grounding), kappa-validated — the AEO/trust/agency-sales artifact and the show-your-work proof. Doc 00 ledger says 'specified, not yet run/published'. Gated on the long eval chain and inadmissible until the judge is kappa-validated and the publish gate (245 annotations) is met.",
+          "status": "not-started",
+          "needsFounder": "Labeling effort; publish decision",
+          "effort": "L",
+          "blockedBy": [
+            "EVAL-1",
+            "EVAL-4"
+          ]
+        },
+        {
+          "id": "CAR-2",
+          "title": "Go-public mechanism + narrative",
+          "what": "The repo is PRIVATE; 'public' scorecard is unbuilt (distinct from producing the numbers). Plus the show-your-work write-up (content-understanding standard, method-as-artifact) and the portfolio surface (site/GitHub-org/blog/talk). Fork: publish repo + dossier + scorecard openly (maximizes artifact/SEO/trust/distribution) vs stay private/distill (protects the labeled-corpus/eval/grounding moat from fast-followers). Folds CAR-3/CAR-7/CAR-8.",
+          "status": "not-started",
+          "needsFounder": "When/how public; transparency vs moat caution; choose surfaces",
+          "effort": "M",
+          "blockedBy": [
+            "BR-1"
+          ]
+        },
+        {
+          "id": "CAR-9",
+          "title": "Reconcile the 'specified vs built' honesty gap",
+          "what": "The audit found the dossier overstates 'engine built / ~106 golden set exists'. Doc 00's whole credibility is the provenance gate — any public artifact MUST fix the specified-vs-built ledger against real repo state or it fails its own promise. Must precede any public reveal. Ties the resume/memory hygiene.",
+          "status": "not-started",
+          "needsFounder": "",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "CRIT-09",
+          "title": "Career-artifact success metric (the primary objective)",
+          "what": "The PRIMARY objective (the career-defining artifact) has no defined success metric or instrumentation, while the SECONDARY objective (revenue) has a full gate/pricing apparatus — a strategy smell. Define what 'artifact succeeded' means (schema adopters/GitHub stars, inbound recruiter/investor/collaborator interest, talk/citation invitations, scorecard reception) with the same rigor as the revenue gates.",
+          "status": "not-started",
+          "needsFounder": "Define artifact-success criteria + review cadence",
+          "effort": "S",
+          "blockedBy": [
+            "DEC-01"
+          ]
+        },
+        {
+          "id": "CRIT-17",
+          "title": "Whole-project kill/time-box + sustainability",
+          "what": "'No deadline' is itself a risk — it removes the forcing function and invites indefinite pre-PMF grinding. Set now, while unemotional, a pre-committed project-level stop condition ('if by date X none of {Gate 0 passed, N users, first dollar}, I stop/shelve/pivot') plus runway/funding source, a bus-factor plan, and 'minimum-shippable-artifact at every checkpoint' so stopping at any point still yields a portfolio-defensible result. Folds CRIT-23 + CAR-5.",
+          "status": "not-started",
+          "needsFounder": "Set the stop condition, time-box, runway, and cadence",
+          "effort": "S",
+          "blockedBy": [
+            "DEC-01"
+          ]
+        },
+        {
+          "id": "CRIT-15",
+          "title": "Help-vs-no-help selective leverage",
+          "what": "'Solo' is a deliberate constraint but treating it as all-or-nothing is a false economy. Identify the 2–3 highest-regret functions to import cheaply (an IP/employment lawyer for CRIT-10, a trademark hour, an ontology/taxonomy reviewer, a technical ML advisor for the bench/LoRA calls, a design contractor) vs stay pure-solo.",
+          "status": "not-started",
+          "needsFounder": "Pick the functions worth paid/advisory help",
+          "effort": "S",
+          "blockedBy": []
+        },
+        {
+          "id": "CRIT-16",
+          "title": "Support / help / community operations",
+          "what": "Post-ship, users hit capture breaks, key failures, wrong groundings; post-OSS, issues/PRs. The internal breakage runbook isn't a user-facing support surface (help docs/FAQ, a channel, bug triage, maintainership). For a 10–20 hr/wk founder, support + OSS-maintenance can consume all build hours — a documented burnout trap and a direct threat to the delivery plan.",
+          "status": "not-started",
+          "needsFounder": "How much support he'll commit to; canned-vs-live posture",
+          "effort": "M",
+          "blockedBy": []
+        },
+        {
+          "id": "CRIT-27",
+          "title": "Anti-over-planning / bias-to-ship tripwire",
+          "what": "The memory notes flag over-planning as a known founder failure mode, and this very multi-agent enumeration apparatus risks becoming productive procrastination — exhaustive planning in place of shipping/testing. Install an explicit tripwire (no more than N% of hours on planning/tooling; the next block must produce user-testable output).",
+          "status": "not-started",
+          "needsFounder": "Accept a planning-to-shipping ratio cap",
+          "effort": "S",
+          "blockedBy": []
+        }
+      ]
+    }
+  ],
+  "criticalPath": [
+    "Ratify objective & envelope",
+    "Consumer-first-as-funnel vs agency-first",
+    "Pick the lead consumer wedge",
+    "Resolve Gate 0 metric: within-subject delta vs 70% rate",
+    "Sign & date the kill-gate pre-registration",
+    "Ruthless MVP scope cut to the Gate-0 instrument",
+    "Recruit 5–10 own-corpus beachhead users",
+    "Cheaper Wizard-of-Oz retrieval probe before the full build",
+    "Declare src/lib engine as source-of-truth",
+    "Migrate authoritative store to IndexedDB",
+    "Unified base-object data model",
+    "Post/Save/Referent (WEMI) data model",
+    "IndexedDB object stores + retrieval index",
+    "Eager media persistence at capture-time",
+    "Typed-mention extraction",
+    "Wedge-domain extraction & grounding readiness",
+    "Candidate-A end-to-end pipeline wiring",
+    "Pick one aesthetic direction",
+    "Design tokens",
+    "Shared React component kit",
+    "Apple-Photos-grade library UI",
+    "Minimum testable Library on the real engine",
+    "Session-logging + paired-baseline instrument",
+    "Live own-corpus capture at test time",
+    "Gate 0 qualitative discovery pass",
+    "Gate 0 within-subject time-to-find delta",
+    "Gate 1 Sean-Ellis 40% test"
+  ],
+  "openDecisions": [
+    {
+      "title": "Consumer-first-as-funnel vs agency-first (the deepest fork)",
+      "why": "The top-level sequencing bet the whole dossier rests on; it subsumes and re-weights the wedge, agency-motion, and monetization forks. Consumer is the cheapest Gate-0 instrument + SEO/portfolio/trust engine; agency is the only structurally-attractive, painkiller-grade, budgeted market (Porter), and the founder's own corpus suggests the consumer painkiller may be weak in his network.",
+      "options": "Consumer-first-as-funnel (dossier commitment: narrow painkiller as proof + funnel + portfolio, agency deferred) vs invert to agency-first (chase the budgeted market — but needs a cold B2B sales motion the ~10–20 hr/wk envelope forbids) vs a hybrid that architects agency now and builds-then-shows later."
+    },
+    {
+      "title": "Lead consumer wedge: recipes vs restaurants vs food-broadly",
+      "why": "One S-effort founder call forks four clusters at once — resolver build order, the doorway matrix, who to recruit for Gate 0, and the decision-moment surfaces. The founder's own n=1 corpus (recipe 6.2% / restaurant 5.5%, painkiller touches ~1 in 8 saves) mildly argues against a clean recipes-first anchor, so it deserves conscious buy-in.",
+      "options": "Recipes-first (proven paid WTP Preplo/Némos/Paprika, daily forcing function, unambiguous execution test, resolution is structured extraction so less blocked on external resolvers) vs restaurant-led (largest documented discovery shift, clean resolve-to-Places payoff, but we own only half the job and Places is the only paid KB) vs food-broadly (matches the corpus's food skew but blurs the single-acute-domain discipline the plan rests on)."
+    },
+    {
+      "title": "Objective & envelope weighting: artifact vs revenue",
+      "why": "The assumed weighting silently re-prioritizes every downstream fork — wedge aggressiveness, monetization, agency timing, eval/OSS polish. It has never been founder-ratified.",
+      "options": "Balanced/career-leaning (assumed default: portfolio-grade artifact first, real revenue second) vs artifact-max (optimize purely for the technical/OSS story → heavier engine/eval investment, weaker GTM urgency) vs revenue-first (optimize for paid conversion → pull the agency tier forward, cut eval/OSS polish)."
+    },
+    {
+      "title": "Gate 0 statistical instrument: within-subject delta vs absolute 70% rate",
+      "why": "A live contradiction across docs 01/02/06 (≥70% absolute task-success) vs doc 08 §5 (within-subject time-to-find delta, 70% only a directional floor). The choice materially enlarges the recruit and cost of Gate 0 and must be settled before the pre-registration can be signed.",
+      "options": "Within-subject delta at N=5–10 (each user is own control, defensible and cheap, fits the envelope, yields no absolute rate) vs escalate to N≈15–20 to license a quantitative '≥70% success rate' headline (auditable per NN/g, but a far larger recruit than a kill-gate warrants)."
+    },
+    {
+      "title": "Monetization model: one-time Pass-led vs subscription-led",
+      "why": "Direction is locked (free local/BYO-key + paid managed) but the model is deferred. The docs argue hard against a retention subscription as the primary line for a vitamin (front-loaded inference cost + vitamin demand curve = betting the P&L on the exact retention the graveyard disproves).",
+      "options": "One-time Resolve/Export Pass ~$49 led (Dewey-proven, retention-independent) vs a subscription-led ~$6–8/mo line (recurring revenue if the painkiller pocket is real) vs a three-lane hybrid (free BYO-key + Pass + conditional subscription gated on Sean-Ellis ≥40%)."
+    },
+    {
+      "title": "Consumer subscription go/no-go",
+      "why": "Building subscription infra pre-validation bets against the strongest evidence; not building it forgoes the only recurring line if the painkiller pocket is real. Pre-committed conditional on Gate 1.",
+      "options": "Build subscription only if Sean-Ellis ≥40% + retrieval gate clear vs default to Pass-only and de-fund subscription infra on a Gate-1 miss."
+    },
+    {
+      "title": "BYO-key free-tier viability",
+      "why": "If free/local/BYO-key can't process a heavy library (low RPM + daily caps make a 20k backfill infeasible), the managed paid tier becomes de-facto mandatory for the exact heavy-saver beachhead — eroding the free-first/trust-first wedge the whole positioning rests on.",
+      "options": "Accept a 'managed tier for heavy libraries' framing (honest, weakens the free promise) vs invest in a genuinely-local OSS path (Qwen3-VL/whisper.cpp on-device — real engineering, preserves the wedge and hedges vendor supplier-power) vs cap free-tier library size."
+    },
+    {
+      "title": "IG at launch: ZIP-import vs live-deep",
+      "why": "The locked 'TikTok AND IG at launch, both deep' conflicts with doc 08's TikTok-led validation build carrying IG via ZIP-import (v1.1). Live IG is unproven and unmaintainable for a solo founder (Meta killed Basic Display, rotating GraphQL doc_ids break every 2–4 weeks); the answer changes what 'launch' means and whether Gate 0 can run TikTok-only.",
+      "options": "ZIP-import IG as the primary launch lane (durable, compliant, but stale, no eager media, a manual user step) vs live deep IG in the first public release (better first-run aha, high maintenance, delays validation) — gated behind the IG live-feasibility probe."
+    },
+    {
+      "title": "Open-core release trigger & first-cut scope",
+      "why": "Irreversible ('can't un-publish trust') and the north-star's payoff. Releasing a wrong abstraction too early invites forks of it and burns the one-shot launch credibility; too late forgoes the SEO/AEO/dev-trust compounding.",
+      "options": "Release at v1.3 strictly last, only after v1.0–v1.2 harden the schema against real corpora AND an audience exists vs an earlier trust/SEO play — and precisely which of {engine, SKOS ontology, export schema, eval harness, golden set, grounding-correctness rules} ship in the first cut."
+    },
+    {
+      "title": "Ruthless MVP scope cut to the Gate-0 instrument",
+      "why": "As enumerated the program is 2–3 years of solo part-time work; Rumelt would call much of it a laundry list, not a strategy. The single biggest strategic omission is the absence of a forcing cut to the smallest thing that tests the core bet. The plan risks dying of ambition before first user contact.",
+      "options": "Cut to the minimum instrument that reaches Gate 0 and freeze everything else (defer the bench, calibration, referent migration, 4 resolvers, full design system, doorways, open-core) vs build the fuller v1 the dossier describes before first user contact."
+    },
+    {
+      "title": "Agency motion shape & timing",
+      "why": "Porter run twice says agency is the only structurally-attractive, painkiller-grade, budgeted market — but a solo part-time founder cannot run a cold B2B motion and the field is crowded (dig.ai, VidContext, Mixpeek); the concierge motion only works against warm contacts.",
+      "options": "Architect-now, build-then-show later (concierge → WoZ → productized, deferred to v1.2, DEFER on 3-for-0) vs invert to agency-first vs never (treat B2B as a pure optional API surface, no motion). Executability hinges on whether warm agency contacts exist at all."
+    },
+    {
+      "title": "Pricing-research method: run PSM/conjoint or skip",
+      "why": "Survey WTP tests whether provenance/openness/grounding actually move choice before building the paid tier, but the Mom Test warns survey WTP is systematically inflated for an identity-flattering vitamin — making the retrieval test + commitment ask + Sean-Ellis + a live Pass A/B the real instrument.",
+      "options": "Run Van Westendorp PSM + choice-based conjoint (bounds the price band and tests whether the differentiators are cosmetic) vs behavioral-only / skip (rely purely on revealed preference; survey pricing is potentially wasted effort)."
+    },
+    {
+      "title": "Free-export inversion (ADR-05)",
+      "why": "Giving away the portability lever is a monetization one-way door — users will expect free export forever and re-paywalling erodes the trust the category rewards; it also forces monetization onto enrichment depth/volume.",
+      "options": "Free open-schema export (trust + open-core credibility, neutralizes Dewey's paid Export-Pass) vs keep export as a revenue lever (easier monetization, weaker trust story)."
+    },
+    {
+      "title": "One aesthetic direction (taste call, blending forbidden)",
+      "why": "All three satisfy the anti-slop bar; the fork is a taste + positioning call that gates the tokens → component kit → library-UX chain (Track B of the critical path). Blending is explicitly forbidden.",
+      "options": "quiet-archive/editorial (library calm, serif voice) vs modern-utility/crisp (instrument, mono data accents) vs warm-collected/tactile (scrapbook warmth)."
+    },
+    {
+      "title": "Measurement vs zero-telemetry paradox",
+      "why": "The locked local-first, no-telemetry, no-accounts posture structurally cannot compute 2-week retention, cohorts, or the GTM funnel — yet Gate 1, retention analysis, and GTM instrumentation all require it. A live contradiction that must be resolved before instrumenting anything.",
+      "options": "Design a consented, opt-in, locally-aggregated, user-visible-before-send telemetry exception to the zero-data promise vs accept cohort-only measurement (metrics come only from the recruited test cohort and can't generalize)."
+    },
+    {
+      "title": "Cross-device sync model",
+      "why": "The product's entire value lives in one browser's IndexedDB; sync is deferred but its eventual shape trades convenience against the 'nothing at rest on our servers' promise the category rewards, and couples to catastrophic-loss protection.",
+      "options": "Defer for v1 (clean trust story, single-copy catastrophe risk for users) vs a minimal user-held-file portable sync (private, manual) vs a managed-but-encrypted zero-knowledge server (best UX, re-opens data-at-rest)."
+    }
+  ],
+  "topRisks": [
+    "Scope death (the #1 risk): as enumerated the program is 2–3 years of solo part-time work, with no item owning a forcing cut to the minimum Gate-0 instrument. Rumelt would call much of it a laundry list, not a strategy — the plan can die of ambition before first user contact, compounded by the founder's own documented over-planning failure mode (this very enumeration apparatus risks becoming productive procrastination).",
+    "The vitamin verdict: the painkiller may be weak — the founder's own corpus shows recipe and restaurant both a minority (~1 in 8 saves) — and Gate 0 is designed to be able to kill the whole thesis. Worsened by an almost-absent, structurally-hard retention loop: a passive-save/delayed-payoff product with no legitimate re-engagement channel (local-first, no server, no accounts) leans the entire business onto a one-time Pass.",
+    "Recruitment invalidity: the founder's network skews finance/tech/film, not weeknight home cooks or urban diners. If he cannot recruit real recipe/restaurant heavy-savers, Gate 0 runs on the wrong population and its verdict — and every downstream monetization fork — is silently invalid.",
+    "Measurement-without-surveillance contradiction: the locked zero-telemetry, no-accounts, local-first posture structurally forbids measuring 2-week retention, cohorts, and the GTM funnel that Gate 1 and the whole GTM plan depend on — a live unreconciled contradiction across clusters.",
+    "Moat evaporation + supplier power: the strategy deliberately publishes the schema/ontology/eval/grounding rules, yet what actually compounds vs what a fast-follower can copy is unanalyzed; the engine is a thin layer over frontier APIs exposed to vendor deprecation/re-pricing; half the restaurant job is already conceded to Google; and the platform (TikTok/IG native saved-search, or Google AI Overviews) could ship the wedge natively overnight.",
+    "Ownership/title risk: a 10–20 hr/wk moonlighter's employment IP-assignment agreement could — if the employer is in AI/media/search/social — invalidate the entire ownership premise (the OSS release, monetization, and 'career artifact I own' all assume clean title). Potentially dispositive, cheap to check, currently unchecked.",
+    "Single-point-of-failure hygiene: the entire July dossier + engine-groundup + grounding code exists only on the founder's local disk (untracked, origin cold since 2026-05-27), and leaked Supabase/OpenAI keys sit unrotated in a conversation archive — irreplaceable-asset loss and security exposure that are retireable this week with founder-only actions."
+  ]
+}
