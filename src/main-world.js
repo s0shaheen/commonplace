@@ -1,11 +1,18 @@
 // Runs in the page's MAIN world. Skims TikTok's OWN already-signed item_list responses.
-// Matches /api/user/collect/item_list/ (Favorites) plus post/favorite variants — confirmed via recon.
+// Matches every *_list variant: collect (Favorites), favorite (Likes), post (Posts), repost — confirmed via recon.
 (() => {
   const TARGET = /\/api\/[^?]*item_list/i;
 
+  // Map the endpoint's discriminating path segment to a human-readable capture source,
+  // so Likes and Favorites (and Posts/Reposts) stay distinguishable in the merged corpus.
+  function sourceFromUrl(url) {
+    const seg = ((/\/([a-z_]+)\/item_list/i.exec(url || "") || [])[1] || "").toLowerCase();
+    return { collect: "favorites", favorite: "likes", post: "posts", repost: "reposts" }[seg] || seg || "other";
+  }
+
   function emit(url, json) {
     try {
-      window.postMessage({ __attic: true, kind: "item_list", url, json }, "*");
+      window.postMessage({ __attic: true, kind: "item_list", url, source: sourceFromUrl(url), json }, "*");
     } catch (_) {}
   }
 

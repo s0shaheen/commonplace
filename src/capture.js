@@ -4,7 +4,7 @@
 // NOTE: we deliberately DROP the bulky `raw` object — it blew chrome.storage's 10MB quota and bloats
 // the export. We keep the one useful nested bit (the subtitle URL) as a top-level field.
 
-export function normalizeItem(it) {
+export function normalizeItem(it, source = null) {
   const author = it.author?.uniqueId ?? it.author?.unique_id ?? null;
   const video = it.video ?? {};
   const stats = it.stats ?? it.statsV2 ?? {};
@@ -14,6 +14,7 @@ export function normalizeItem(it) {
   const engSub = subs.find((s) => /eng/i.test(s.LanguageCodeName || "")) ?? subs[0];
   return {
     id,
+    sources: source ? [source] : [], // which tab(s) this item was captured from: favorites | likes | posts | reposts
     desc: it.desc ?? "",
     createTime: it.createTime ?? null,
     author,
@@ -38,13 +39,19 @@ export function normalizeItem(it) {
   };
 }
 
-export function extractItems(payload) {
+export function extractItems(payload, source = null) {
   const list = payload?.itemList ?? payload?.items ?? [];
-  return list.map(normalizeItem).filter((x) => x.id);
+  return list.map((it) => normalizeItem(it, source)).filter((x) => x.id);
 }
 
 export function mergeDedupe(existing, incoming) {
   const byId = new Map(existing.map((x) => [x.id, x]));
-  for (const item of incoming) byId.set(item.id, item);
+  for (const item of incoming) {
+    const prev = byId.get(item.id);
+    // The same video can appear under multiple tabs (e.g. liked AND favorited) — keep the
+    // freshest record but UNION the source tags so we never lose that provenance on dedupe.
+    const sources = [...new Set([...(prev?.sources ?? []), ...(item.sources ?? [])])];
+    byId.set(item.id, prev ? { ...prev, ...item, sources } : { ...item, sources });
+  }
   return [...byId.values()];
 }

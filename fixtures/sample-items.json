@@ -1,110 +1,312 @@
 [
   {
-    "id": "7001",
-    "desc": "best pasta in brooklyn 🍝 #pasta #brooklyn",
-    "createTime": 1710253380,
-    "author": "foodietravels",
-    "authorName": "Foodie Travels",
-    "url": "https://www.tiktok.com/@foodietravels/video/7001",
-    "playUrl": "https://v.tiktokcdn.com/7001/video/tos.mp4",
-    "downloadUrl": "https://v.tiktokcdn.com/7001/dl.mp4",
-    "cover": "https://p.tiktokcdn.com/7001.jpg",
-    "durationSec": 42,
+    "author": "sullivanryan",
+    "authorName": "ryan sullivan",
+    "cover": "https://p16-common-sign.tiktokcdn-us.com/tos-maliva-p-0068/b71db4a5cb4c4d5587369ae7c0c7f12a_1699899456~tplv-tiktokx-origin.image?dr=9636&x-expires=1783519200&x-signature=pYcVpRWQZGugIc%2Fn%2BagTtii9CLw%3D&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=useast5",
+    "createTime": 1699899452,
+    "desc": "@Reigning Champ thank you! Amazinf fall classics!  - Midweight Terry Classic Hoody - Matte Ripstop Training Camp Vest  - Colour Block Ball Cap   #reigningchamp #fallfashion #streetwear #mensfashion #outfitideas #outfitinspo #unboxing ",
+    "downloadUrl": null,
+    "durationSec": 123,
     "hasSubtitles": true,
-    "subtitleUrl": "https://v.tiktokcdn.com/7001/sub-eng.webvtt",
+    "hashtags": [
+      "reigningchamp",
+      "fallfashion",
+      "streetwear",
+      "mensfashion",
+      "outfitideas",
+      "outfitinspo",
+      "unboxing"
+    ],
+    "id": "7301012534553840901",
     "isSlideshow": false,
-    "music": { "name": "original sound", "author": "foodietravels" },
-    "hashtags": ["pasta", "brooklyn"],
-    "stats": { "plays": 1000, "likes": 80, "comments": 5, "shares": 2, "collects": 10 }
+    "music": {
+      "author": "ryan sullivan",
+      "name": "original sound"
+    },
+    "playUrl": "https://v16-webapp-prime.us.tiktok.com/video/tos/alisg/tos-alisg-ve-0068c800-sg/okiOLYByqACpgUpQi9CTxIaAkBSfEygkCcKoIB/?a=1988&bti=ODszNWYuMDE6&&bt=1630&ft=4KJMyMzm8Zmo08Okja4jV-kbdpWrKsd.&mime_type=video_mp4&rc=aGk0OTo4Ozo4aTc2aTk5aUBpM241M3c5cm45bzMzNzczM0A2My0yYWBfNTExYTVeMTVjYSMyZmhiMmRzYjZgLS1kMTZzcw%3D%3D&expire=1783522537&l=2026070614533447D50844C778980DFDC6&ply_type=2&policy=2&signature=58edbba20f590d4bb0f4eba56eddc0be&tk=tt_chain_token&btag=e00090000",
+    "sources": [
+      "favorites"
+    ],
+    "stats": {
+      "collects": 17,
+      "comments": 24,
+      "likes": 583,
+      "plays": 23500,
+      "shares": 10
+    },
+    "subtitleUrl": "https://v16m-webapp.tiktokcdn-us.com/f988b79a148182b9b72ba8a03e42b462/6a4e64e9/video/tos/useast2a/tos-useast2a-v-0068/59463db591ac43eda6239169dfbd156a/?a=1988&bti=ODszNWYuMDE6&&bt=2888&ft=4KLMeMzm8Zmo08Okja4jV-kbdpWrKsd.&mime_type=video_mp4&rc=M241M3c5cm45bzMzNzczM0BpM241M3c5cm45bzMzNzczM0AyZmhiMmRzYjZgLS1kMTZzYSMyZmhiMmRzYjZgLS1kMTZzcw%3D%3D&l=2026070614533447D50844C778980DFDC6&btag=e00050000",
+    "url": "https://www.tiktok.com/@sullivanryan/video/7301012534553840901"
   },
   {
-    "id": "7002",
-    "desc": "lilia is still the best date spot in williamsburg",
-    "createTime": 1710339780,
-    "author": "nyceats",
-    "authorName": "NYC Eats",
-    "url": "https://www.tiktok.com/@nyceats/video/7002",
-    "playUrl": "https://v.tiktokcdn.com/7002/video/tos.mp4",
-    "downloadUrl": null,
-    "cover": "https://p.tiktokcdn.com/7002.jpg",
-    "durationSec": 18,
-    "hasSubtitles": false,
-    "subtitleUrl": null,
-    "isSlideshow": false,
-    "music": null,
-    "hashtags": ["nyc", "datenight"],
-    "stats": { "plays": 500, "likes": 40, "comments": 1, "shares": 0, "collects": 7 }
-  },
-  {
-    "id": "7003",
-    "desc": "5 books that changed how I think",
-    "createTime": 1710426180,
-    "author": "readwithme",
-    "authorName": "Read With Me",
-    "url": "https://www.tiktok.com/@readwithme/video/7003",
-    "playUrl": null,
-    "downloadUrl": null,
-    "cover": "https://p.tiktokcdn.com/7003.jpg",
-    "durationSec": null,
-    "hasSubtitles": false,
-    "subtitleUrl": null,
-    "isSlideshow": true,
-    "music": { "name": "lofi beats", "author": "dj" },
-    "hashtags": ["books", "reading"],
-    "stats": { "plays": 200, "likes": 30, "comments": 3, "shares": 1, "collects": 4 }
-  },
-  {
-    "id": "7004",
-    "desc": "30 min full body workout no equipment",
-    "createTime": 1710512580,
-    "author": "fitdaily",
-    "authorName": "Fit Daily",
-    "url": "https://www.tiktok.com/@fitdaily/video/7004",
-    "playUrl": "https://v.tiktokcdn.com/7004/video/tos.mp4",
-    "downloadUrl": null,
-    "cover": "https://p.tiktokcdn.com/7004.jpg",
-    "durationSec": 65,
+    "author": "hellofromniko",
+    "authorName": "Niko",
+    "cover": "https://p16-common-sign.tiktokcdn-us.com/tos-useast8-p-0068-tx2/okEvyPAEAKDID8oXlR2idisKvABaDPAjBAYAm~tplv-tiktokx-origin.image?dr=9636&x-expires=1783519200&x-signature=OdNq9gcclwceseJQbLJmT4vkOJk%3D&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=useast5",
+    "createTime": 1760729249,
+    "desc": "@PAIGE unboxing ✨ (links in bio) Paige was super generous in sending me some items to add to my dad wardrobe! These are definitely some amazing investment staples I’ll be enjoying this fall/winter! Hope you enjoy ✨ #unboxing #menswear #paige #pr #prunboxing ",
+    "downloadUrl": "https://v16-webapp-prime.us.tiktok.com/video/tos/useast8/tos-useast8-pve-0068-tx2/oMtKjRvD5fLQIY6YIAikbg48XbfAeXAMBDqCBS/?a=1988&bti=ODszNWYuMDE6&&bt=1111&ft=4KJMyMzm8Zmo08Okja4jV-kbdpWrKsd.&mime_type=video_mp4&rc=NWVmNjg4Z2VlODxnNjhnM0BpM3VnOXY5cjU8NjMzaTczNEAxMGMxNl9fXl8xYzE1Yy81YSNgZF8tMmRzYm1hLS1kMTJzcw%3D%3D&expire=1783522516&l=2026070614533447D50844C778980DFDC6&ply_type=2&policy=2&signature=9024f909b5649115238d7bb0eaea9fe8&tk=tt_chain_token&btag=e00090000",
+    "durationSec": 102,
     "hasSubtitles": true,
-    "subtitleUrl": "https://v.tiktokcdn.com/7004/sub-eng.webvtt",
+    "hashtags": [
+      "unboxing",
+      "menswear",
+      "paige",
+      "pr",
+      "prunboxing"
+    ],
+    "id": "7562274488042278174",
     "isSlideshow": false,
-    "music": null,
-    "hashtags": ["workout", "fitness"],
-    "stats": { "plays": 9000, "likes": 700, "comments": 40, "shares": 25, "collects": 120 }
+    "music": {
+      "author": "Cheng Lee",
+      "name": "Refreshing and light indie pop(1552207)"
+    },
+    "playUrl": "https://v16-webapp-prime.us.tiktok.com/video/tos/useast8/tos-useast8-ve-0068c004-tx2/ooMEEeFV0EAUbPKZYKmuyfQWYAi8ABBPoIbRdi/?a=1988&bti=ODszNWYuMDE6&&bt=1231&ft=4KJMyMzm8Zmo08Okja4jV-kbdpWrKsd.&mime_type=video_mp4&rc=M2g4OGY6aTw6ZzkzOzllNkBpM3VnOXY5cjU8NjMzaTczNEA1NC0tLWMyXi4xYzQ2Xi0xYSNgZF8tMmRzYm1hLS1kMTJzcw%3D%3D&expire=1783522516&l=2026070614533447D50844C778980DFDC6&ply_type=2&policy=2&signature=49bb15ef75e44731ed5d793e56cd89c0&tk=tt_chain_token&btag=e00088000",
+    "sources": [
+      "favorites"
+    ],
+    "stats": {
+      "collects": 43,
+      "comments": 14,
+      "likes": 653,
+      "plays": 11100,
+      "shares": 6
+    },
+    "subtitleUrl": "https://v16m-webapp.tiktokcdn-us.com/4309d4e2293e1c6f59539aa55f46b35d/6a4e64d4/video/tos/useast8/tos-useast8-v-0068-tx2/94ad69a8e3f948f68a2e083cb36b561d/?a=1988&bti=ODszNWYuMDE6&&bt=14782&ft=4KLMeMzm8Zmo08Okja4jV-kbdpWrKsd.&mime_type=video_mp4&rc=M3VnOXY5cjU8NjMzaTczNEBpM3VnOXY5cjU8NjMzaTczNEBgZF8tMmRzYm1hLS1kMTJzYSNgZF8tMmRzYm1hLS1kMTJzcw%3D%3D&l=2026070614533447D50844C778980DFDC6&btag=e00050000",
+    "url": "https://www.tiktok.com/@hellofromniko/video/7562274488042278174"
   },
   {
-    "id": "7005",
-    "desc": "Lilia in Williamsburg — get the cacio e pepe",
-    "createTime": 1710598980,
-    "author": "foodietravels",
-    "authorName": "Foodie Travels",
-    "url": "https://www.tiktok.com/@foodietravels/video/7005",
-    "playUrl": "https://v.tiktokcdn.com/7005/video/tos.mp4",
-    "downloadUrl": null,
-    "cover": "https://p.tiktokcdn.com/7005.jpg",
-    "durationSec": 27,
+    "author": "electroclashed",
+    "authorName": "electroclashed",
+    "cover": "https://p16-common-sign.tiktokcdn-us.com/tos-useast5-p-0068-tx/owCojJDk9LyfIz787f5ykVfEBghFIITiHIAAS6~tplv-tiktokx-origin.image?dr=9636&x-expires=1783519200&x-signature=24CpHfyAb6orElJotfJ0unZ%2Fq2M%3D&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=useast5",
+    "createTime": 1778094371,
+    "desc": "Madeon- Pop Culture (2011) #Bloghouse #Electroclash #Madeon #Electro #Electroclashed ",
+    "downloadUrl": "https://v16-webapp-prime.us.tiktok.com/video/tos/useast5/tos-useast5-pve-0068-tx/oQGN1WIIQOAnf67elILI3fnFArR5sRAfGFkGgD/?a=1988&bti=ODszNWYuMDE6&&bt=282&ft=4KJMyMzm8Zmo08Okja4jV-kbdpWrKsd.&mime_type=video_mp4&rc=MzxmZjs2aTZnaDtoaGRlNEBpM3Rsdmo5cjpzOjMzZzczNEAvYS0wLWIzXzQxYmNgNC5eYSNkMmtzMmRzL3FhLS1kMS9zcw%3D%3D&expire=1783522504&l=2026070614533447D50844C778980DFDC6&ply_type=2&policy=2&signature=477e92e3500ddc251e75a1199561b769&tk=tt_chain_token&btag=e00090000",
+    "durationSec": 90,
     "hasSubtitles": false,
-    "subtitleUrl": null,
+    "hashtags": [
+      "bloghouse",
+      "electroclash",
+      "madeon",
+      "electro",
+      "electroclashed"
+    ],
+    "id": "7636857034167569677",
     "isSlideshow": false,
-    "music": null,
-    "hashtags": ["pasta", "nyc"],
-    "stats": { "plays": 1500, "likes": 95, "comments": 8, "shares": 4, "collects": 22 }
+    "music": {
+      "author": "electroclashed",
+      "name": "original sound"
+    },
+    "playUrl": "https://v16-webapp-prime.us.tiktok.com/video/tos/useast5/tos-useast5-ve-0068c002-tx/ogrRA8k3LAUGMbNRAyHQAfFIIO7WgGeLnqRfhf/?a=1988&bti=ODszNWYuMDE6&&bt=307&ft=4KJMyMzm8Zmo08Okja4jV-kbdpWrKsd.&mime_type=video_mp4&rc=aGQ7ZWlkOTc2ZjY6ZTg7N0BpM3Rsdmo5cjpzOjMzZzczNEAvL2MxLWAvXmExYDVeNTU1YSNkMmtzMmRzL3FhLS1kMS9zcw%3D%3D&expire=1783522504&l=2026070614533447D50844C778980DFDC6&ply_type=2&policy=2&signature=d890f70e8f9509092b0754dc10d264e9&tk=tt_chain_token&btag=e00090000",
+    "sources": [
+      "favorites"
+    ],
+    "stats": {
+      "collects": 27500,
+      "comments": 734,
+      "likes": 145900,
+      "plays": 663100,
+      "shares": 6366
+    },
+    "subtitleUrl": null,
+    "url": "https://www.tiktok.com/@electroclashed/video/7636857034167569677"
   },
   {
-    "id": "7006",
-    "desc": "no author edge case",
-    "createTime": null,
-    "author": null,
-    "authorName": null,
-    "url": null,
-    "playUrl": null,
-    "downloadUrl": null,
-    "cover": null,
-    "durationSec": null,
+    "author": "maggiorinoviolin",
+    "authorName": "maggiorinoviolin",
+    "cover": "https://p16-common-sign.tiktokcdn-us.com/tos-useast2a-p-0037-euttp/o0ELNi2BQghZtgSBItaiEr04EBxhHBM8TAvBD~tplv-tiktokx-origin.image?dr=9636&x-expires=1783519200&x-signature=5Tyai1aMTk4tU19oh9dtYp4y2iU%3D&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=useast5",
+    "createTime": 1779125967,
+    "desc": "Attack on titan in a Wedding Entrance part 2 💍🤵🏻👰🏻 #aot #attackontitan #weddingentrance #erenyeager #ShingekiNoKyojin",
+    "downloadUrl": "https://v16-webapp-prime.us.tiktok.com/video/tos/useast2a/tos-useast2a-ve-0068c001-euttp/o4vL6iNEBgAKia4BMSEZRa0WhxQgIxgZDBEtG/?a=1988&bti=ODszNWYuMDE6&&bt=1420&ft=4KJMyMzm8Zmo0Qukja4jVtwZdpWrKsd.&mime_type=video_mp4&rc=aGdpNjtoaTw3Zzc0OGY4NEBpM2xqcms5cnJuOzMzZjczNUAzMjM1MDJgXy0xNDBgNi5eYSMzMzUtMmRrbzJhLS1kMTNzcw%3D%3D&expire=1783522855&l=2026070614595321DE8157A915870EDC28&ply_type=2&policy=2&signature=1605d3e5e54b58cf6b3f2f784de775d2&tk=tt_chain_token&btag=e00090000",
+    "durationSec": 62,
     "hasSubtitles": false,
-    "subtitleUrl": null,
+    "hashtags": [
+      "aot",
+      "AttackOnTitan",
+      "weddingentrance",
+      "erenyeager",
+      "shingekinokyojin"
+    ],
+    "id": "7641287834275433760",
     "isSlideshow": false,
-    "music": null,
+    "music": {
+      "author": "maggiorinoviolin",
+      "name": "audio originale"
+    },
+    "playUrl": "https://v16-webapp-prime.us.tiktok.com/video/tos/useast2a/tos-useast2a-ve-0068c001-euttp/oMiBkEZvzgNiLB0BSTMEAQm4KahEdtgDIixdE/?a=1988&bti=ODszNWYuMDE6&&bt=1373&ft=4KJMyMzm8Zmo0Qukja4jVtwZdpWrKsd.&mime_type=video_mp4&rc=aDszNzc8ZTczaTQ8MzRkM0BpM2xqcms5cnJuOzMzZjczNUAtMDExYzAyNWMxMjYvXzI1YSMzMzUtMmRrbzJhLS1kMTNzcw%3D%3D&expire=1783522855&l=2026070614595321DE8157A915870EDC28&ply_type=2&policy=2&signature=90c209cad4dc578e99e5c2db597460ca&tk=tt_chain_token&btag=e00090000",
+    "sources": [
+      "likes"
+    ],
+    "stats": {
+      "collects": 26200,
+      "comments": 1296,
+      "likes": 303100,
+      "plays": 1400000,
+      "shares": 43700
+    },
+    "subtitleUrl": null,
+    "url": "https://www.tiktok.com/@maggiorinoviolin/video/7641287834275433760"
+  },
+  {
+    "author": "nostalgiafactor78",
+    "authorName": "nostalgiafactor78",
+    "cover": "https://p19-common-sign.tiktokcdn-us.com/tos-useast5-p-0068-tx/okf3iJCggIoQ5KfHlWUIOGWCjgsQkDXeAAcLSj~tplv-tiktokx-origin.image?dr=9636&x-expires=1783519200&x-signature=hyd8ZYdyl0WFWcrsZpfcdyZSlQI%3D&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=useast5",
+    "createTime": 1783049397,
+    "desc": "Can the Doomsday trailer compete with this #infinitywar #marvel #avengers #movietrailer #nostalgia ",
+    "downloadUrl": "https://v16-webapp-prime.us.tiktok.com/video/tos/useast5/tos-useast5-ve-0068c001-tx/oA6XjBYIIGi5B6tfCwyHEp1IbxIAIAjTiEEAQV/?a=1988&bti=ODszNWYuMDE6&&bt=373&ft=4KJMyMzm8Zmo0Qukja4jVtwZdpWrKsd.&mime_type=video_mp4&rc=aDNlOGZpaTU6O2VnPDloOEBpM3Rqa2w5cnBsPDMzZzczNEAyLV5fM2E1XmExMjAxYTI0YSMxLi1fMmRzbDBhLS1kMS9zcw%3D%3D&expire=1783522936&l=2026070614595321DE8157A915870EDC28&ply_type=2&policy=2&signature=bec25749665611d3cfbf6c432d69597e&tk=tt_chain_token&btag=e00090000",
+    "durationSec": 143,
+    "hasSubtitles": true,
+    "hashtags": [
+      "infinitywar",
+      "marvel",
+      "avengers",
+      "movietrailer",
+      "nostalgia"
+    ],
+    "id": "7658138770520149262",
+    "isSlideshow": false,
+    "music": {
+      "author": "nostalgiafactor78",
+      "name": "original sound"
+    },
+    "playUrl": "https://v16-webapp-prime.us.tiktok.com/video/tos/useast5/tos-useast5-ve-0068c002-tx/ogABQR6HmX1EfAuHyJB5AItjpILIiYiwSdECIE/?a=1988&bti=ODszNWYuMDE6&&bt=415&ft=4KJMyMzm8Zmo0Qukja4jVtwZdpWrKsd.&mime_type=video_mp4&rc=OmU5NTllN2VlZTdlNTg4NEBpM3Rqa2w5cnBsPDMzZzczNEA2YzM0LWFjNTMxYS9eMzAtYSMxLi1fMmRzbDBhLS1kMS9zcw%3D%3D&expire=1783522936&l=2026070614595321DE8157A915870EDC28&ply_type=2&policy=2&signature=e0c0e13c620c1d4fd890c602b5ea9382&tk=tt_chain_token&btag=e00090000",
+    "sources": [
+      "likes"
+    ],
+    "stats": {
+      "collects": 7437,
+      "comments": 1259,
+      "likes": 87200,
+      "plays": 533000,
+      "shares": 6057
+    },
+    "subtitleUrl": "https://v16m-webapp.tiktokcdn-us.com/25ba9b2196c7da29ce50baa4a7118bdf/6a4e6678/video/tos/useast5/tos-useast5-v-0068-tx/c773562e305945b3aa1f23b533846b05/?a=1988&bti=ODszNWYuMDE6&&bt=4104&ft=4KLMeMzm8Zmo0Qukja4jVtwZdpWrKsd.&mime_type=video_mp4&rc=M3Rqa2w5cnBsPDMzZzczNEBpM3Rqa2w5cnBsPDMzZzczNEAxLi1fMmRzbDBhLS1kMS9zYSMxLi1fMmRzbDBhLS1kMS9zcw%3D%3D&l=2026070614595321DE8157A915870EDC28&btag=e00050000",
+    "url": "https://www.tiktok.com/@nostalgiafactor78/video/7658138770520149262"
+  },
+  {
+    "author": "kamoka_pearl",
+    "authorName": "kamokapearl",
+    "cover": "https://p16-common-sign.tiktokcdn-us.com/tos-useast8-p-0068-tx2/oQCrIQALGQ0JMGBAcPRCifQKbeX7GewFU8fm8E~tplv-tiktokx-origin.image?dr=9636&x-expires=1783519200&x-signature=VQJYxuuxtyiEEx0CpmqiBLq4Cxk%3D&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=useast5",
+    "createTime": 1770139614,
+    "desc": "Living in arguably the most remote place on Earth 🏝️🌊🪸🐠🦈 ",
+    "downloadUrl": "https://v16-webapp-prime.us.tiktok.com/video/tos/useast8/tos-useast8-ve-0068c004-tx2/o8EPdpiBXhviE8iRpoEQ6iAVAMAfveyCr2gIAB/?a=1988&bti=ODszNWYuMDE6&&bt=1612&ft=4KJMyMzm8Zmo0Qukja4jVtwZdpWrKsd.&mime_type=video_mp4&rc=O2Y6M2k7M2hnOGQ2ODNnZ0Bpajs1bWw5cnk1OTMzaTczNEA1MTYwLTRhX2IxYDAtYzAtYSNrMGxfMmRjay5hLS1kMTJzcw%3D%3D&expire=1783522943&l=2026070614595321DE8157A915870EDC28&ply_type=2&policy=2&signature=f00b5f4907787a8b449e4d5fa0bbe303&tk=tt_chain_token&btag=e00090000",
+    "durationSec": 150,
+    "hasSubtitles": true,
     "hashtags": [],
-    "stats": { "plays": null, "likes": null, "comments": null, "shares": null, "collects": null }
+    "id": "7602691632722365727",
+    "isSlideshow": false,
+    "music": {
+      "author": "kamokapearl",
+      "name": "original sound"
+    },
+    "playUrl": "https://v16-webapp-prime.us.tiktok.com/video/tos/useast8/tos-useast8-ve-0068c001-tx2/ocQRCLmcKFAiQCGhIeFXNUhAI5M8eCJ7GefAGB/?a=1988&bti=ODszNWYuMDE6&&bt=1744&ft=4KJMyMzm8Zmo0Qukja4jVtwZdpWrKsd.&mime_type=video_mp4&rc=NjxlN2k3OWhoN2VlOmc6O0Bpajs1bWw5cnk1OTMzaTczNEAyYDMwNDExNTIxLmE1MWEwYSNrMGxfMmRjay5hLS1kMTJzcw%3D%3D&expire=1783522943&l=2026070614595321DE8157A915870EDC28&ply_type=2&policy=2&signature=5f5febcf3fa48c46fc2bf018c7f61744&tk=tt_chain_token&btag=e00090000",
+    "sources": [
+      "likes"
+    ],
+    "stats": {
+      "collects": 23600,
+      "comments": 1073,
+      "likes": 368700,
+      "plays": 2500000,
+      "shares": 15700
+    },
+    "subtitleUrl": "https://v16m-webapp.tiktokcdn-us.com/4a095fbc78c840505fcebbd4afe80cc5/6a4e667f/video/tos/useast8/tos-useast8-v-0068-tx2/4db28839fe9d46248c164627e72dcc61/?a=1988&bti=ODszNWYuMDE6&&bt=13153&ft=4KLMeMzm8Zmo0Qukja4jVtwZdpWrKsd.&mime_type=video_mp4&rc=ajs1bWw5cnk1OTMzaTczNEBpajs1bWw5cnk1OTMzaTczNEBrMGxfMmRjay5hLS1kMTJzYSNrMGxfMmRjay5hLS1kMTJzcw%3D%3D&l=2026070614595321DE8157A915870EDC28&btag=e00050000",
+    "url": "https://www.tiktok.com/@kamoka_pearl/video/7602691632722365727"
+  },
+  {
+    "author": "esther.xvjw",
+    "authorName": "esther ✮",
+    "cover": "https://p19-common-sign.tiktokcdn-us.com/tos-useast2a-p-0037-euttp/oAxYMGQgiAGNgdA1IP0IEgwOeeLkjHcI6eAEe5~tplv-tiktokx-origin.image?dr=9636&x-expires=1783519200&x-signature=pDaeV5WBZwjxB%2BjWdPRsIS1tiak%3D&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=useast5",
+    "createTime": 1712244292,
+    "desc": "Basically Ode to the Mets #THESTROKES #fabrizio #fabriziomorettiedit #fabriziomoretti #juliancasablancas #juliancasablancasedits #julian #ahj #albert #alberthammondjr #alberthammondjredit #albert #nickvalensiedit #nickvalensi #nick #nikolaifraitureedit #nikolaifraiture #nikolai #thestrokes #thestrokesedit #thestrokesmusic #TheStrokes #thestrokesband #thestrokeslive #thestrokesconcert #thenewabnormal #firstimpressionsofearth #futurepresentpast #comedownmachine #isthisit #angles #roomonfire ",
+    "downloadUrl": null,
+    "durationSec": 62,
+    "hasSubtitles": false,
+    "hashtags": [
+      "thestrokes",
+      "fabrizio",
+      "fabriziomorettiedit",
+      "fabriziomoretti",
+      "juliancasablancas",
+      "juliancasablancasedits",
+      "julian",
+      "ahj",
+      "albert",
+      "alberthammondjr",
+      "alberthammondjredit",
+      "nickvalensiedit",
+      "nickvalensi",
+      "nick",
+      "nikolaifraitureedit",
+      "nikolaifraiture",
+      "nikolai",
+      "thestrokesedit",
+      "thestrokesmusic",
+      "thestrokesband",
+      "thestrokeslive",
+      "thestrokesconcert",
+      "thenewabnormal",
+      "firstimpressionsofearth",
+      "futurepresentpast",
+      "comedownmachine",
+      "isthisit",
+      "angles",
+      "roomonfire"
+    ],
+    "id": "7354033215738236193",
+    "isSlideshow": false,
+    "music": {
+      "author": "esther ✮",
+      "name": "original sound"
+    },
+    "playUrl": "https://v16-webapp-prime.us.tiktok.com/video/tos/no1a/tos-no1a-ve-68c710-no/owjYMGIgigGNgdA1QO4IEmwdeeLLjHcIfFnEev/?a=1988&bti=ODszNWYuMDE6&&bt=377&ft=4KJMyMzm8Zmo0Qukja4jVtwZdpWrKsd.&mime_type=video_mp4&rc=PDU7OzY7Zmg4OWhmZDk3aUBpanF3bXI5cnBmcjMzZjczM0BeL14tXmItXjMxY2EtNGAxYSM0My0tMmRrNTRgLS1kMWNzcw%3D%3D&expire=1783522855&l=2026070614595321DE8157A915870EDC28&ply_type=2&policy=2&signature=7386217d554c2f5385921923af30bcc1&tk=tt_chain_token&btag=e000d0000",
+    "sources": [
+      "favorites",
+      "likes"
+    ],
+    "stats": {
+      "collects": 1716,
+      "comments": 81,
+      "likes": 16100,
+      "plays": 135600,
+      "shares": 1012
+    },
+    "subtitleUrl": null,
+    "url": "https://www.tiktok.com/@esther.xvjw/video/7354033215738236193"
+  },
+  {
+    "author": "kgarciacenteno",
+    "authorName": "KGC ✨",
+    "cover": "https://p19-common-sign.tiktokcdn-us.com/tos-useast8-p-0068-tx2/oAWa0AVl41dVlkAdiiuvjIElxcXb1GBBQAEWR~tplv-tiktokx-origin.image?dr=9636&x-expires=1783519200&x-signature=EAJ6B3tIO70h0jRa2D%2BaJ6D8H5U%3D&t=4d5b0474&ps=13740610&shp=81f88b70&shcp=43f4a2f9&idc=useast5",
+    "createTime": 1781882442,
+    "desc": "Reminds me of Nick Jones and “Red Dress” 🤭 #thestrokes #juliancasablancas #odetothemets #chicago #unitedcenter ",
+    "downloadUrl": "https://v16-webapp-prime.us.tiktok.com/video/tos/useast8/tos-useast8-ve-0068c004-tx2/oMBvjxcaAdCXW2WdByIzIRs0GEQVibIQA1EVi/?a=1988&bti=ODszNWYuMDE6&&bt=458&ft=4KJMyMzm8Zmo0Qukja4jVtwZdpWrKsd.&mime_type=video_mp4&rc=NjU5ZTlnaDVpZzRkNTZoNUBpM2pqcGs5cnBvOzMzaTczNEBgNC00YGNeXy4xLl9eLmFjYSNfYG9iMmRrbm5hLS1kMTJzcw%3D%3D&expire=1783522831&l=2026070614595321DE8157A915870EDC28&ply_type=2&policy=2&signature=def56c8f7c03917f7497649f436565a7&tk=tt_chain_token&btag=e00088000",
+    "durationSec": 38,
+    "hasSubtitles": false,
+    "hashtags": [
+      "thestrokes",
+      "juliancasablancas",
+      "odetothemets",
+      "chicago",
+      "unitedcenter"
+    ],
+    "id": "7653126707943165214",
+    "isSlideshow": false,
+    "music": {
+      "author": "KGC ✨",
+      "name": "original sound"
+    },
+    "playUrl": "https://v16-webapp-prime.us.tiktok.com/video/tos/useast8/tos-useast8-ve-0068c002-tx2/o8Xc2bEjiAkjBWQPvGAdiQdrV1nVAEWIRaBCx/?a=1988&bti=ODszNWYuMDE6&&bt=478&ft=4KJMyMzm8Zmo0Qukja4jVtwZdpWrKsd.&mime_type=video_mp4&rc=Ozo8NGk4Ojo6ZGhkOjdnNUBpM2pqcGs5cnBvOzMzaTczNEAwMjU2YDM0NTAxY2JiMzYvYSNfYG9iMmRrbm5hLS1kMTJzcw%3D%3D&expire=1783522831&l=2026070614595321DE8157A915870EDC28&ply_type=2&policy=2&signature=42d801902190dca523fe47c4077016d5&tk=tt_chain_token&btag=e00088000",
+    "sources": [
+      "favorites",
+      "likes"
+    ],
+    "stats": {
+      "collects": 3218,
+      "comments": 200,
+      "likes": 47200,
+      "plays": 219200,
+      "shares": 1585
+    },
+    "subtitleUrl": null,
+    "url": "https://www.tiktok.com/@kgarciacenteno/video/7653126707943165214"
   }
 ]

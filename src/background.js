@@ -9,10 +9,10 @@ chrome.storage.local.get("items").then((d) => {
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.kind === "item_list") {
-    const incoming = extractItems(msg.json);
+    const incoming = extractItems(msg.json, msg.source);
     items = mergeDedupe(items, incoming);
     chrome.storage.local.set({ items, count: items.length });
-    console.log(`[attic-spike] +${incoming.length}, total ${items.length}`);
+    console.log(`[attic-spike] +${incoming.length} from ${msg.source || "?"}, total ${items.length}`);
   } else if (msg.kind === "scroll_done") {
     exportData("attic-favorites.json", items);
   } else if (msg.kind === "export_enriched") {

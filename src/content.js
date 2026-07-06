@@ -4,7 +4,7 @@
 window.addEventListener("message", (e) => {
   if (e.source !== window || !e.data || e.data.__attic !== true) return;
   if (e.data.kind === "item_list") {
-    chrome.runtime.sendMessage({ kind: "item_list", url: e.data.url, json: e.data.json });
+    chrome.runtime.sendMessage({ kind: "item_list", url: e.data.url, source: e.data.source, json: e.data.json });
   }
 });
 
@@ -29,6 +29,65 @@ function getScroller() {
   return best;
 }
 
+// ── content-visibility pruning ────────────────────────────────────────────────
+// Keeps the page fast on huge lists (thousands of likes) by letting the browser SKIP
+// layout/paint for off-screen tiles. It mutates ZERO tiles (just a <style> + one attr),
+// so it's transparent to TikTok's React; capture is network-based (main-world intercepts
+// item_list), so this can NEVER lose corpus data. Kill anytime with Alt+Shift+K.
+const CV_STYLE_ID = "attic-cv";
+let cvGrid = null;
+
+function resolveGrid() {
+  const anchors = document.querySelectorAll('a[href*="/video/"], a[href*="/photo/"]');
+  if (anchors.length < 12) return null; // grid not populated yet
+  const a = anchors[anchors.length >> 1]; // middle anchor — resilient to class churn
+  let best = null;
+  let bestCount = 0;
+  for (let n = a; n && n !== document.body; n = n.parentElement) {
+    const p = n.parentElement;
+    if (p && p.childElementCount > bestCount) {
+      bestCount = p.childElementCount;
+      best = n;
+    }
+  }
+  if (!best || bestCount < 6) return null; // no repeating grid → refuse to act
+  return best.parentElement;
+}
+
+function enableCV() {
+  if (document.getElementById(CV_STYLE_ID)) return true;
+  const g = resolveGrid();
+  if (!g) return false;
+  cvGrid = g;
+  const sample = g.querySelector(":scope > *");
+  const h = (sample && Math.round(sample.getBoundingClientRect().height)) || 300;
+  g.setAttribute("data-attic-grid", "1");
+  const s = document.createElement("style");
+  s.id = CV_STYLE_ID;
+  s.textContent = `[data-attic-grid] > * { content-visibility: auto; contain-intrinsic-size: auto ${h}px; }`;
+  document.documentElement.appendChild(s); // outside TikTok's #app → React never reconciles it
+  console.log("[attic-spike] content-visibility pruning ON (grid: %d tiles)", g.childElementCount);
+  return true;
+}
+
+function killCV() {
+  document.getElementById(CV_STYLE_ID)?.remove();
+  cvGrid?.removeAttribute("data-attic-grid");
+  cvGrid = null;
+  console.log("[attic-spike] content-visibility pruning OFF");
+}
+
+// Keep the rule live across TikTok re-renders / SPA tab switches (Likes <-> Favorites).
+function ensureCV() {
+  if (!document.getElementById(CV_STYLE_ID)) return enableCV();
+  if (!cvGrid || !cvGrid.isConnected) {
+    killCV();
+    return enableCV(); // grid element replaced → re-resolve
+  }
+  if (!cvGrid.hasAttribute("data-attic-grid")) cvGrid.setAttribute("data-attic-grid", "1"); // attr stripped → re-assert
+  return true;
+}
+
 function nudgeToBottom() {
   // Drive the last loaded item into view — scrolls all ancestor containers as needed (virtualization-safe).
   const links = document.querySelectorAll('a[href*="/video/"], a[href*="/photo/"]');
@@ -48,6 +107,7 @@ async function autoScroll() {
   let prev = -1;
   const MAX = 15; // ~15 idle polls (~45s of no new items) before giving up — patient
   while (stable < MAX) {
+    ensureCV();
     const domCount = nudgeToBottom();
     await sleep(2000 + Math.random() * 1500);
     const { count = 0 } = await chrome.storage.local.get("count");
@@ -58,6 +118,7 @@ async function autoScroll() {
     console.log(`[attic-spike] scrolling… captured ${count} (idle ${stable}/${MAX}, DOM ${domCount})`);
   }
   scrolling = false;
+  killCV(); // restore the page to its natural state now capture is done
   chrome.runtime.sendMessage({ kind: "scroll_done" });
   console.log(`[attic-spike] auto-scroll complete — ${prev} captured`);
 }
@@ -123,6 +184,7 @@ window.addEventListener("keydown", (e) => {
     console.log("[attic-spike] manual export triggered → attic-favorites.json");
   }
   if (e.code === "KeyE") runEnrichment();
+  if (e.code === "KeyK") killCV(); // manual kill-switch for content-visibility pruning
   if (e.code === "KeyD") {
     chrome.runtime.sendMessage({ kind: "download_test", n: 3 });
     console.log("[attic-spike] Path 1: chrome.downloads test (3 videos)");
@@ -134,5 +196,5 @@ window.addEventListener("keydown", (e) => {
 });
 
 console.log(
-  "[attic-spike] ready — A:auto-scroll · S:export · E:enrich · D:download(chrome.downloads) · F:download(fetch)"
+  "[attic-spike] ready — A:auto-scroll · S:export · E:enrich · K:kill-pruning · D:download(chrome.downloads) · F:download(fetch)"
 );

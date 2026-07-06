@@ -58,3 +58,21 @@ test("mergeDedupe upserts by id", () => {
   assert.equal(merged.length, 2);
   assert.equal(merged.find((x) => x.id === "1").desc, "new");
 });
+
+test("normalizeItem tags the capture source (and defaults to none)", () => {
+  assert.deepEqual(normalizeItem(realItem, "likes").sources, ["likes"]);
+  assert.deepEqual(normalizeItem(realItem).sources, []);
+});
+
+test("extractItems propagates the source to every item", () => {
+  const out = extractItems({ itemList: [realItem] }, "likes");
+  assert.deepEqual(out[0].sources, ["likes"]);
+});
+
+test("mergeDedupe unions sources for a video that is both favorited AND liked", () => {
+  const favs = extractItems({ itemList: [realItem] }, "favorites");
+  const likes = extractItems({ itemList: [realItem] }, "likes");
+  const merged = mergeDedupe(favs, likes);
+  assert.equal(merged.length, 1);
+  assert.deepEqual([...merged[0].sources].sort(), ["favorites", "likes"]);
+});
