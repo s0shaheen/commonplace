@@ -1,6 +1,8 @@
-# Fable Brief — Product Spec (v4, governing)
+# Fable Brief — Product Spec (v4) — ⛔ SUPERSEDED
 
-> **This is the single governing spec.** v4 folds the founder-ratified Phase-1 decisions (D1–D15) and every 2026-verified correction into one document; it supersedes v3 and the dossier's doc 09. The evidence trail is `_FABLE-PHASE1-findings.md`; strategic depth is the dossier (`01–08`); the engine design is `_ENGINE-groundup-2026-07-02.md` (now governing — see §7.A). **No timelines or effort estimates appear here by design:** the build is agentically coded, so the only scarce resource is the founder's decisions, provisioning, and taste — the build is sequenced by *those* gates, not by hours.
+> **SUPERSEDED 2026-07-06 by [`SPEC.md`](./SPEC.md) (v5, governing).** v4 was the brief that *commissioned* a build-ready spec; SPEC.md is that spec — re-founded from intention, with every hard problem below resolved to a defended call (evidence: `_RESEARCH-2026-07-06.md`). Kept for history only. Do not build from this document.
+
+> ~~**This is the single governing spec.**~~ v4 folds the founder-ratified Phase-1 decisions (D1–D15) and every 2026-verified correction into one document; it supersedes v3 and the dossier's doc 09. The evidence trail is `_FABLE-PHASE1-findings.md`; strategic depth is the dossier (`01–08`); the engine design is `_ENGINE-groundup-2026-07-02.md` (now governing — see §7.A). **No timelines or effort estimates appear here by design:** the build is agentically coded, so the only scarce resource is the founder's decisions, provisioning, and taste — the build is sequenced by *those* gates, not by hours.
 
 ```
 Date:     2026-07-06 (v4)
