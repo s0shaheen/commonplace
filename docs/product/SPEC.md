@@ -134,11 +134,15 @@ Every AI claim carries its receipts. On every resolved card and item detail, the
 
 One pattern, four payoffs: the trust that lets a user act without re-searching; the visible embodiment of honesty-over-fluency; the sales artifact for skeptical technical evaluators; and the product's screenshot-recognizable signature. Verified today: **nobody in the field shows provenance on AI claims.** The strip renders identically in the UI, exports, MCP payloads, and marketing shots — one component, spec'd once.
 
-## 10. The open schema (the contract)
+## 10. The open schema (the contract) — governed by `_ONTOLOGY.md` + `_KOE-STANDARD.md`
 
-The durable core is the consensus object that Activity Streams 2.0, schema.org, Open Graph, oEmbed, and Media RSS converge on: `type · canonical id · creator · timestamp · text body · media renditions · refers-to · collection membership` — plus the grounding envelope on every record: `entities[] {surface, type, resolved_id?, kb_source, confidence, evidence_span, nil_reason?}`, `schema_version`, provenance, capture metadata. Platform weirdness (TikTok itemStruct, IG carousel children, X reference edges) lives in adapters and never leaks into the core; raw payloads are kept as versioned artifacts (they rot fastest — evidence, not foundation).
+The schema is engineered to an adopted **knowledge-organization-engineering standard** (`_KOE-STANDARD.md`: NeOn methodology + W3C RDF/SKOS/SHACL/PROV-O + ISO 25964 + schema.org governance + FAIR); its full design is `_ONTOLOGY.md` (v2). The load-bearing shape:
+- **One cross-platform base object + per-platform Application Profiles** (Dublin Core Singapore Framework): each platform = a DCTAP table + a SHACL shape + an adapter, touching zero base fields; the **base SHACL passes on 100% of items regardless of platform** — the gate that makes "map every restaurant across all my platforms" real. Reuses schema.org CreativeWork / ActivityStreams 2.0 / oEmbed (`mediaKind ∈ photo·video·rich·link`) / Media RSS — one shape spans video *and* text posts (X/Reddit/Substack), only the provenance modalities shift.
+- **Four Referent kinds** (NamedEntity / Concept incl. **CulturalReference** / Claim / StructuredContent) + orthogonal **Facets**.
+- **Provenance is first-class, required, multi-valued** on every extraction (PROV-O + Web Annotation + Media Fragments): each `Evidence` carries a typed selector, a `channel` (closed ~6), an extensible `source_role`, an `assertion_mode ∈ STATED·SHOWN·REPORTED·INFERRED`, and a calibrated confidence. Zero-evidence extraction is rejected. This *is* the receipt.
+- **Grounding envelope:** `{authority, external_id | NIL, grounding_confidence}`; NIL first-class; a **Wikidata QID** attached as the cross-platform join key wherever anything resolves. Authorities are CC0/CC-BY-mirrorable (Wikidata/IPTC/WordNet/ConceptNet); memes/culture grounded via Wikidata + link-only KYM; ESCO demoted.
 
-Versioning: additive-only within a major; migrations ship with the extension; the schema is **public and versioned from day one** — it is the standard-setting artifact, and what makes "leave anytime" true rather than sentimental.
+Versioning: **never-delete-only-deprecate** under semver; migrations ship with the extension; public and versioned from day one — the standard-setting artifact, and what makes "leave anytime" true.
 
 ## 11. The personal MCP (bring your own agent)
 

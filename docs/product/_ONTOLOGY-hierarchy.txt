@@ -121,3 +121,76 @@ Post|asserts|Claim
 Save|is a|WEMI-Item
 Post|is a|WEMI-Manifestation
 Referent|is a|WEMI-Work
+
+# ══════════════════════════════════════════════════════════════════════════════
+# v2 ADDITIONS (2026-07-07): base object + provenance + cultural + generalized authorities
+# Conforms to _KOE-STANDARD.md. ESCO demoted; cultural grounding added.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Cross-platform container: one base object + per-platform profiles ─────────
+BaseObject|is a|CommonplaceNode
+Save|is a|BaseObject
+Post|is a|BaseObject
+Post|maps to|schema.org-CreativeWork
+short_video_profile|is a|ApplicationProfile
+instagram_profile|is a|ApplicationProfile
+reddit_profile|is a|ApplicationProfile
+x_profile|is a|ApplicationProfile
+substack_profile|is a|ApplicationProfile
+ApplicationProfile|validated by|SHACL-shape
+ApplicationProfile|declared in|DCTAP-table
+short_video_profile|status|v1
+instagram_profile|status|v1
+reddit_profile|status|v2
+x_profile|status|v2
+substack_profile|status|v2
+photo|is a|mediaKind
+video|is a|mediaKind
+rich|is a|mediaKind
+link|is a|mediaKind
+mediaKind|reused from|oEmbed
+
+# ── Provenance: Evidence is REQUIRED + multi-valued on every extraction ───────
+Extraction|has|Evidence
+Evidence|status|v1
+Evidence|models|PROV-O-qualified-derivation
+Evidence|locates via|WebAnnotation-selector
+Evidence|has|channel
+Evidence|has|source_role
+Evidence|has|assertion_mode
+Evidence|has|confidence
+Evidence|points into|Signal
+Signal|wasDerivedFrom|Signal
+# channel — CLOSED ~6 (Axis A, by human perception, cross-platform)
+VERBAL_AUDIO|is a|channel
+VERBAL_TEXT|is a|channel
+VISUAL_SCENE|is a|channel
+VISUAL_TEXT|is a|channel
+NONVERBAL_AUDIO|is a|channel
+STRUCTURED_METADATA|is a|channel
+# assertion_mode — evidentiality typology, orthogonal to channel
+STATED|is a|assertion_mode
+SHOWN|is a|assertion_mode
+REPORTED|is a|assertion_mode
+INFERRED|is a|assertion_mode
+
+# ── Concept sub-scheme: CulturalReference (the under-served wedge) ────────────
+cultural_reference|is a|Concept
+cultural_reference|grounds to|own-SKOS-anchor
+cultural_reference|closeMatch|Wikidata-QID
+cultural_reference|link only|Know-Your-Meme
+cultural_reference|link only|TVTropes
+cultural_reference|status|v1
+
+# ── Generalized authority spine (CC0/CC-BY, mirrorable) ──────────────────────
+subject|grounds to|IPTC-Media-Topics
+subject|grounds to|Wikidata-class
+subject|grounds to|ConceptNet
+subject|grounds to|OpenEnglishWordNet
+Wikidata|is|canonical-join-hub
+# ESCO DEMOTED — occupation/skill is off-by-default add-on, prefer O*NET
+occupation|grounds to|ONET-SOC
+occupation|status|v2-off-by-default
+skill|grounds to|ONET-SOC
+skill|status|v2-off-by-default
+ESCO|status|rejected-as-primary

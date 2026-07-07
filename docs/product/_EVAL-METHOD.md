@@ -1,6 +1,6 @@
 # The Evaluation Method — governing (Block 0.5)
 
-> **This is the governing method for the engine.** Commonplace's entire moat is *published, measured grounding accuracy*, so the evaluation instrument **is the core product asset** — not a QA afterthought. This doc defines how it is built, in what order, and how it is reported. Nothing about the engine — prompt, ontology, model, ingestion path — is decided except *through* this instrument. Grounded in current (2026) prior art; sources inline. Companion to `SPEC.md` §13/§15.
+> **Conforms to `_KOE-STANDARD.md`** (the adopted knowledge-organization-engineering standard); grounding metrics follow its TAC-KBP validation layer. **This is the governing method for the engine.** Commonplace's entire moat is *published, measured grounding accuracy*, so the evaluation instrument **is the core product asset** — not a QA afterthought. This doc defines how it is built, in what order, and how it is reported. Nothing about the engine — prompt, ontology, model, ingestion path — is decided except *through* this instrument. Grounded in current (2026) prior art; sources inline. Companion to `SPEC.md` §13/§15.
 
 ## 0. The principle, and the mistake that motivated it
 
