@@ -8,7 +8,7 @@
 // Env: reads GEMINI_KEY from ../../src/secrets.js. Arg: N items (default 16), stratified by VTT.
 // Run: node spikes/pipeline/experiment.mjs [N]
 
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, appendFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -29,25 +29,33 @@ function parseEntities(txt) {
   try { const m = txt.match(/\{[\s\S]*\}/); return (JSON.parse(m ? m[0] : txt).entities || []).filter((e) => e && e.name); }
   catch { return null; }
 }
-async function gen(parts) {
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const r = await fetch(`${API}/v1beta/models/${MODEL}:generateContent?key=${KEY}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0, responseMimeType: "application/json" } }),
-    });
-    if (r.status === 429 || r.status >= 500) { await sleep(2000 * (attempt + 1)); continue; }
-    const j = await r.json();
-    const usage = j.usageMetadata || {};
-    const txt = j.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || "";
-    return { txt, tokens: (usage.promptTokenCount || 0) + (usage.candidatesTokenCount || 0), err: j.error?.message };
+// resilient fetch: retries on network throws AND 429/5xx, with a generous per-attempt timeout
+async function fetchRetry(url, opts = {}, tries = 5) {
+  let last;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetch(url, { ...opts, signal: AbortSignal.timeout(120000) });
+      if (r.status === 429 || r.status >= 500) { last = new Error("HTTP " + r.status); await sleep(3000 * (i + 1)); continue; }
+      return r;
+    } catch (e) { last = e; await sleep(3000 * (i + 1)); }
   }
-  return { txt: "", tokens: 0, err: "retries exhausted" };
+  throw last;
+}
+async function gen(parts) {
+  const r = await fetchRetry(`${API}/v1beta/models/${MODEL}:generateContent?key=${KEY}`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0, responseMimeType: "application/json" } }),
+  });
+  const j = await r.json();
+  const usage = j.usageMetadata || {};
+  const txt = j.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || "";
+  return { txt, tokens: (usage.promptTokenCount || 0) + (usage.candidatesTokenCount || 0), err: j.error?.message };
 }
 
 // Path A: upload video via File API, poll ACTIVE, generate
 async function pathA(mp4) {
   const bytes = readFileSync(mp4);
-  const up = await fetch(`${API}/upload/v1beta/files?key=${KEY}`, {
+  const up = await fetchRetry(`${API}/upload/v1beta/files?key=${KEY}`, {
     method: "POST",
     headers: { "X-Goog-Upload-Protocol": "raw", "X-Goog-Upload-File-Name": "clip.mp4", "Content-Type": "video/mp4" },
     body: bytes,
@@ -55,7 +63,7 @@ async function pathA(mp4) {
   const uj = await up.json();
   if (!uj.file?.uri) return { entities: null, tokens: 0, err: "upload failed: " + (uj.error?.message || up.status) };
   let file = uj.file;
-  for (let i = 0; i < 30 && file.state !== "ACTIVE"; i++) { await sleep(1500); file = await (await fetch(`${API}/v1beta/${file.name}?key=${KEY}`)).json(); if (file.state === "FAILED") return { entities: null, tokens: 0, err: "file processing FAILED" }; }
+  for (let i = 0; i < 40 && file.state !== "ACTIVE"; i++) { await sleep(1500); file = await (await fetchRetry(`${API}/v1beta/${file.name}?key=${KEY}`)).json(); if (file.state === "FAILED") return { entities: null, tokens: 0, err: "file processing FAILED" }; }
   if (file.state !== "ACTIVE") return { entities: null, tokens: 0, err: "file not ACTIVE" };
   const { txt, tokens, err } = await gen([{ text: PROMPT }, { fileData: { mimeType: "video/mp4", fileUri: file.uri } }]);
   return { entities: parseEntities(txt), tokens, err };
@@ -93,12 +101,20 @@ const noVtt = ids.filter((id) => !withVtt.includes(id));
 const pick = [...withVtt.slice(0, Math.ceil(N / 2)), ...noVtt.slice(0, Math.floor(N / 2))];
 console.log(`experiment: ${pick.length} items (${Math.min(withVtt.length, Math.ceil(N/2))} vtt / ${Math.min(noVtt.length, Math.floor(N/2))} no-vtt), model=${MODEL}\n`);
 
+// resume: load any rows already computed in a prior run
+const ROWS_FILE = new URL("./results.jsonl", import.meta.url).pathname;
 const rows = [];
+const done = new Set();
+if (existsSync(ROWS_FILE)) for (const ln of readFileSync(ROWS_FILE, "utf8").split("\n").filter(Boolean)) { try { const r = JSON.parse(ln); rows.push(r); done.add(r.id); } catch {} }
+if (done.size) console.log(`resuming: ${done.size} items already done\n`);
+
 for (const id of pick) {
+  if (done.has(id)) continue;
   const mp4 = join(MEDIA, `${id}.mp4`);
   if (!existsSync(mp4)) continue;
-  const a = await pathA(mp4);
-  const b = await pathB(mp4, id);
+  let a, b;
+  try { a = await pathA(mp4); b = await pathB(mp4, id); }
+  catch (e) { console.log(`${id}: SKIP (threw: ${String(e.message || e).slice(0, 60)})`); await sleep(500); continue; }
   if (!a.entities || !b.entities) { console.log(`${id}: SKIP (A:${a.err || "ok"} B:${b.err || "ok"})`); continue; }
   const setA = new Set(a.entities.map(norm)), setB = new Set(b.entities.map(norm));
   const inter = [...setA].filter((x) => setB.has(x)).length;
@@ -106,7 +122,9 @@ for (const id of pick) {
   const jaccard = union ? inter / union : 1;                    // symmetric agreement (neither treated as truth)
   const bOfA = setA.size ? inter / setA.size : 1;               // fraction of A's entities B also found
   const aOfB = setB.size ? inter / setB.size : 1;               // fraction of B's entities A also found
-  rows.push({ id, hadVtt: b.hadVtt, nA: setA.size, nB: setB.size, inter, union, jaccard, bOfA, aOfB, aOnly: setA.size - inter, bOnly: setB.size - inter, tokA: a.tokens, tokB: b.tokens });
+  const row = { id, hadVtt: b.hadVtt, nA: setA.size, nB: setB.size, inter, union, jaccard, bOfA, aOfB, aOnly: setA.size - inter, bOnly: setB.size - inter, tokA: a.tokens, tokB: b.tokens };
+  rows.push(row);
+  appendFileSync(ROWS_FILE, JSON.stringify(row) + "\n"); // persist incrementally — survives a crash
   console.log(`${id} ${b.hadVtt ? "vtt" : "   "}: A=${setA.size} B=${setB.size} shared=${inter} jaccard=${(jaccard*100).toFixed(0)}% A-only=${setA.size-inter} B-only=${setB.size-inter}`);
   await sleep(500);
 }

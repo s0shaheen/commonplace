@@ -23,3 +23,4 @@ spikes/pipeline/candidates.json
 spikes/pipeline/*.log
 spikes/pipeline/manifest.jsonl
 spikes/pipeline/experiment.out
+spikes/pipeline/results.jsonl
