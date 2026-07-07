@@ -58,6 +58,19 @@ Today three inconsistent ontologies exist: `src/lib/types.ts` (10 types, only `m
 
 ## 4. Phase 4: the metric stack (validate the scorer before trusting it)
 
+**The scorecard is a per-layer MATRIX, not a scalar (governed by `_ONTOLOGY.md`).** The engine emits four Referent kinds + Facets, each grounding to a different authority by a different regime — so each is scored by its own metric and **must not be averaged into one number** (different denominators, chance baselines, meanings of "correct" — a blended "accuracy %" is statistically incoherent *and* dishonest). One row per layer, each with metric + n + CI + publish-gate; **NamedEntity-linking is the named flagship**, the rest "in calibration" until powered:
+
+| layer | regime | metric |
+|---|---|---|
+| **NamedEntity** | closed-world linking | linking P/R/F1 + NIL + disambiguation *(flagship; §4 below)* |
+| **Concept** | open multi-label subject indexing | hierarchical F1@k (micro+macro), True-Path partial credit, R-precision@k (k≈5) — **not** 1:1 linking |
+| **Claim** | faithfulness-to-source | faithfulness (fraction entailed by the video; MiniCheck/AlignScore) **+ coverage** (KPA) — both mandatory; never world-truth |
+| **StructuredContent** | slot-filling | Field Accuracy + Document Accuracy + step recall/order |
+| **Facets** | classification | per-facet macro-F1 + Cohen's κ |
+
+The NamedEntity flagship's detailed metric definitions follow; the other layers' metrics are specified in `_ONTOLOGY.md` §2 and `_RESEARCH-ontology-2026-07-07.md`.
+
+
 **Extraction (mention-level), exact-string BANNED.** Adopt the MUC-5 / SemEval-2013 Task 9.1 family via **nervaluate** — categories COR/INC/PAR/MIS/SPU, schemes strict / exact / partial / type (partial = 0.5 credit: `P=(COR+0.5·PAR)/ACT`). For span-free video output: mention-match = unicode-normalized, casefolded, article/punct-stripped equality vs gold surface+aliases (the "exact" analog) + a fuzzy tier (rapidfuzz token-set) as "partial"; **Hungarian bipartite alignment** so each gold entity pairs with ≤1 prediction. Report **micro AND macro P/R/F1, per-type table, all four schemes**; **pre-designate strict (normalized mention + type) as the headline.**
 
 **Grounding (ID-level), decomposed GERBIL/ELEVANT-style** — because extraction noise and grounding noise must not be confounded:

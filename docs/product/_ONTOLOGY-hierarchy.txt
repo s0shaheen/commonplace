@@ -1,0 +1,123 @@
+# Commonplace ontology — node typology (source|relation|target)
+# Source of truth for the TS types + JSON schema + Gemini responseSchema.
+# [v1] = populated in the first benchmark; [v2] = defined-but-unpopulated (additive-only later).
+# Relations: "is a" (hierarchy) · "grounds to" (authority) · "eval by" (metric regime) · "is about"/"asserts"/"has facet" (composition)
+
+# ── HIERARCHY: the discriminated union ───────────────────────────────────────
+Referent|is a|CommonplaceNode
+Facet|is a|CommonplaceNode
+NamedEntity|is a|Referent
+Concept|is a|Referent
+Claim|is a|Referent
+StructuredContent|is a|Referent
+
+# ── NamedEntity types (instance axis, P31 → closed-KB instance ID) ────────────
+music_recording|is a|NamedEntity
+place|is a|NamedEntity
+screen_work|is a|NamedEntity
+book|is a|NamedEntity
+product|is a|NamedEntity
+brand_org|is a|NamedEntity
+software_app|is a|NamedEntity
+game|is a|NamedEntity
+person|is a|NamedEntity
+restaurant|is a facet of|place
+music_recording|grounds to|MusicBrainz-MBID
+place|grounds to|Google-Place-ID
+screen_work|grounds to|Wikidata-QID
+book|grounds to|OpenLibrary-OLID
+product|grounds to|Wikidata-QID
+brand_org|grounds to|Wikidata-QID
+software_app|grounds to|Wikidata-QID
+game|grounds to|Wikidata-QID
+person|grounds to|Wikidata-QID
+NamedEntity|eval by|entity-linking-F1-plus-NIL
+music_recording|status|v1
+place|status|v1
+screen_work|status|v1
+book|status|v1
+product|status|v2
+brand_org|status|v2
+software_app|status|v2
+game|status|v2
+person|status|v2
+
+# ── Concept sub-schemes (class axis, P279 → pluggable subject authority) ──────
+subject|is a|Concept
+skill|is a|Concept
+technique|is a|Concept
+occupation|is a|Concept
+service_category|is a|Concept
+subject|grounds to|Wikidata-class
+subject|grounds to|IPTC-Media-Topics
+subject|grounds to|LCSH
+skill|grounds to|ESCO-skill
+technique|grounds to|ESCO-skill
+occupation|grounds to|ESCO-occupation
+occupation|grounds to|ONET-SOC
+service_category|grounds to|NAICS-ISIC
+subject|grounds to|MeSH
+Concept|eval by|hierarchical-F1-at-k
+subject|status|v1
+skill|status|v1
+technique|status|v1
+occupation|status|v2
+service_category|status|v2
+
+# ── Claim (proposition → source span; args reuse entity/concept nodes) ────────
+Claim|grounds to|source-span
+Claim|eval by|faithfulness-plus-coverage
+ClaimOccurrence|is a|Claim
+ClaimKeyPoint|is a|Claim
+Claim|has slot|text
+Claim|has slot|evidence_span
+Claim|has slot|about
+Claim|has slot|predicate
+Claim|has slot|stance
+Claim|has slot|modality
+Claim|has slot|claim_type
+Claim|is about|Concept
+Claim|is about|NamedEntity
+recommends|is a|predicate
+causes|is a|predicate
+compares|is a|predicate
+defines|is a|predicate
+warns_against|is a|predicate
+equates|is a|predicate
+quantifies|is a|predicate
+ClaimOccurrence|status|v1
+ClaimKeyPoint|status|v2
+
+# ── StructuredContent (schema.org shell → slot-filling; slots point down) ─────
+Recipe|is a|StructuredContent
+ExercisePlan|is a|StructuredContent
+HowTo|is a|StructuredContent
+ItemList|is a|StructuredContent
+StructuredContent|eval by|field-and-document-accuracy
+Recipe|slot references|Concept
+ExercisePlan|slot references|technique
+ItemList|slot references|NamedEntity
+Recipe|status|v1
+ExercisePlan|status|v2
+HowTo|status|v2
+ItemList|status|v2
+
+# ── Facets (orthogonal; the 8-facet IP → classification) ──────────────────────
+affect|is a|Facet
+topic|is a|Facet
+genre|is a|Facet
+communicative_intent|is a|Facet
+creator_role|is a|Facet
+viewer_orientation|is a|Facet
+presentation_style|is a|Facet
+content_provenance|is a|Facet
+actionability|is a|Facet
+Facet|grounds to|own-SKOS-closed-enum
+topic|maps to|IPTC-Media-Topics
+Facet|eval by|classification-macro-F1-plus-kappa
+Referent|is about|Concept
+Post|has facet|Facet
+Post|asserts|Claim
+Save|is a|WEMI-Item
+Post|is a|WEMI-Manifestation
+Referent|is a|WEMI-Work
