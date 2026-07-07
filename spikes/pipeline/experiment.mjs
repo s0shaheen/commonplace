@@ -29,18 +29,20 @@ function parseEntities(txt) {
   try { const m = txt.match(/\{[\s\S]*\}/); return (JSON.parse(m ? m[0] : txt).entities || []).filter((e) => e && e.name); }
   catch { return null; }
 }
-// resilient fetch: retries on network throws AND 429/5xx, with a generous per-attempt timeout
-async function fetchRetry(url, opts = {}, tries = 5) {
+// resilient fetch: retries on network throws AND 429/5xx, fail-fast per attempt
+async function fetchRetry(url, opts = {}, tries = 3) {
   let last;
   for (let i = 0; i < tries; i++) {
     try {
-      const r = await fetch(url, { ...opts, signal: AbortSignal.timeout(120000) });
-      if (r.status === 429 || r.status >= 500) { last = new Error("HTTP " + r.status); await sleep(3000 * (i + 1)); continue; }
+      const r = await fetch(url, { ...opts, signal: AbortSignal.timeout(35000) });
+      if (r.status === 429 || r.status >= 500) { last = new Error("HTTP " + r.status); await sleep(2000 * (i + 1)); continue; }
       return r;
-    } catch (e) { last = e; await sleep(3000 * (i + 1)); }
+    } catch (e) { last = e; await sleep(2000 * (i + 1)); }
   }
   throw last;
 }
+// hard cap so no single item can stall the whole run
+const withTimeout = (p, ms, label) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timed out ${ms}ms`)), ms))]);
 async function gen(parts) {
   const r = await fetchRetry(`${API}/v1beta/models/${MODEL}:generateContent?key=${KEY}`, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -113,8 +115,8 @@ for (const id of pick) {
   const mp4 = join(MEDIA, `${id}.mp4`);
   if (!existsSync(mp4)) continue;
   let a, b;
-  try { a = await pathA(mp4); b = await pathB(mp4, id); }
-  catch (e) { console.log(`${id}: SKIP (threw: ${String(e.message || e).slice(0, 60)})`); await sleep(500); continue; }
+  try { a = await withTimeout(pathA(mp4), 90000, "A"); b = await withTimeout(pathB(mp4, id), 50000, "B"); }
+  catch (e) { console.log(`${id}: SKIP (${String(e.message || e).slice(0, 60)})`); await sleep(500); continue; }
   if (!a.entities || !b.entities) { console.log(`${id}: SKIP (A:${a.err || "ok"} B:${b.err || "ok"})`); continue; }
   const setA = new Set(a.entities.map(norm)), setB = new Set(b.entities.map(norm));
   const inter = [...setA].filter((x) => setB.has(x)).length;

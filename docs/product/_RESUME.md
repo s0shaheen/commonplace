@@ -19,17 +19,19 @@ What SPEC v5 settles (evidence: `_RESEARCH-2026-07-06.md`, 7 Fable research trac
 
 ## Next move: BUILD — Block 0 (in motion since 2026-07-06 evening)
 
-**Block-0 status (2026-07-07) — 2 of 3 spikes DONE, #3 running:**
+## ✅ BLOCK 0 COMPLETE (2026-07-07) — all three spikes PASS; next = Block 1
+
+**Block-0 status (2026-07-07) — all 3 spikes DONE:**
 - ✅ **Spike #1 IG-live: PASS** (`spikes/ig-live/RESULT.md`) — saved view fires `GET /api/v1/feed/saved/posts/` (200, single JSON blob, `max_id` cursor, enrichable `{media}`); REST-cursor not GraphQL-doc_id (no rotation tax); constructing 400s → passive-observe only. **G4 → live-IG PROMOTED to a v1 headline lane.** IG DYD ZIP schema verified richer than assumed (`URL·Caption·Title·Hashtags·Owner`/post + collections; fixture `fixtures/ig-saved-sample.json`).
 - ✅ **Spike #2 zero-knowledge sync: PASS both legs** (`spikes/sync-zk/RESULT.md`) — protocol (200 items) + **remote on live Supabase Postgres** (50 items, authed user + RLS, 6/6 incl. server-blindness verified at the storage layer). Remote leg caught+fixed a real seq-bump bug. **Backend LIVE in `attic-dev`** (`schema.sql`: `sync_items` + RLS + trigger) = the one project for sync + managed inference + MCP.
-- 🟡 **Spike #3 pipeline experiment: RUNNING.** Media harvested (60 live TikToks, 31 VTT/29 not); key verified valid; **`gemini-2.5-flash-lite` pinned** (3.1-flash-lite not GA yet). Full 59-item native-vs-VTT run in progress (`experiment.mjs`); 6-item directional: paths **complementary not equivalent** (B ~10× cheaper + more on-screen-text; A more audio) → hybrid/cascade. Result → `spikes/pipeline/RESULT.md`.
+- ✅ **Spike #3 pipeline experiment: PASS — decisive** (`spikes/pipeline/RESULT.md`, 54 clean pairs, `gemini-2.5-flash-lite`). native-video vs keyframes+VTT: **jaccard 38%** → strongly complementary, not equivalent. Union 42% richer than native alone; keyframes ~8.4× cheaper; native has a reliability tail (one clip hung). **Decision:** confidence-routed cascade — keyframes+VTT default → native escalation → fuse for the golden set. No native-video vendor lock (open lane viable). Folded into SPEC §13/§15.
 
 **Landed this session:** G1 ✅ **Commonplace** (domains available; founder buying) · Gemini key rotated+verified · Supabase authed, `attic-dev` restored + sync backend live · **Claude Design brief** (`docs/design/CLAUDE-DESIGN-BRIEF.md`) · IG export ingested (gitignored) → both ZIP importers scoped for Block 3.
 
 **Remaining unblocks:**
 - 🟡 Claude Design diverge session (founder refining) → **G2 pick**.
 - 🟡 Drop the **TikTok DYD ZIP** when ready · **Google Places** key (SKU-disciplined) · **CWS dev account** · **G3** price signature before Block 4.
-- 🟢 When all 3 spike RESULTs are in, Block 0 closes → Block 1 (wire `src/lib` into the MV3 shell — the artifact core) begins.
+- 🟢 **Block 0 is closed.** Next = **Block 1 — the artifact core:** wire `src/lib` into the MV3 shell end-to-end (capture→analyze→ground→library-data→export), resumable offscreen queue, both lane adapters (cascade per §13), Wikidata+Places resolvers, open schema v1 + export, promptfoo eval slice in CI, early minimal CWS dry-run. No founder gate blocks starting it.
 
 **Repo:** `github.com/s0shaheen/attic` (private). Docs: SPEC.md (governing) · _RESEARCH-2026-07-06.md + _FABLE-PHASE1-findings.md (evidence) · _ENGINE-groundup (engine method; stale corpus stats) · dossier 00–08 (reference) · _FABLE-BRIEF.md v4 + GATE0 docs (superseded).
 
