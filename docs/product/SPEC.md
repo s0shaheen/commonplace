@@ -179,7 +179,7 @@ Six axes on a version-locked golden set; the flagship, published: **grounding-to
 
 **The deciding experiment (Block 0):** native-video vs [VTT + keyframes + OCR] on a labeled ~50-item slice, measured on entity-resolution accuracy. The corpus is transcript-heavy; if the cheap path ties, the cost floor drops and no native-video vendor lock exists.
 
-**Cost basis (managed lane):** ~$0.005/clip standard, ~$0.002–0.003 batched (Gemini 3.1 Flash-Lite; 2.5 Flash-Lite dies 2026-10-16 — model versions pinned in golden-set metadata; eval re-runs on every SKU turn). A 5,000-item Deep Scan costs ~$10–25 of inference against $39 — the margin is the Batch API.
+**Cost basis (managed lane):** ~$0.005/clip standard, ~$0.002–0.003 batched (Gemini 3.1 Flash-Lite; 2.5 Flash-Lite dies 2026-10-16 — model versions pinned in golden-set metadata; eval re-runs on every SKU turn). **Reality check 2026-07-07 (verified against the live API on the rotated key):** `gemini-3.1-flash-lite` is **not GA yet** (only `gemini-3.1-pro-preview` + `gemini-2.5-flash-lite` are live) — so the Block-0 pipeline experiment and early build run on **`gemini-2.5-flash-lite` (pinned)**, migrating to 3.1 Flash-Lite the day it ships (zero code change; the schema/grounding are model-agnostic by design). A 5,000-item Deep Scan costs ~$10–25 of inference against $39 — the margin is the Batch API.
 
 ---
 

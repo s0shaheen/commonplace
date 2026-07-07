@@ -19,15 +19,18 @@ What SPEC v5 settles (evidence: `_RESEARCH-2026-07-06.md`, 7 Fable research trac
 
 ## Next move: BUILD — Block 0 (in motion since 2026-07-06 evening)
 
-**Landed tonight:** G1 ✅ **Commonplace ratified** (domains re-verified available via GoDaddy: `commonplacehq.com`, `usecommonplace.app` — founder registering) · **Gemini key ROTATED** (goes in gitignored `src/secrets.js` line 2, mirrored in `.env`) · sandbox ratified = Vercel+Supabase · **sync spike protocol leg PASSED** (`spikes/sync-zk/spike.mjs` — 200 real items, 6/6 checks incl. server-blindness; remote leg needs a Supabase project) · **Claude Design sprint brief ready** (`docs/design/CLAUDE-DESIGN-BRIEF.md` — founder pastes §B into Claude Design, picks at G2) · TikTok **and** IG DYD exports in progress → both ZIP importers added to scope (Block 3; the exports become first fixtures).
+**Block-0 status (2026-07-07):**
+- ✅ **Spike #1 IG-live: PASS** (`spikes/ig-live/RESULT.md`) — saved view fires `GET /api/v1/feed/saved/posts/` (200, single JSON blob, `max_id` cursor, enrichable `{media}` items); REST-cursor not GraphQL-doc_id (no rotation tax); constructing 400s → passive-observe only. **G4 → live-IG PROMOTED to a v1 headline lane.** IG DYD ZIP schema also verified (richer than assumed: `URL·Caption·Title·Hashtags·Owner`/post + collections; synthetic fixture `fixtures/ig-saved-sample.json`).
+- ✅ **Spike #2 sync protocol leg: PASS** (`spikes/sync-zk/spike.mjs`, 200 real items, 6/6 incl. server-blindness). **Remote leg pending Supabase project** (OAuth in progress).
+- 🟡 **Spike #3 pipeline experiment: key UNBLOCKED, media BLOCKED.** Gemini key verified VALID against live API (50 models). **Finding:** `gemini-3.1-flash-lite` not GA yet → experiment uses **`gemini-2.5-flash-lite` pinned**. Still needs a **labeled ~50-item media slice** — corpus media expired (signed URLs) and the IG export's only mp4s are private DM voice-notes, so this needs fresh capture (cheapest: extension eager-fetch on ~50 still-live TikTok URLs from the corpus, or a controlled yt-dlp pull of the founder's own saved slice for eval).
+
+**Landed same session:** G1 ✅ **Commonplace** (domains re-verified available; founder buying) · Gemini key rotated+verified · sandbox = Vercel+Supabase · **Claude Design brief** ready (`docs/design/CLAUDE-DESIGN-BRIEF.md`) · IG export ingested (gitignored) → both ZIP importers scoped for Block 3.
 
 **Remaining unblocks:**
-- 🔴 Founder pastes the new key into `src/secrets.js` (+ `.env`) — enables the pipeline experiment.
-- 🔴 **Connect the Claude Chrome extension** (claude.ai/chrome, restart Chrome) — the IG-live probe (spike #1) runs read-only in the founder's logged-in session the moment it's connected.
-- 🟡 Create the Supabase project (or complete the Supabase MCP auth) → sync spike remote leg + the one backend.
-- 🟡 Run the Claude Design diverge session (brief §A runbook) → G2 pick.
-- 🟡 Drop the TikTok/IG export ZIPs into the repo root or Downloads when ready.
-- 🟡 Google Places key (SKU-disciplined) · CWS dev account · G3 price signature before Block 4.
+- 🔴 **Approve Supabase OAuth** (URL handed in chat) → I create the project, apply the DDL, run the sync remote leg.
+- 🟡 **Spike #3 media:** greenlight the cheapest labeled-slice path (extension eager-fetch of ~50 corpus URLs) so the pipeline experiment can run.
+- 🟡 Claude Design diverge session underway (founder refining) → G2 pick.
+- 🟡 Drop the TikTok DYD ZIP when ready · Google Places key · CWS dev account · G3 price signature before Block 4.
 
 **Repo:** `github.com/s0shaheen/attic` (private). Docs: SPEC.md (governing) · _RESEARCH-2026-07-06.md + _FABLE-PHASE1-findings.md (evidence) · _ENGINE-groundup (engine method; stale corpus stats) · dossier 00–08 (reference) · _FABLE-BRIEF.md v4 + GATE0 docs (superseded).
 
