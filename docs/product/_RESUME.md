@@ -19,7 +19,17 @@ What SPEC v5 settles (evidence: `_RESEARCH-2026-07-06.md`, 7 Fable research trac
 
 ## Next move: BUILD — Block 0 (in motion since 2026-07-06 evening)
 
-## ✅ BLOCK 0 COMPLETE (2026-07-07) — all three spikes PASS; next = Block 1
+## CURRENT (2026-07-07): Block 0.5 — Eval Foundation (the engine's real first work)
+
+Capture + backend feasibility are done (IG-live + zero-knowledge sync spikes PASS). But the **pipeline experiment (native-vs-VTT) was retracted** — it was run before any eval instrument existed (ad-hoc ontology, exact-string matching, no ground truth → uninterpretable). Founder correction: *"think like an ai engineer/scientist… don't skip steps."* → **Block 0.5 now precedes the engine build.** Two governing docs written (cited research in `_RESEARCH-eval-method-*` + `_RESEARCH-ontology-*`):
+- **`_EVAL-METHOD.md`** — instrument-before-experiment; the full sequence (construct → ontology+schema → guidelines → gold set dev/**sealed-test** → validated matcher/metric → prompt-on-dev → freeze → ablations → report-once); nervaluate matching, GERBIL/ELEVANT grounding, Φ_c asymmetric headline, smECE, cluster-bootstrap CIs, solo-annotator protocol.
+- **`_ONTOLOGY.md`** (+ `_ONTOLOGY-hierarchy.txt`) — the ONE ontology, answering the founder's "how do we capture ideas/concepts/subjects/services/jobs": **four Referent kinds — NamedEntity (→instance ID, flagship) · Concept (→subject vocabulary, hierarchical) · Claim (→proposition, faithfulness) · StructuredContent (→schema.org slot-filling) — + Facets (the original 8-facet IP)**, on doc-03's WEMI/SKOS spine. Scorecard = per-layer **matrix**, never one blended number. Grounding authorities licensing-checked (Wikidata/IPTC/ESCO/O*NET/LCSH/MeSH; reject Dewey/UDC/TMDB-API).
+
+**Pending founder decision:** confirm the **v1 layer cut** — rec: NamedEntity(music/place/screen_work/book) + Concept(subjects+skills) + 8 Facets + 1 Takeaway + Recipe-only. Annotation = **auto-label + founder spot-check** (chosen); 2nd-labeler seed deferred to publish-time.
+
+**Next concrete steps (Block 0.5):** freeze ontology → write annotation guidelines (`guidelines.md`) → build the matcher + per-layer metric harness (open-source) → pilot ~150-video gold set (auto-label + spot-check) → then, and only then, prompt iteration + the (re-run, valid) native-vs-VTT ablation. Block 1 (`src/lib`→MV3 wiring) proceeds in parallel where it doesn't touch the ontology (capture, queue, storage).
+
+### (superseded) earlier framing: "Block 0 complete → Block 1"
 
 **Block-0 status (2026-07-07) — all 3 spikes DONE:**
 - ✅ **Spike #1 IG-live: PASS** (`spikes/ig-live/RESULT.md`) — saved view fires `GET /api/v1/feed/saved/posts/` (200, single JSON blob, `max_id` cursor, enrichable `{media}`); REST-cursor not GraphQL-doc_id (no rotation tax); constructing 400s → passive-observe only. **G4 → live-IG PROMOTED to a v1 headline lane.** IG DYD ZIP schema verified richer than assumed (`URL·Caption·Title·Hashtags·Owner`/post + collections; fixture `fixtures/ig-saved-sample.json`).
