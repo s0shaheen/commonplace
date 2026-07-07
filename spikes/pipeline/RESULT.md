@@ -1,6 +1,10 @@
 # Block-0 Spike #3 — the pipeline experiment (native-video vs VTT+keyframes)
 
-**Result: the two ingestion paths are strongly COMPLEMENTARY, not equivalent. Decision → hybrid / confidence-routed cascade (SPEC §13), with fusion for the golden set. We are NOT locked to native-video vendors, and native video is NOT strictly better.**
+> ⛔ **RETRACTED AS A DECISION (2026-07-07).** This experiment was run *before* the eval instrument existed, which is a method error: it used an ad-hoc entity ontology (matching neither `src/lib/types.ts`'s `EntityType` nor `prompts/observe_video.md`'s taxonomy), scored by exact-string + exact-type matching (so `place` vs `restaurant`, `song` vs `media` for the same real entity counted as disagreement), against **no ground truth** — so the "38% agreement" headline largely measures the incoherence of the matcher, not the models. The ingestion comparison is a legitimate *ablation*, but only after the ontology, schema, annotation guidelines, gold set, and a *validated* metric exist. See `docs/product/_EVAL-METHOD.md` for the correct sequence. **Salvageable feasibility signal only:** a cheap keyframes path exists (~8× cheaper), and native-video has a reliability tail (one clip's call hung indefinitely). Everything below about "complementary / cascade / union" is NOT a valid conclusion.
+
+---
+
+**[original, retracted] Result: the two ingestion paths are strongly COMPLEMENTARY, not equivalent. Decision → hybrid / confidence-routed cascade (SPEC §13), with fusion for the golden set. We are NOT locked to native-video vendors, and native video is NOT strictly better.**
 
 Run 2026-07-07 on 54 of 59 harvested live TikToks (5 skipped — see reliability note), `gemini-2.5-flash-lite`, same model + same typed-mention schema on both paths so the ingestion method is the only variable. `experiment.mjs`; per-item data in `results.jsonl` (gitignored — real IDs).
 
