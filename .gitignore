@@ -11,3 +11,8 @@ compare_*.json
 
 results/engine-*
 results/vault/
+
+# personal platform exports (never commit)
+instagram-*.zip
+*-export/
+ig-export/

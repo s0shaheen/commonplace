@@ -1,0 +1,41 @@
+{
+  "_note": "Synthetic IG 'Download Your Data' saved_posts fixture — structure-faithful, fake data. Mirrors your_instagram_activity/saved/saved_posts.json. Safe to commit / open-source.",
+  "saved_posts": [
+    {
+      "timestamp": 1751500000,
+      "media": [],
+      "fbid": "0000000000000001",
+      "label_values": [
+        { "label": "URL", "value": "https://www.instagram.com/reel/CxAMPLE001/", "href": "https://www.instagram.com/reel/CxAMPLE001/" },
+        { "label": "Caption", "value": "brown butter pasta in one pan — save this for a weeknight" },
+        { "label": "Title", "value": "one-pan brown butter pasta" },
+        { "label": "Hashtags", "value": "#pasta #weeknightdinner #brownbutter" },
+        { "label": "Owner", "dict": [ { "dict": [ { "label": "Username", "value": "example.kitchen" }, { "label": "Bio Link", "value": "https://linktr.ee/example.kitchen" } ], "title": "Profile" } ], "title": "Owner" }
+      ]
+    },
+    {
+      "timestamp": 1751400000,
+      "media": [],
+      "fbid": "0000000000000002",
+      "label_values": [
+        { "label": "URL", "value": "https://www.instagram.com/p/CxAMPLE002/", "href": "https://www.instagram.com/p/CxAMPLE002/" },
+        { "label": "Caption", "value": "Yoo Yee is worth the hype — full menu review" },
+        { "label": "Title", "value": "" },
+        { "label": "Hashtags", "value": "#nycfood #restaurant" },
+        { "label": "Owner", "dict": [ { "dict": [ { "label": "Username", "value": "example.eats" } ], "title": "Profile" } ], "title": "Owner" }
+      ]
+    }
+  ],
+  "saved_collections": [
+    {
+      "timestamp": 1751300000,
+      "media": [],
+      "fbid": "0000000000000010",
+      "label_values": [
+        { "label": "Name", "value": "Recipes" },
+        { "label": "Added Time", "timestamp_value": 1751300000 },
+        { "title": "Posts", "dict": [ { "dict": [ { "label": "URL", "value": "https://www.instagram.com/reel/CxAMPLE001/", "href": "https://www.instagram.com/reel/CxAMPLE001/" } ], "title": "Post" } ] }
+      ]
+    }
+  ]
+}
