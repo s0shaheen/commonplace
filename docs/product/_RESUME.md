@@ -17,14 +17,17 @@ What SPEC v5 settles (evidence: `_RESEARCH-2026-07-06.md`, 7 Fable research trac
 
 **Verified this session (2026-07-06):** 61/61 engine tests · 8/8 capture tests · corpus = 4,661 items (fav 1,367 / likes 4,132 / posts 2; ∩ 840) · live grounding demo re-run (berlioz → MBID conf 1.00; 7 honest NILs).
 
-## Next move: BUILD — Block 0
+## Next move: BUILD — Block 0 (in motion since 2026-07-06 evening)
 
-Start the three spikes. **Founder unblocks (in order of urgency):**
-- 🔴 **ROTATE the exposed Gemini key** (into gitignored `src/secrets.js`) — still pending since 0cf04e3.
-- 🔴 **G1: ratify "Commonplace"** (or pick from the shortlist in `_RESEARCH-2026-07-06.md`) → register `commonplacehq.com` + `usecommonplace.app` same day (availability was point-in-time 2026-07-06) → claim GitHub org / CWS name / handles.
-- 🟡 Logged-in IG session + a Download-Your-Data ZIP (spike #1) · backend sandbox pick (Vercel+Supabase fine) (spike #2).
-- 🟡 G2 design pick happens when the design sprint renders directions; G3 price signature before Block 4.
-- 🟡 Google Places key (SKU-disciplined) · CWS dev account.
+**Landed tonight:** G1 ✅ **Commonplace ratified** (domains re-verified available via GoDaddy: `commonplacehq.com`, `usecommonplace.app` — founder registering) · **Gemini key ROTATED** (goes in gitignored `src/secrets.js` line 2, mirrored in `.env`) · sandbox ratified = Vercel+Supabase · **sync spike protocol leg PASSED** (`spikes/sync-zk/spike.mjs` — 200 real items, 6/6 checks incl. server-blindness; remote leg needs a Supabase project) · **Claude Design sprint brief ready** (`docs/design/CLAUDE-DESIGN-BRIEF.md` — founder pastes §B into Claude Design, picks at G2) · TikTok **and** IG DYD exports in progress → both ZIP importers added to scope (Block 3; the exports become first fixtures).
+
+**Remaining unblocks:**
+- 🔴 Founder pastes the new key into `src/secrets.js` (+ `.env`) — enables the pipeline experiment.
+- 🔴 **Connect the Claude Chrome extension** (claude.ai/chrome, restart Chrome) — the IG-live probe (spike #1) runs read-only in the founder's logged-in session the moment it's connected.
+- 🟡 Create the Supabase project (or complete the Supabase MCP auth) → sync spike remote leg + the one backend.
+- 🟡 Run the Claude Design diverge session (brief §A runbook) → G2 pick.
+- 🟡 Drop the TikTok/IG export ZIPs into the repo root or Downloads when ready.
+- 🟡 Google Places key (SKU-disciplined) · CWS dev account · G3 price signature before Block 4.
 
 **Repo:** `github.com/s0shaheen/attic` (private). Docs: SPEC.md (governing) · _RESEARCH-2026-07-06.md + _FABLE-PHASE1-findings.md (evidence) · _ENGINE-groundup (engine method; stale corpus stats) · dossier 00–08 (reference) · _FABLE-BRIEF.md v4 + GATE0 docs (superseded).
 

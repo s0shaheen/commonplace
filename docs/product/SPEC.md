@@ -2,7 +2,7 @@
 
 > **This is the single governing document.** It supersedes `_FABLE-BRIEF.md` (v4) and every earlier brief; the dossier (`00–08`) and `_ENGINE-groundup` remain reference depth; the evidence trails are `_FABLE-PHASE1-findings.md` (2026-07-06, six-agent pressure-test) and `_RESEARCH-2026-07-06.md` (2026-07-06, seven-track re-founding research). A build session starts here and should not need to re-decide anything below. **No timelines or effort estimates appear anywhere: the build is agentically coded; the only scarce resources are the founder's decisions, provisioning, and taste, and the plan is sequenced by exactly those gates.**
 >
-> Product name: **Commonplace** (proposed, availability-checked, defended in §22; awaiting founder gate **G1**). Codename "Attic" persists in repo paths until G1.
+> Product name: **Commonplace** — **G1 RATIFIED by the founder 2026-07-06.** Domain availability re-verified via GoDaddy the same evening: `commonplacehq.com` and `usecommonplace.app` both available (founder registers; `commonplace.app` confirmed parked — acquisition inquiry is an upgrade, not a blocker). Codename "Attic" persists in repo paths until the open-core carve (Block 6), per the naming plan.
 
 ```
 Date:      2026-07-06 (v5 — the re-founding)
@@ -94,6 +94,7 @@ The hinge is **RESURFACE + FIND**: a library you never re-enter is a vault (Dewe
 
 - **TikTok (proven, shipped):** MAIN-world interception of the platform's own already-signed `item_list` responses during human-paced scrolling. Source-tagged (favorites / likes / posts) with union dedupe. The real 4,661-item corpus came through this path (verified this session: 1,367 favorites-tagged, 4,132 likes-tagged, 2 posts; overlap 840).
 - **Instagram (ZIP-primary, live spike-gated):** the "Download Your Data" ZIP is the guaranteed lane (saved list, collection names, timestamps). Live interception of the logged-in saved view is Block-0 spike #1. Pre-agreed rule **G4**: *promote live-IG to a headline iff the spike shows a stable interceptable XHR; otherwise ZIP stays primary and live ships as best-effort experimental.*
+- **TikTok DYD ZIP (added 2026-07-06):** TikTok's own "Download Your Data" export ships as a second guaranteed TikTok lane alongside live capture — it cross-checks the live corpus, recovers likes/favorites a scroll session missed, and gives ban-scared users a zero-scroll path. Both platform ZIP importers land in Block 3; the founder's exports of both are in progress and become the importers' first fixtures.
 - **X bookmarks:** same interception pattern, lowest-risk platform, after the core.
 - **Eager media:** signed poster/media URLs expire in hours — fetch posters at capture. This is the structural advantage: mobile-app competitors cannot preserve expiring signed media; an extension sitting inside the session can.
 - **The #1 correctness build:** the resumable, memory-bounded offscreen job queue (checkpointing, service-worker-death revival, 429 backoff, bounded concurrency). The 4,661-item capture crashing the renderer — and losing nothing, because accumulation is storage-checkpointed — is the lived proof of both the risk and the answer.
@@ -272,11 +273,10 @@ Plain, warm, precise. Privacy stated as fact, not marketing: *"We can't read you
 
 ## 24. Build sequence (dependency-ordered; gates, never calendars)
 
-**Block 0 — The spikes (all three, before anything else is committed).**
-1. *IG-live probe:* does the logged-in saved view fire an interceptable XHR? Blob or streamed? Shape-stable? → applies G4's pre-agreed rule.
-2. *Zero-knowledge sync probe:* client-side AES-GCM encrypt/decrypt + push/pull/conflict (per-item LWW + tombstones) on a sandbox backend → locks the one backend (sync + managed inference + MCP, agency-ready).
-3. *The pipeline experiment:* native-video vs [VTT + keyframes + OCR] on a labeled ~50-item golden slice → locks the managed-lane shape; may drop the cost floor.
-- Needs from founder: **rotated Gemini key** · logged-in IG session + DYD ZIP · backend sandbox pick.
+**Block 0 — The spikes (all three, before anything else is committed).** *Status 2026-07-06 evening:*
+1. *IG-live probe:* does the logged-in saved view fire an interceptable XHR? Blob or streamed? Shape-stable? → applies G4's pre-agreed rule. **Status: IG session is logged in; execution needs the Claude Chrome extension connected (claude.ai/chrome) so the probe can run read-only in the founder's session.**
+2. *Zero-knowledge sync probe:* **protocol leg PROVEN 2026-07-06** (`spikes/sync-zk/spike.mjs`, run on 200 real corpus items): AES-GCM-256 with PBKDF2-600k passphrase derivation, HMAC-opaqued item keys, per-item LWW + tombstones — cold-start convergence PASS, post-conflict convergence PASS, LWW PASS, tombstone PASS, **server-blindness PASS** (no captions, artists, or even platform item IDs visible server-side), wrong-passphrase fails closed. ~1.78× ciphertext overhead (base64 envelope; binary columns cut this). **Remote leg pending:** SupabaseTransport implemented + DDL written; needs a Supabase project (sandbox ratified: Vercel+Supabase). Prod note: swap PBKDF2 → Argon2id before launch; protocol unchanged.
+3. *The pipeline experiment:* native-video vs [VTT + keyframes + OCR] on a labeled ~50-item golden slice → locks the managed-lane shape; may drop the cost floor. **Status: unblocked — key rotated 2026-07-06 (lives in gitignored `src/secrets.js`, mirrored in `.env`); needs the golden-slice labeling pass.**
 - Done when: each spike has a written result with evidence; G4 applied; pipeline pick recorded as an ADR.
 
 **Block 1 — The artifact core (the spine).**
@@ -304,7 +304,7 @@ Done when: a stranger can clone the public repo, run the eval, and reproduce the
 **Block 7 — Launch (G5).** Full CWS listing engineered for the favorites/saved/export query cluster · Edge/Firefox · demo video (the 90s arc) · Reddit ignition post (r/DataHoarder, Karakeep-shaped) · Show HN with the eval as headline · 2–4 utility pages · story log current → founder pushes the button.
 
 **The gates (the only calendar that exists):**
-- **G1 — Name.** Ratify Commonplace (or pick from shortlist) → register domains + org + handles same sitting. Blocks: brand, CWS listing name, public repo org, Block-6 naming.
+- **G1 — Name. ✅ RATIFIED 2026-07-06: Commonplace.** Founder still to do, same sitting: register `commonplacehq.com` + `usecommonplace.app` (available at check time) · claim GitHub org + CWS listing name + handles. Design sprint brief lives at `docs/design/CLAUDE-DESIGN-BRIEF.md`.
 - **G2 — Design direction.** Pick from rendered directions (Paper & Proof + two challengers). Blocks: Block 2.
 - **G3 — Prices.** Sign the §17 card. Blocks: Block 4's paywall.
 - **G4 — IG-live posture.** Pre-agreed rule; auto-applies on the spike result.
