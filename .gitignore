@@ -16,3 +16,9 @@ results/vault/
 instagram-*.zip
 *-export/
 ig-export/
+
+# spike #3 fetched media + candidate lists (personal content)
+spikes/pipeline/media/
+spikes/pipeline/candidates.json
+spikes/pipeline/*.log
+spikes/pipeline/manifest.jsonl
