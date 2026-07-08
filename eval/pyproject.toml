@@ -16,6 +16,13 @@ dependencies = [
 commonplace-eval = "commonplace_eval.cli:main"
 [dependency-groups]
 dev = ["pytest>=8.3"]
+[tool.pytest.ini_options]
+# Scoped silence for rdflib's json-ld parser instantiating a (deprecated)
+# ConjunctiveGraph internally — nothing we call or can fix. Matched by exact
+# message + category so any OTHER DeprecationWarning still surfaces.
+filterwarnings = [
+  "ignore:ConjunctiveGraph is deprecated, use Dataset instead\\.:DeprecationWarning",
+]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
