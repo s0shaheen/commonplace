@@ -56,10 +56,15 @@ def test_paired_bootstrap_detects_difference():
     def metric_b(s):
         return sum(b_val[x] for x in s) / len(s)
 
-    out = paired_bootstrap(ids, metric_a, metric_b, B=1000, seed=0)
+    B = 1000
+    out = paired_bootstrap(ids, metric_a, metric_b, B=B, seed=0)
     assert out["delta"] == pytest.approx(0.1)
     assert out["lo"] > 0
     assert out["p_value"] < 0.05
+    # add-one convention never publishes a literal 0.0, and floors at 2/(B+1);
+    # with test-sized B the floor still clears the 0.05 significance bar above.
+    assert out["p_value"] > 0.0
+    assert out["p_value"] >= 2 / (B + 1)
 
 
 def test_paired_bootstrap_null():
@@ -74,3 +79,43 @@ def test_paired_bootstrap_null():
     assert out["delta"] == 0.0
     assert out["p_value"] == 1.0
     assert out["lo"] == 0.0 and out["hi"] == 0.0
+
+
+def test_paired_p_never_zero():
+    # Strongly separated systems: a beats b by a fixed +1.0 on every cluster,
+    # so every one of B resamples favors a (count(delta<=0) == 0). The naive
+    # 2·min(frac) p-value would be exactly 0.0 (a published overclaim); the
+    # add-one convention floors it at 2/(B+1) instead.
+    ids = [f"c{i}" for i in range(40)]
+    b_val = {f"c{i}": float(i) for i in range(40)}
+    a_val = {k: v + 1.0 for k, v in b_val.items()}
+
+    def metric_a(s):
+        return sum(a_val[x] for x in s) / len(s)
+
+    def metric_b(s):
+        return sum(b_val[x] for x in s) / len(s)
+
+    B = 1000
+    out = paired_bootstrap(ids, metric_a, metric_b, B=B, seed=0)
+    assert out["p_value"] == pytest.approx(2 / (B + 1))
+
+
+def test_cluster_bootstrap_rejects_duplicate_ids():
+    ids = ["c0", "c1", "c1", "c2"]  # c1 duplicated
+
+    def metric(s):
+        return float(len(s))
+
+    with pytest.raises(ValueError, match="unique cluster ids"):
+        cluster_bootstrap(ids, metric, B=100, seed=0)
+
+
+def test_paired_bootstrap_rejects_duplicate_ids():
+    ids = ["c0", "c1", "c1", "c2"]  # c1 duplicated
+
+    def metric(s):
+        return float(len(s))
+
+    with pytest.raises(ValueError, match="unique cluster ids"):
+        paired_bootstrap(ids, metric, metric, B=100, seed=0)
