@@ -18,17 +18,28 @@ confounded, so this module scores the *resolver* on top of the Task-5 matcher's
   product-facing "coverage at the shipped confidence threshold").
 
 **Grounding universe.** Gold mentions with ``nil == "NON_ENTITY"`` are excluded
-entirely: those rows exist to score extraction SPU, not grounding. A prediction
-the matcher aligned to a NON_ENTITY gold is dropped too (it is neither a
-grounding error nor a spurious link — extraction already owns it). The universe
-is therefore every gold mention with ``nil != "NON_ENTITY"``: InKB (has
-``gold_id``) or ``nil == "NIL_NO_ID"``.
+from the universe/denominator: those rows are adjudicated extraction traps, not
+grounding targets. The universe is every gold mention with ``nil != "NON_ENTITY"``:
+InKB (has ``gold_id``) or ``nil == "NIL_NO_ID"``. A NON_ENTITY gold with no
+aligned pred contributes nothing anywhere (extraction owns the SPU).
+
+**Grounding a trap is penalized ("honesty over fluency", §4).** A pred the
+matcher aligned to a NON_ENTITY gold that nonetheless asserts a non-NIL id is a
+confidently-wrong durable assertion and is penalized *without* entering the
+denominator: it costs **−c** in Φ_c (component ``non_entity_with_id``, exactly
+like ``spurious_with_id``), counts as an **FP** in ``inkb_prf`` (bucketed by
+pred type; never TP-eligible, never FN), and counts as an **answered+wrong**
+point in ``risk_coverage``. A pred aligned to a NON_ENTITY that abstains/NILs
+contributes nothing. These NON_ENTITY-aligned pairs live in ``GAlignment.non_entity``
+so ``disambiguation_accuracy`` and ``nil_prf`` (resolver-isolation / NIL-class
+views over ``pairs`` only) never see them and stay NON_ENTITY-excluded.
 
 **Alignment object.** ``align_grounding(gold_items, pred_items)`` runs the
 matcher per ``item_id`` and returns a :class:`GAlignment` carrying: ``pairs``
 (aligned in-universe gold + its pred), ``missed`` (in-universe gold with no
-pred), and ``spurious`` (pred aligned to no gold). Every metric consumes this
-object. Functions whose brief signature also takes ``gold_items``/``pred_items``
+pred), ``spurious`` (pred aligned to no gold), and ``non_entity`` (a NON_ENTITY
+gold with an aligned pred — excluded from the universe/denominator but its pred
+penalized when grounded). Every metric consumes this object. Functions whose brief signature also takes ``gold_items``/``pred_items``
 keep them for harness-contract symmetry; the alignment already encodes the
 universe, missed, and spurious sets, so those params are not re-read (avoiding
 any risk of a second, divergent universe count).
@@ -89,6 +100,7 @@ class GAlignment(NamedTuple):
     pairs: list  # aligned: in-universe gold + matched pred
     missed: list  # in-universe gold with no matched pred
     spurious: list  # pred matched to no gold
+    non_entity: list  # NON_ENTITY gold + its matched pred (out of universe/denom)
 
 
 # --- small predicates over mention dicts -------------------------------------
@@ -146,8 +158,10 @@ def align_grounding(
 ) -> GAlignment:
     """Build the in-universe grounding alignment across items.
 
-    Joins by ``item_id`` and runs ``matcher.align`` per item. NON_ENTITY gold
-    (and any pred the matcher paired to it) are excluded from every bucket.
+    Joins by ``item_id`` and runs ``matcher.align`` per item. NON_ENTITY gold are
+    kept out of the universe: one with an aligned pred goes to ``non_entity`` (so
+    grounding a trap can be penalized without inflating the denominator); one with
+    no aligned pred is dropped (extraction owns its SPU).
     """
     gold_by_id = {it["item_id"]: it for it in gold_items}
     pred_by_id = {it["item_id"]: it for it in pred_items}
@@ -156,6 +170,7 @@ def align_grounding(
     pairs: list = []
     missed: list = []
     spurious: list = []
+    non_entity: list = []
 
     for item_id in item_ids:
         gold_mentions = gold_by_id.get(item_id, {}).get("mentions") or []
@@ -164,17 +179,20 @@ def align_grounding(
         for pair in result.pairs:
             if pair.gold_idx is not None and pair.pred_idx is not None:
                 gold = gold_mentions[pair.gold_idx]
+                pred = pred_mentions[pair.pred_idx]
                 if _in_universe(gold):
-                    pairs.append(GPair(gold, pred_mentions[pair.pred_idx]))
-                # else: NON_ENTITY gold + its pred both excluded.
+                    pairs.append(GPair(gold, pred))
+                else:  # NON_ENTITY gold with an aligned pred -> penalize if grounded.
+                    non_entity.append(GPair(gold, pred))
             elif pair.gold_idx is not None:
                 gold = gold_mentions[pair.gold_idx]
                 if _in_universe(gold):
                     missed.append(GPair(gold, None))
+                # else: NON_ENTITY gold, no pred -> contributes nothing anywhere.
             else:  # pred with no gold -> spurious
                 spurious.append(GPair(None, pred_mentions[pair.pred_idx]))
 
-    return GAlignment(pairs=pairs, missed=missed, spurious=spurious)
+    return GAlignment(pairs=pairs, missed=missed, spurious=spurious, non_entity=non_entity)
 
 
 # --- disambiguation accuracy -------------------------------------------------
@@ -183,8 +201,9 @@ def disambiguation_accuracy(alignment: GAlignment) -> dict:
 
     Denominator = aligned pairs where gold has ``gold_id``; a pair is correct
     iff the pred is non-NIL and its id equals the gold id. Reports overall plus
-    a per-authority breakdown (keyed by the gold id's authority). Zero
-    denominator -> 0.0.
+    a per-authority breakdown, keyed by the gold id's authority stripped+casefolded
+    (so ``"Wikidata"`` and ``"wikidata"`` share one bucket, matching ``_id_eq``).
+    Zero denominator -> 0.0.
     """
     total = 0
     correct = 0
@@ -194,7 +213,7 @@ def disambiguation_accuracy(alignment: GAlignment) -> dict:
         gold_id = gold.get("gold_id")
         if gold_id is None:
             continue
-        authority = gold_id.get("authority", "")
+        authority = str(gold_id.get("authority", "")).strip().casefold()
         bucket = per_auth.setdefault(authority, {"n": 0, "correct": 0})
         total += 1
         bucket["n"] += 1
@@ -231,7 +250,8 @@ def inkb_prf(gold_items: list[dict], pred_items: list[dict], alignment: GAlignme
 
     * **TP** — aligned, gold InKB, pred non-NIL, id correct (owned by gold type).
     * **FP** — every non-NIL pred that is not a TP: a wrong id, a link on a
-      gold-NIL, or a spurious pred (owned by pred type).
+      gold-NIL, a spurious pred, or a link on a NON_ENTITY trap (owned by pred
+      type). A NON_ENTITY-aligned pred is never TP-eligible and never an FN.
     * **FN** — every InKB gold without a correct pred: aligned-but-wrong/NIL, or
       missed (owned by gold type).
 
@@ -264,6 +284,11 @@ def inkb_prf(gold_items: list[dict], pred_items: list[dict], alignment: GAlignme
 
     for _gold, pred in alignment.spurious:
         if _pred_nonnil(pred):
+            pt = pred.get("type")
+            fp[pt] = fp.get(pt, 0) + 1
+
+    for _gold, pred in alignment.non_entity:
+        if _pred_nonnil(pred):  # grounding a NON_ENTITY trap -> FP (never TP/FN)
             pt = pred.get("type")
             fp[pt] = fp.get(pt, 0) + 1
 
@@ -328,12 +353,15 @@ def effective_reliability(
 
     Per in-universe gold: a correct non-NIL id scores **+1**; a wrong non-NIL id
     (including asserting an id where gold is NIL) scores **−c**; a NIL/abstain or
-    a missed gold scores **0**. Additionally, each spurious pred that asserts a
-    non-NIL id contributes **−c** to the numerator (a fabricated durable id is a
-    grounding harm even with no gold to align to). ``Φ_c = numerator / n`` where
-    n = count of in-universe gold mentions (0.0 when n == 0, even if spurious
-    penalties exist). Returns ``{"phi", "c", "n", "components"}`` with components
-    ``{correct, wrong_id, abstain, missed, spurious_with_id}``.
+    a missed gold scores **0**. Additionally, each **spurious** pred that asserts
+    a non-NIL id contributes **−c** (a fabricated durable id is a grounding harm
+    even with no gold to align to), and each pred aligned to a **NON_ENTITY** gold
+    that asserts a non-NIL id contributes **−c** via ``non_entity_with_id``
+    (grounding an adjudicated trap is the same confident-wrong harm). Neither
+    enters the denominator. ``Φ_c = numerator / n`` where n = count of in-universe
+    gold mentions (0.0 when n == 0, even if spurious/NON_ENTITY penalties exist).
+    Returns ``{"phi", "c", "n", "components"}`` with components
+    ``{correct, wrong_id, abstain, missed, spurious_with_id, non_entity_with_id}``.
     ``gold_items``/``pred_items`` are accepted for signature symmetry; n and the
     components are derived from the alignment so they cannot diverge.
     """
@@ -352,9 +380,10 @@ def effective_reliability(
 
     missed = len(alignment.missed)
     spurious_with_id = sum(1 for _gold, pred in alignment.spurious if _pred_nonnil(pred))
+    non_entity_with_id = sum(1 for _gold, pred in alignment.non_entity if _pred_nonnil(pred))
 
     n = correct + wrong_id + abstain + missed  # in-universe gold mentions
-    numerator = correct - c * (wrong_id + spurious_with_id)
+    numerator = correct - c * (wrong_id + spurious_with_id + non_entity_with_id)
     phi = numerator / n if n else 0.0
 
     return {
@@ -367,6 +396,7 @@ def effective_reliability(
             "abstain": abstain,
             "missed": missed,
             "spurious_with_id": spurious_with_id,
+            "non_entity_with_id": non_entity_with_id,
         },
     }
 
@@ -394,12 +424,14 @@ def risk_coverage(
     """Risk–coverage curve, AURC, and coverage at ≤5% risk.
 
     Sweeps the confidence threshold over the distinct ``grounding_confidence``
-    values of the non-NIL predictions (aligned or spurious), descending. At each
-    threshold τ: answered = non-NIL preds with confidence >= τ; wrong = answered
-    that are not a correct link; ``coverage = answered / n_gold`` (in-universe
-    gold count), ``risk = wrong / answered``. Points are ordered by ascending
-    coverage. AURC = trapezoidal area of risk over coverage across those points
-    (no synthetic anchor; the curve *is* the swept thresholds).
+    values of the non-NIL predictions (aligned in-universe, spurious, or aligned
+    to a NON_ENTITY trap), descending. At each threshold τ: answered = non-NIL
+    preds with confidence >= τ; wrong = answered that are not a correct link (a
+    spurious or NON_ENTITY-aligned grounding is always wrong, consistent with
+    Φ_c); ``coverage = answered / n_gold`` (in-universe gold count),
+    ``risk = wrong / answered``. Points are ordered by ascending coverage. AURC =
+    trapezoidal area of risk over coverage across those points (no synthetic
+    anchor; the curve *is* the swept thresholds).
     ``coverage_at_risk_5pct`` = max coverage of any point with risk <= 0.05, or
     0.0 if none qualifies. ``gold_items``/``pred_items`` accepted for signature
     symmetry; all quantities derive from the alignment.
@@ -416,6 +448,10 @@ def risk_coverage(
         if _pred_nonnil(pred):
             conf = pred["grounding"].get("grounding_confidence", 0.0)
             answers.append((conf, False))  # spurious link is always wrong
+    for _gold, pred in alignment.non_entity:
+        if _pred_nonnil(pred):
+            conf = pred["grounding"].get("grounding_confidence", 0.0)
+            answers.append((conf, False))  # grounding a NON_ENTITY trap is always wrong
 
     thresholds = sorted({conf for conf, _ in answers}, reverse=True)
     curve: list[dict] = []

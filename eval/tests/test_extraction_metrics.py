@@ -16,6 +16,11 @@ def _m(surface, type_, aliases=()):
     return {"surface": surface, "type": type_, "aliases": list(aliases)}
 
 
+def _ne(surface, type_, aliases=()):
+    # An adjudicated NON_ENTITY trap: a proposed mention the annotator rejected.
+    return {"surface": surface, "type": type_, "aliases": list(aliases), "nil": "NON_ENTITY"}
+
+
 def _item(item_id, mentions):
     return {"item_id": item_id, "mentions": mentions}
 
@@ -150,6 +155,42 @@ def test_per_type_mis_attributed_to_gold_type():
     assert per_type["place"]["actual"] == 0
     assert per_type["place"]["possible"] == 1
     assert per_type["place"]["recall"] == 0.0
+
+
+# --- NON_ENTITY traps are never creditable (ratified semantics) --------------
+def test_non_entity_gold_not_missed():
+    # gold: 1 real (Dune/book) + 1 NON_ENTITY trap (Pizza Place/place).
+    # pred: only the real one. The unmatched trap must NOT count as MIS.
+    gold = [_item("v1", [_m("Dune", "book"), _ne("Pizza Place", "place")])]
+    pred = [_item("v1", [_m("Dune", "book")])]
+    out = score_extraction(gold, pred)["strict"]
+    # Only Dune scores: COR=1, no MIS from the trap.
+    # ACT = COR = 1, POS = COR = 1 -> strict micro P=1.0, R=1.0, F1=1.0.
+    assert out["counts"] == {"COR": 1, "INC": 0, "PAR": 0, "MIS": 0, "SPU": 0}
+    assert out["micro"]["precision"] == 1.0
+    assert out["micro"]["recall"] == 1.0
+    assert out["micro"]["f1"] == 1.0
+    # The trap's 'place' type never enters the per-type table (nothing counted).
+    assert "place" not in out["per_type"]
+
+
+def test_pred_matching_non_entity_is_spurious():
+    # gold: 1 real (Dune/book) + 1 NON_ENTITY trap (Pizza Place/place).
+    # pred: the real one + a pred that HITS the trap surface -> that pred is SPU.
+    gold = [_item("v1", [_m("Dune", "book"), _ne("Pizza Place", "place")])]
+    pred = [_item("v1", [_m("Dune", "book"), _m("Pizza Place", "place")])]
+    out = score_extraction(gold, pred)["strict"]
+    # Dune -> COR; the trap-aligned pred is recast COR->SPU (owned by pred type).
+    # counts: COR=1, SPU=1. ACT = COR+SPU = 2, POS = COR = 1 (no MIS from trap).
+    # P = (1 + 0.5*0)/ACT = 1/2 = 0.5 ; R = 1/POS = 1/1 = 1.0 ; F1 = 2*0.5*1/1.5.
+    assert out["counts"] == {"COR": 1, "INC": 0, "PAR": 0, "MIS": 0, "SPU": 1}
+    assert out["micro"]["precision"] == 0.5
+    assert out["micro"]["recall"] == 1.0
+    assert abs(out["micro"]["f1"] - (2 * 0.5 * 1.0) / 1.5) < 1e-12
+    # Attribution: book COR (gold type), place SPU (pred type).
+    assert out["per_type"]["book"]["f1"] == 1.0
+    assert out["per_type"]["place"]["actual"] == 1
+    assert out["per_type"]["place"]["possible"] == 0
 
 
 # --- micro vs macro divergence on skewed types (mandated addition) -----------

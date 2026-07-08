@@ -340,30 +340,111 @@ def test_risk_coverage_no_point_under_risk_is_zero():
     assert out["coverage_at_risk_5pct"] == 0.0
 
 
-# --- NON_ENTITY exclusion from the grounding universe (mandated addition) ----
+# --- NON_ENTITY: excluded from universe/denominator (mandated addition) ------
 def test_non_entity_excluded_from_grounding_universe():
-    # gold A = NON_ENTITY (extraction error), B = InKB. A pred grounds BOTH.
+    # gold A = NON_ENTITY (adjudicated trap), B = InKB. The pred ABSTAINS on the
+    # trap (NILs it) and correctly links B.
     gold = [_item("v1", [
         _gold_nonentity("Foo"),
         _gold_inkb("Bar", "wikidata", "Q1"),
     ])]
     pred = [_item("v1", [
-        _pred_link("Foo", "wikidata", "Q99"),   # aligned to NON_ENTITY -> excluded
-        _pred_link("Bar", "wikidata", "Q1"),    # correct
+        _pred_nil("Foo"),                        # aligned to NON_ENTITY, abstains
+        _pred_link("Bar", "wikidata", "Q1"),     # correct
     ])]
     al = align_grounding(gold, pred)
-    # Universe = only B (1 in-universe gold), Foo/pred-Foo dropped (not spurious).
+    # Universe = only B (1 in-universe gold); Foo lands in non_entity, not pairs,
+    # not spurious, not missed.
     assert len(al.pairs) == 1
     assert al.spurious == []
+    assert al.missed == []
+    assert len(al.non_entity) == 1
     # disambiguation: denom=1 (Bar), correct=1 -> 1.0.
     dis = disambiguation_accuracy(al)
     assert dis["n"] == 1 and dis["accuracy"] == 1.0
-    # Φ_c: n=1, correct=1, NO spurious penalty from the NON_ENTITY pred -> phi=1.0
-    # (had Foo counted as a spurious grounded pred it would be (1-10)/1 = -9).
+    # Φ_c: n=1, correct=1; the NON_ENTITY pred ABSTAINED so no penalty -> phi=1.0.
     phi = effective_reliability(gold, pred, al)
     assert phi["n"] == 1
     assert phi["components"]["spurious_with_id"] == 0
+    assert phi["components"]["non_entity_with_id"] == 0
     assert phi["phi"] == 1.0
+
+
+# --- NON_ENTITY: grounding a trap IS penalized (ratified semantics) -----------
+def test_phi_non_entity_with_id():
+    # 1 correct InKB gold + 1 NON_ENTITY gold that the pred GROUNDS with an id.
+    # c=10; n=1 (only the InKB gold is in-universe). The NON_ENTITY grounding
+    # adds -c to the numerator via non_entity_with_id but NOT to the denominator.
+    #   numerator = correct - c*(wrong_id + spurious_with_id + non_entity_with_id)
+    #             = 1 - 10*(0 + 0 + 1) = -9 ;  phi = -9 / 1 = -9.0
+    gold = [_item("v1", [
+        _gold_inkb("Alpha", "wikidata", "Q1"),
+        _gold_nonentity("Foo"),
+    ])]
+    pred = [_item("v1", [
+        _pred_link("Alpha", "wikidata", "Q1"),   # correct
+        _pred_link("Foo", "wikidata", "Q99"),    # grounds the trap -> -c
+    ])]
+    al = align_grounding(gold, pred)
+    out = effective_reliability(gold, pred, al, c=10.0)
+    assert out["n"] == 1
+    assert out["components"]["correct"] == 1
+    assert out["components"]["non_entity_with_id"] == 1
+    assert out["components"]["spurious_with_id"] == 0
+    assert out["phi"] == -9.0
+
+
+def test_inkb_fp_on_non_entity():
+    # Same setup: Alpha correctly linked -> TP=1; the grounded NON_ENTITY trap is
+    # an FP (bucketed by pred type 'book'), never TP-eligible, never FN.
+    gold = [_item("v1", [
+        _gold_inkb("Alpha", "wikidata", "Q1"),
+        _gold_nonentity("Foo"),
+    ])]
+    pred = [_item("v1", [
+        _pred_link("Alpha", "wikidata", "Q1"),
+        _pred_link("Foo", "wikidata", "Q99"),
+    ])]
+    out = inkb_prf(gold, pred, align_grounding(gold, pred))
+    micro = out["micro"]
+    # TP=1 (Alpha), FP=1 (Foo trap grounding), FN=0.
+    assert micro["tp"] == 1
+    assert micro["fp"] == 1
+    assert micro["fn"] == 0
+    # P = 1/(1+1) = 0.5, R = 1/(1+0) = 1.0.
+    assert micro["precision"] == 0.5
+    assert micro["recall"] == 1.0
+    # The FP is owned by the pred type 'book'.
+    assert out["per_type"]["book"]["fp"] == 1
+
+
+def test_nil_and_disambiguation_ignore_non_entity():
+    # NON_ENTITY-aligned preds must NOT touch the resolver-isolation / NIL-class
+    # views (both iterate alignment.pairs, which excludes NON_ENTITY).
+    # gold: 1 gold-NIL (En1) + 1 InKB (Kay) + 1 NON_ENTITY (Foo) grounded by pred.
+    gold = [_item("v1", [
+        _gold_nil("En1"),
+        _gold_inkb("Kay", "wikidata", "Q1"),
+        _gold_nonentity("Foo"),
+    ])]
+    pred = [_item("v1", [
+        _pred_nil("En1"),                        # correct NIL
+        _pred_link("Kay", "wikidata", "Q1"),     # correct disambiguation
+        _pred_link("Foo", "wikidata", "Q99"),    # grounds the trap -> ignored here
+    ])]
+    al = align_grounding(gold, pred)
+    # disambiguation: only Kay has a gold_id among the in-universe pairs ->
+    # denom=1, correct=1 -> 1.0. Foo never enters (it is in non_entity).
+    dis = disambiguation_accuracy(al)
+    assert dis["n"] == 1
+    assert dis["accuracy"] == 1.0
+    # nil_prf over in-universe pairs {En1, Kay}: predicted-NILs={En1}=1,
+    # gold-NILs={En1}=1, correct-NILs={En1}=1 -> NIL-F1=1.0. Foo excluded.
+    nil = nil_prf(al)
+    assert nil["predicted_nils"] == 1
+    assert nil["gold_nils"] == 1
+    assert nil["correct_nils"] == 1
+    assert nil["nil_f1"] == 1.0
 
 
 # --- empty inputs (mandated addition) ----------------------------------------

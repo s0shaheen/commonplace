@@ -27,6 +27,15 @@ counted under the **pred** mention's type. Join is by ``item_id`` — a gold ite
 with no matching pred item yields all-MIS; a pred item with no gold item yields
 all-SPU (both fall out of ``matcher.align`` on an empty opposite side).
 
+**NON_ENTITY traps are never creditable.** A gold mention with
+``nil == "NON_ENTITY"`` is an adjudicated pre-annotation trap ("a good pizza
+place" proposed then rejected), not a real entity. Alignment runs on the full
+mention sets unchanged, but the result is recast: an *unmatched* NON_ENTITY gold
+contributes **nothing** (correctly ignoring a trap is not a recall failure — no
+MIS); a pred that aligned to one is **SPU** by its own pred type (the system
+extracted something that was rejected), and the pair yields no COR/INC/PAR. This
+keeps extraction honest without penalizing the annotator's trap rows on recall.
+
 Macro averaging uses observed types (types present in the per-type table),
 matching nervaluate; a type never seen contributes nothing (rather than a
 0/0 F1 that would drag the mean toward zero). The grounding InKB metric, by
@@ -99,6 +108,10 @@ def score_extraction(
     "per_type": {type: prf}, "counts": {COR,INC,PAR,MIS,SPU}}}``. Macro is the
     unweighted mean of per-type precision/recall/F1 over observed types (0.0 for
     each when no type is observed). Duplicate ``item_id``s are last-wins.
+
+    NON_ENTITY gold rows (``nil == "NON_ENTITY"``) are never creditable: an
+    unmatched one is dropped (no MIS); a pred aligned to one is recast as SPU by
+    its pred type. See the module docstring.
     """
     gold_by_id = {it["item_id"]: it for it in gold_items}
     pred_by_id = {it["item_id"]: it for it in pred_items}
@@ -114,12 +127,21 @@ def score_extraction(
         result = align(gold_mentions, pred_mentions, fuzzy_threshold)
         for scheme in schemes:
             for pair, cat in result.categorize(scheme):
-                label = cat.value
-                micro[scheme][label] += 1
-                if label == "SPU":  # spurious pred owns its category by PRED type
+                gold = gold_mentions[pair.gold_idx] if pair.gold_idx is not None else None
+                if gold is not None and gold.get("nil") == "NON_ENTITY":
+                    # Adjudicated trap: not creditable.
+                    if pair.pred_idx is None:
+                        continue  # unmatched trap correctly ignored -> no MIS
+                    # A pred that grounded the trap is spurious, owned by pred type.
+                    label = "SPU"
+                    type_ = pred_mentions[pair.pred_idx].get("type")
+                elif cat.value == "SPU":  # spurious pred owns its category by PRED type
+                    label = "SPU"
                     type_ = pred_mentions[pair.pred_idx].get("type")
                 else:  # COR/INC/PAR/MIS owned by GOLD type
+                    label = cat.value
                     type_ = gold_mentions[pair.gold_idx].get("type")
+                micro[scheme][label] += 1
                 bucket = per_type[scheme].setdefault(type_, _zero_counts())
                 bucket[label] += 1
 
