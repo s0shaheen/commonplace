@@ -2,6 +2,9 @@
 
 **Operating contract lives in `CLAUDE.md`** (repo root, auto-loaded) — Frame / Truth / Verdict. The `memory/` notes hold the *why*.
 
+> ## ▶ EXECUTION PLAN: `docs/product/_ROADMAP.md`
+> After reading this pointer, go to the roadmap — it's the single from-here-to-launch plan (phases, founder gates, the provisioning punch-list, how to run it). To drive the build, say **"execute the roadmap"**. Governing spec = `SPEC.md`; schema = `_ONTOLOGY.md` v3; eval = `_EVAL-METHOD.md`; standard = `_KOE-STANDARD.md`.
+
 ## STATE (2026-07-06, evening) — the re-founding is done; SPEC v5 governs; next = BUILD
 
 **`docs/product/SPEC.md` (v5) is THE single governing document.** Written by Fable from intention down at the founder's directive ("start with the intention and work your way from there… get this whole thing ready to just go and build"). It supersedes `_FABLE-BRIEF.md` (v4) and everything before it. A build session starts at SPEC.md and should not need to re-decide anything.
