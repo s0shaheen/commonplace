@@ -63,9 +63,17 @@ Category → Concept. "Restaurant" is never a type — a specific restaurant is 
 
 **Negative — NOT entities (route elsewhere):**
 
+These are about *entityhood*: none is a rigid individual, so none enters
+`mentions[]` as a linked entity. A category surface earns a `NON_ENTITY` record
+in `mentions[]` **only when something proposed it as an entity** (a pre-annotation
+suggestion, or a system output being adjudicated); a category surface no one
+proposed gets **no record**. Several still route to another layer
+(Concept/Claim/StructuredContent/Facet) and are captured there.
+
 1. "cable lateral raise" → a technique, not a thing → **Concept**.
-2. "a good pizza place near me" → a category, no individual → **not a mention**
-   (or Concept "pizzeria").
+2. "a good pizza place near me" → a category, no individual → **not an entity**;
+   if something proposed it → record `NON_ENTITY`, else no record (or Concept
+   "pizzeria").
 3. "this 15-minute protein-shake recipe" → shaped steps → **StructuredContent**
    (Recipe).
 4. "honestly it's worth the hype" → a proposition → **Claim** (faithfulness, not

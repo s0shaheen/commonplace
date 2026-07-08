@@ -60,6 +60,18 @@
           }
         },
         "hard_case": { "type": "boolean" },
+        "verification": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Structured staleness guard for Places (and any authority whose id churns): store the human-readable anchor so the label survives a stale/rotated external id (_EVAL-METHOD.md §3).",
+          "properties": {
+            "name": { "type": "string" },
+            "address": { "type": "string" },
+            "lat": { "type": "number" },
+            "lng": { "type": "number" },
+            "url": { "type": "string" }
+          }
+        },
         "notes": { "type": "string" }
       },
       "oneOf": [

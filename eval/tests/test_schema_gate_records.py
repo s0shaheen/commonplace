@@ -79,6 +79,25 @@ def test_gold_bad_entity_type_rejected():
     assert validate_gold_record({"item_id": "x", "mentions": [m]}) != []
 
 
+def test_gold_verification_object_valid():
+    """A Place mention may carry the structured staleness-guard `verification` block."""
+    m = {"mention_id": "m1", "surface": "Joe's Pizza", "type": "place",
+         "gold_id": {"authority": "google_places", "id": "ChIJ...Bleecker"},
+         "verification": {"name": "Joe's Pizza",
+                          "address": "7 Carmine St, New York, NY 10014",
+                          "lat": 40.7305, "lng": -74.0027,
+                          "url": "https://maps.google.com/?cid=123"}}
+    assert validate_gold_record({"item_id": "x", "mentions": [m]}) == []
+
+
+def test_gold_verification_unknown_key_rejected():
+    """`verification` is `additionalProperties: false` — an unknown key must fail."""
+    m = {"mention_id": "m1", "surface": "Joe's Pizza", "type": "place",
+         "gold_id": {"authority": "google_places", "id": "ChIJ...Bleecker"},
+         "verification": {"name": "Joe's Pizza", "place_id": "ChIJ...Bleecker"}}
+    assert validate_gold_record({"item_id": "x", "mentions": [m]}) != []
+
+
 # --- pred record ------------------------------------------------------------
 
 PRED = {

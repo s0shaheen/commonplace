@@ -75,7 +75,12 @@ to; base-container fixtures without `extractions` are unaffected.
 - `gold.schema.json` — the human-verified gold record (one per item, JSONL). All
   layer blocks optional except `item_id`. mentions enforce `gold_id` XOR `nil`
   (`oneOf`) and `nil="NIL_NO_ID"` ⇒ non-empty `failed_queries` (`if/then`); two
-  distinct NIL labels `NIL_NO_ID` / `NON_ENTITY`.
+  distinct NIL labels `NIL_NO_ID` / `NON_ENTITY`. `GoldMention` also carries an
+  optional structured `verification` object (`{name?, address?, lat?, lng?,
+  url?}`, `additionalProperties: false`) — the `_EVAL-METHOD.md` §3 staleness
+  guard: store a Place's name + address + lat/lng (Google Place IDs go stale, so
+  the human-readable anchor is what keeps the label reproducible). Additive and
+  optional; every prior fixture still validates.
 - `pred.schema.json` — the system-prediction record. mentions carry `grounding`
   with the same nil/externalId invariant.
 - `vocab/facets.json` (v1.0) — the frozen 9-facet vocabulary, kept out of the

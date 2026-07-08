@@ -43,13 +43,18 @@ required field is `item_id`; each in-scope entity is one object in `mentions[]`:
 | **xor** the honest-no-id label | `nil` ∈ `NIL_NO_ID` \| `NON_ENTITY` |
 | searches you ran before NIL | `failed_queries[]` |
 | when you looked it up | `kb_snapshot { authority, retrieved }` |
+| a Place's stable anchor (name/address/lat/lng/url) | `verification { name?, address?, lat?, lng?, url? }` |
 | is this a seeded hard case | `hard_case` (boolean) |
-| free-text: evidence note, Places address, disambiguation | `notes` |
+| free-text: evidence/where-seen (§6), disambiguation | `notes` |
 
 **Invariant (schema-enforced):** exactly one of `gold_id` or `nil` is non-null
 per mention (`oneOf`). If `nil = "NIL_NO_ID"`, `failed_queries` must be
 non-empty. Facet/Concept/Claim/StructuredContent layers have their own blocks
 (`facets`, `concepts`, `claims`, `structured`) — §7 and §8.
+
+The item-level `strata` object (`{has_vtt, is_slideshow, duration_tercile}`) is
+populated by the **sampling pipeline, not the annotator** — it records how the
+item was drawn (for stratified reporting); leave it as delivered.
 
 ### 1.2 Exhaustive, per-item — never from system output
 
@@ -69,7 +74,11 @@ being measured.
    **suggestions** into the annotation tool (**Argilla** primary, or **Label
    Studio** for its native video player).
 2. **Human pass:** for every suggestion — *verify* it, *correct* the type or
-   surface if wrong, *delete* it if it is a NON_ENTITY, and **add** every
+   surface if wrong, and if it is **not** a rigid in-scope individual *mark it
+   `NON_ENTITY`* — **never delete a suggestion.** A suggestion is something that
+   *proposed* this surface as an entity; the `NON_ENTITY` record is the scored
+   gold label that says "proposed and rejected" (§4, `_EVAL-METHOD.md` §2).
+   Deleting it would silently drop a label the metric needs. Then **add** every
    in-scope mention the pre-annotation missed. Confirm every id by opening the
    actual record (§5). The suggestions are a labor aid, never the answer.
 
@@ -104,10 +113,13 @@ Q1. Does it name a RIGID INDIVIDUAL?
               → then ground to an instance ID, or an honest NIL (§4).
         NO  → go to Q2.
 
-Q2. Is it a KIND / IDEA with an authority node above threshold?
-    (a category, technique, skill, subject, meme/trend)
-        YES → it is a Concept (§8). Not a grounding entity.
-        NO  → it is a free tag / Facet value (§7).
+Q2. Is it a KIND / IDEA you can pin to an authority node within 2 searches?
+    (a category, technique, skill, subject, meme/trend — its OWN page as a
+     class/topic item in Wikidata, or a term in IPTC Media Topics)
+        YES → it is a Concept (§8): give it concept_id + authority. Not a
+              grounding entity.
+        NO  → it is a free tag (no concept_id) / Facet value (§7);
+              record the searches in notes when you give up.
 
 Orthogonally, regardless of Q1–Q2:
     • Is the mention a PROPOSITION (a claim, opinion, verdict)? → Claim (§8).
@@ -132,7 +144,8 @@ error that quietly destroys grounding precision. Litmus test: *one
 re-identifiable individual, or a category of things?* Category → Concept.
 
 - "cable lateral raise" → a **technique** → Concept. **NOT** an entity.
-- "a good pizza place" → a **category** → not a mention (or Concept). **NOT** a
+- "a good pizza place" → a **category** → **not an entity**; if something
+  proposed it → a `NON_ENTITY` record, else no record (or Concept). **NOT** a
   place entity.
 - "a solid retinol serum" → a **kind** → Concept. **NOT** a product.
 - "a nutritionist said…" → a **role** → Concept/nothing. **NOT** a person.
@@ -193,8 +206,9 @@ confirm it by opening the record (§5), not by trusting the surface string.
   matcher.*
 - **Verification check:** the Place ID resolves in Google Places to a specific
   establishment/landmark. **Store the resolved `name`, formatted `address`, and
-  `lat/lng` in `notes`** — Place IDs go stale, so the human-readable anchor is
-  what keeps the label reproducible (`_EVAL-METHOD.md` §3).
+  `lat/lng` in the structured `verification` field** (`{name, address, lat, lng,
+  url?}`) — Place IDs go stale, so the human-readable anchor is what keeps the
+  label reproducible (`_EVAL-METHOD.md` §3).
 - **Include:** a specific, physically locatable establishment or landmark
   (restaurant, café, gym, shop, park, monument).
 - **Exclude:** a category ("a good taco spot"), a generic ("the gym", "home"), a
@@ -205,8 +219,8 @@ confirm it by opening the record (§5), not by trusting the surface string.
 
 | # | Content | Ruling | Reason |
 |---|---|---|---|
-| 1 | "Best slice in NYC — Joe's Pizza on Bleecker St" | `place` → Place ID; `notes`: name + address + lat/lng | named, locatable individual |
-| 2 | "this hidden gym in Bali" — no name shown or spoken | not a place entity → **NON_ENTITY** | no re-identifiable individual; only a category is named |
+| 1 | "Best slice in NYC — Joe's Pizza on Bleecker St" | `place` → Place ID; `verification`: name + address + lat/lng | named, locatable individual |
+| 2 | "this hidden gym in Bali" — no name shown or spoken | not a place entity; if it was suggested/extracted as a place → **NON_ENTITY** record, else no record | no re-identifiable individual, only a category — record it only because something proposed it (§4) |
 | 3 | "the Eiffel Tower at night" | `place` → Place ID | named locatable landmark |
 | 4 (boundary) | "grabbed a coffee at Starbucks" (no specific store) | `brand_org` (the chain), **not** `place` | the referent is the brand, not one outlet — see §9 |
 
@@ -288,13 +302,16 @@ confirm it by opening the record (§5), not by trusting the surface string.
 - **Include:** a specific, notable, **named** product model.
 - **Exclude:** a product *kind* ("a retinol serum", "a hair tool") → Concept; the
   brand alone → `brand_org`.
+- **One surface, one mention.** A single surface yields **one** mention at its
+  **most specific type**. Add a separate mention for an embedded brand **only
+  when the brand also appears as its own surface elsewhere** in the item.
 - **Boundary:** most specific SKUs lack a QID → `NIL_NO_ID` after an honest
   search is the *expected, correct* answer here — do not force a name-similar QID.
 
 | # | Content | Ruling | Reason |
 |---|---|---|---|
 | 1 | "the Dyson Airwrap is worth it" | `product` → QID | named, notable product model |
-| 2 | "this CeraVe moisturizing cream" | `product` → QID if it has one, else `NIL_NO_ID` (+ `brand_org` CeraVe) | brand is notable; the specific SKU often isn't in the KB |
+| 2 | "this CeraVe moisturizing cream" (one surface) | **one** `product` mention → QID if it has one, else `NIL_NO_ID`; add a separate `brand_org` CeraVe **only if** "CeraVe" also appears as its own surface elsewhere | one surface → one mention at its most specific type; don't split the brand out unless it stands alone elsewhere |
 | 3 | "a good drugstore retinol" | Concept, **not** `product` | a category, no individual |
 | 4 (boundary) | "the pink one from my haul" (unnamed) | **NON_ENTITY** unless a specific named product is identifiable | no individuated product |
 
@@ -399,11 +416,22 @@ NIL auditable — a reviewer can re-run your searches. Example:
 ```
 
 `NON_ENTITY` needs no `failed_queries` (there was nothing to search for). Reserve
-it for genuine over-extractions:
+it for genuine over-extractions.
+
+**When a category surface earns a record — the one decidable rule.** A generic
+category surface ("a good pizza place", "this hidden gym") creates a gold record
+**only when something proposed it as an entity** — a pre-annotation suggestion,
+or a system output being adjudicated. Then you **mark that record `NON_ENTITY`**
+and **never delete it** — `NON_ENTITY` is a *scored gold label* (`_EVAL-METHOD.md`
+§2, "Learn to Not Link"), the thing the metric uses to reward the system for
+declining to link. A category surface **no one proposed gets no record at all**
+(it is simply not a mention). So the NIL decision tree above runs only on
+mentions that already exist because something surfaced them.
 
 ```json
 { "mention_id": "m7", "surface": "a good pizza place", "type": "place",
-  "nil": "NON_ENTITY", "notes": "generic kind — not a rigid individual" }
+  "nil": "NON_ENTITY",
+  "notes": "pre-annotator suggested this as a place; generic category, not a rigid individual → NON_ENTITY (a category no one proposed would get no record)" }
 ```
 
 Remember the schema invariant: `gold_id` **xor** `nil`. A mention never has both.
@@ -420,8 +448,9 @@ wrong id is the worst outcome the metric punishes (`_EVAL-METHOD.md` §4, the
 1. **Open the record in a browser** and confirm the entity *is* the referent:
    - `musicbrainz` → the **Recording** page; artist + title + version match.
    - `google_places` → Google Places / Maps; the establishment matches, and you
-     **copy its name, formatted address, and lat/lng into `notes`** (Place IDs
-     go stale — the readable anchor is what survives).
+     **copy its name, formatted address, and lat/lng into the structured
+     `verification` field** (Place IDs go stale — the readable anchor is what
+     survives).
    - `wikidata` → the entity page; **check `P31`** matches the type
      (`person` = human/Q5; `screen_work` = film/series; `game` = video game;
      `product`/`brand_org`/`software_app` = the corresponding class).
@@ -440,14 +469,19 @@ wrong id is the worst outcome the metric punishes (`_EVAL-METHOD.md` §4, the
   "type": "place",
   "gold_id": { "authority": "google_places", "id": "ChIJ...Bleecker" },
   "kb_snapshot": { "authority": "google_places", "retrieved": "2026-07-08" },
-  "notes": "Joe's Pizza, 7 Carmine St, New York, NY 10014 — 40.7305,-74.0027"
+  "verification": {
+    "name": "Joe's Pizza", "address": "7 Carmine St, New York, NY 10014",
+    "lat": 40.7305, "lng": -74.0027
+  }
 }
 ```
 
-> **Schema note / reconciliation:** `gold.schema.json`'s `GoldMention` has **no
-> dedicated fields** for a Place's name/address/lat/lng — they live in `notes`
-> by the convention above (the frozen schema keeps mentions lean). Flagged in the
-> task report.
+> **Schema note:** `gold.schema.json`'s `GoldMention` carries a dedicated,
+> structured `verification` object (`{name?, address?, lat?, lng?, url?}`,
+> `additionalProperties: false`) — the Place's name/address/lat/lng go **there**,
+> not in `notes` (added in schema `1.0.0-rc.3`; `_EVAL-METHOD.md` §3 staleness
+> guard). `notes` is reserved for free-text evidence/where-seen (§6) and
+> disambiguation prose.
 
 ---
 
@@ -478,10 +512,13 @@ convention:
 notes: "channel=VERBAL_AUDIO; quote=\"best slice is Joe's on Bleecker\"; t=8,13"
 ```
 
-> **Reconciliation flagged in the report:** the brief asks for an evidence
-> section, but the frozen gold schema stores no evidence fields — hence the
-> `notes` convention above. The channel/selector *vocabulary* is authoritative
-> (it is the engine's), the *storage location* on gold is `notes`.
+> **Convention (two homes, no overlap):** the frozen gold schema stores no
+> evidence fields, so **evidence / where-seen stays in `notes`** (channel + quote
+> + fragment, per the line above). This is deliberate and distinct from a Place's
+> `verification` object (§5), which is *structured* — name/address/lat/lng go in
+> `verification`, evidence/where-seen prose goes in `notes`. The channel/selector
+> *vocabulary* is authoritative (it is the engine's); the *storage location* on
+> gold is `notes`.
 
 **Why bother:** the quote + channel disambiguate the surface and drive the
 `surface`/`aliases` decision (a song named in `STRUCTURED_METADATA` vs *heard* in
@@ -534,10 +571,19 @@ metrics, but are **not** part of the grounding headline. Brief rules:
 
 ### 8.1 Concepts — `concepts[]`
 
-A **kind / idea / subject** with an authority node above threshold — including
+A **kind / idea / subject** you can pin to an authority node — including
 **CulturalReference** (memes, trends, aesthetics). Open **multi-label subject
 indexing**, *not* 1:1 linking: an item carries as many concepts as it is about.
 Gold block `GoldConcept`: `{ concept_id, authority, label }`.
+
+**Decidable threshold (replaces "above threshold" vibes).** A Concept earns a
+`concept_id` + `authority` — a grounded `GoldConcept` row — when you can find the
+concept's **own page** (a class/topic item in **Wikidata**, or a term in **IPTC
+Media Topics**) within **2 searches**. If you cannot, record it as a **free tag**
+(a `label` with **no `concept_id`**; it stays an ungrounded descriptor, not a
+`GoldConcept` row) and note the searches you ran before giving up. "flow state",
+"progressive overload", "girl dinner" clear the bar; a hyper-specific coinage
+that has no authority page does not.
 
 - Include: "flow state", "sourdough hydration", "ADHD", "progressive overload",
   "girl dinner" (CulturalReference).
@@ -589,7 +635,7 @@ cases so the benchmark is stress-tested, not flattered. Mark each with
 - The chain named **as a brand** ("Starbucks raised prices") → `brand_org` (QID).
 - A **specific visited outlet** ("the Starbucks on 5th & Main", or a shown
   storefront you can locate) → `place` (Place ID; name+address+lat/lng in
-  `notes`).
+  `verification`).
 - Named chain, no specific outlet identifiable → `brand_org`. Decide by
   **referent role**, and note the reasoning.
 
