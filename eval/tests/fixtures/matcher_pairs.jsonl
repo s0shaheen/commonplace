@@ -1,0 +1,12 @@
+{"a": {"surface": "Joe's Pizza", "aliases": []}, "b": {"surface": "Joes Pizza"}, "human_match": true, "note": "TP: apostrophe/spacing variant, EXACT after normalization"}
+{"a": {"surface": "Joe's Pizza", "aliases": []}, "b": {"surface": "that pizza spot Joe's"}, "human_match": true, "note": "hard case (_EVAL-METHOD.md 4). Human says match; matcher token_set_ratio=100 => FUZZY match => counts TP"}
+{"a": {"surface": "The Matrix", "aliases": []}, "b": {"surface": "Matrix"}, "human_match": true, "note": "TP: leading-article strip, EXACT"}
+{"a": {"surface": "SZA", "aliases": ["Solana Rowe"]}, "b": {"surface": "Solana Rowe"}, "human_match": true, "note": "TP via gold alias, EXACT"}
+{"a": {"surface": "Taylor Swift", "aliases": ["T-Swift"]}, "b": {"surface": "T-Swift"}, "human_match": true, "note": "TP via gold alias (hyphen->space), EXACT"}
+{"a": {"surface": "NYC", "aliases": []}, "b": {"surface": "the Big Apple"}, "human_match": true, "note": "FN: nickname coreference the deterministic matcher cannot settle => NONE"}
+{"a": {"surface": "Radiohead", "aliases": []}, "b": {"surface": "Coldplay"}, "human_match": false, "note": "TN: distinct bands"}
+{"a": {"surface": "Nike", "aliases": []}, "b": {"surface": "Adidas"}, "human_match": false, "note": "TN: distinct brands"}
+{"a": {"surface": "iPhone 15", "aliases": []}, "b": {"surface": "Samsung Galaxy"}, "human_match": false, "note": "TN: distinct products"}
+{"a": {"surface": "Inception", "aliases": []}, "b": {"surface": "The Dark Knight"}, "human_match": false, "note": "TN: distinct films"}
+{"a": {"surface": "Dune", "aliases": []}, "b": {"surface": "Dune Part Two"}, "human_match": false, "note": "FP: distinct works but token_set_ratio=100 => matcher FUZZY over-matches"}
+{"a": {"surface": "Central Park", "aliases": []}, "b": {"surface": "Hyde Park"}, "human_match": false, "note": "TN: distinct parks (shared token 'park' below fuzzy threshold)"}

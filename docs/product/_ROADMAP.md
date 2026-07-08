@@ -86,4 +86,5 @@ Do those two promptly and the showable milestone assembles quickly behind them.
 - **Autonomous-run option (the "ongoing run"):** once the punch-list is cleared and G2 is picked, a fresh session can drive Phases 1→8 in sequence — running each autonomous phase to completion, pausing only at the two gates. Ask for it explicitly ("execute the roadmap") and it self-paces through, updating the status log as it goes.
 
 ## Status log (newest first — update one line per phase)
+- 2026-07-08 · Phase 1 COMPLETE — schema frozen (JSON Schema 1.0.0-rc.4 + SHACL + JSON-LD context + TikTok profile), eval harness green (matcher + per-layer matrix + Φ_c + bootstrap CIs + calibration), construct.md + guidelines.md written. Next: Phase 2 pilot prep + Phase 3 wiring.
 - 2026-07-08 · Roadmap written; foundation (spec, eval method, standard, ontology v3, derivation) complete and committed; awaiting punch-list + G2 to begin Phase 1/3.
