@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0-rc.5",
+  "version": "1.0.0-rc.6",
   "description": "Frozen v1.0 facet vocabulary (ontology v3 §3 Facets). The closed enum source for facet values, kept OUT of the JSON Schemas so the vocab can evolve additively without a schema bump. schema_gate.validate_extraction / validate_gold_record / validate_pred_record enforce membership at runtime. Additive-only: values are never removed, only appended (a removal would invalidate previously-labelled gold). Sources: `topic` ported from FACET_TOPICS in src/lib/ontology.ts; `presentation` ported from prompts/observe_video.md presentation_style.primary_format; `intent` seeded from doc-03 §268; remaining facets marked v1.0-proposal, tunable per the annotation guideline (Task 4).",
   "facets": {
     "topic":   {"values": ["food", "travel", "fitness", "fashion", "tech", "finance", "home", "entertainment", "education", "other"], "status": "ported"},
