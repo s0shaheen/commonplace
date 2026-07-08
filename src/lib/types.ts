@@ -4,6 +4,10 @@
 
 export interface CapturedItem {
   id: string;
+  // Capture provenance: which tab(s) surfaced this item (favorites | likes | posts | reposts).
+  // Emitted by the spike's normalizeItem and UNION-merged on dedupe by the library store — it is
+  // capture metadata, NOT part of the frozen extractor-output schema.
+  sources: string[];
   desc: string;
   createTime: number | null;
   author: string | null;

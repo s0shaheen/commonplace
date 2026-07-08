@@ -18,6 +18,7 @@ const base: CapturedItem = {
   isSlideshow: false,
   music: { name: "original sound", author: "persona" },
   hashtags: ["ironman", "avengers"],
+  sources: [],
   stats: { plays: null, likes: null, comments: null, shares: null, collects: null },
 };
 

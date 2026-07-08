@@ -21,6 +21,7 @@ const items: AnalyzedItem[] = [
     isSlideshow: false,
     music: null,
     hashtags: ["pasta", "brooklyn"],
+    sources: [],
     stats: { plays: 10, likes: null, comments: null, shares: null, collects: null },
     analysis: {
       lane: "local",

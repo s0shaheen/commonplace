@@ -27,6 +27,7 @@ function analyzed(
     isSlideshow: false,
     music: null,
     hashtags: ["pasta"],
+    sources: [],
     stats: { plays: null, likes: null, comments: null, shares: null, collects: null },
     analysis: {
       lane: "local",
