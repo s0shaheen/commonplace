@@ -1,0 +1,10 @@
+{
+  "edges": {
+    "baking": ["food"],
+    "cooking": ["food"],
+    "hiking": ["travel"],
+    "sourdough": ["baking"],
+    "pastry": ["baking", "cooking"],
+    "trail": ["hiking"]
+  }
+}
