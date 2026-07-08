@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://commonplace.tools/schema/pred.schema.json",
+  "$id": "https://commonplace.app/schema/pred.schema.json",
   "title": "Commonplace prediction record",
   "description": "One system-prediction record per item (a JSONL line), scored against the gold record by the metric harness (_EVAL-METHOD.md §4). The grounding-resolved counterpart of extractor-output: mentions carry `grounding` with the same nil/externalId invariant as extraction.schema.json. Every layer block is optional except `item_id`. Facet values are checked against `vocab/facets.json` at runtime by schema_gate.validate_pred_record.",
   "type": "object",

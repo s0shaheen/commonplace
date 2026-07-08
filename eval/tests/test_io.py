@@ -61,6 +61,36 @@ def test_io_rejects_non_json_line(tmp_path):
     assert "line 2" in str(exc.value)
 
 
+def test_load_gold_rejects_duplicate_item_id(tmp_path):
+    """Two gold records sharing item_id -> ValueError naming the id + both lines."""
+    bad = tmp_path / "dup_gold.jsonl"
+    bad.write_text(
+        json.dumps({"item_id": "dup"}) + "\n"  # line 1
+        + json.dumps({"item_id": "other"}) + "\n"  # line 2
+        + json.dumps({"item_id": "dup"}) + "\n"  # line 3: duplicate of line 1
+    )
+    with pytest.raises(ValueError) as exc:
+        load_gold(bad)
+    msg = str(exc.value)
+    assert "dup" in msg
+    assert "line 3" in msg  # the offending (second) occurrence
+    assert "line 1" in msg  # and the first occurrence is named too
+
+
+def test_load_pred_rejects_duplicate_item_id(tmp_path):
+    """Same guard on the prediction loader."""
+    bad = tmp_path / "dup_pred.jsonl"
+    bad.write_text(
+        json.dumps({"item_id": "p"}) + "\n"  # line 1
+        + json.dumps({"item_id": "p"}) + "\n"  # line 2: duplicate
+    )
+    with pytest.raises(ValueError) as exc:
+        load_pred(bad)
+    msg = str(exc.value)
+    assert "p" in msg
+    assert "line 2" in msg
+
+
 def test_join_items_missing_pred_is_none():
     gold = [{"item_id": "a"}, {"item_id": "b"}]
     pred = [{"item_id": "a"}]

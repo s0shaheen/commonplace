@@ -14,11 +14,30 @@ error. The fix is two match tiers plus optimal 1:1 alignment:
   100) can never tie an exact match and steal its alignment by input order.
 * otherwise similarity 0 (never aligned).
 
+**Type-tie epsilon (assignment weight only).** The EXACT tier is 1.0 regardless
+of type, so when a prediction is an exact surface match to *two* gold rows that
+differ only in type (e.g. gold ``[Dune/book, Dune/screen_work]`` vs pred
+``Dune/screen_work``), the solver would otherwise break the 1.0-vs-1.0 tie by
+input order — flipping the pair between COR and INC. To make the alignment
+deterministic and type-aware, the maximum-weight matching runs on a *bonused*
+weight (``_assignment_weight``) that adds a tiny type-match epsilon
+(``_TYPE_BONUS`` = 5e-4) which can never cross a tier boundary. The induced
+ordering is::
+
+    EXACT+type-match (1.0005) > EXACT+type-mismatch (1.0)
+        > any FUZZY (<= 0.999) : FUZZY+type-match (ratio) > FUZZY+type-mismatch (ratio - 5e-4)
+
+The bonus lives **only** inside the assignment weight. Tier attribution and the
+FUZZY threshold check use the *unbonused* similarity from ``_score``, and the
+forced-zero split below tests the *unbonused* ``sim``, so no bonus ever leaks
+into a category or a threshold decision — it only settles equal-tier ties.
+
 Alignment is a maximum-weight bipartite matching via
-``scipy.optimize.linear_sum_assignment`` (maximize) so each gold pairs with at
-most one prediction. Zero-similarity assignments the solver is forced to return
-(it always returns ``min(n_gold, n_pred)`` pairs) are split back into a missed
-gold (MIS) + a spurious prediction (SPU).
+``scipy.optimize.linear_sum_assignment`` (maximize; weights may exceed 1.0
+safely) so each gold pairs with at most one prediction. Zero-(unbonused-)similarity
+assignments the solver is forced to return (it always returns
+``min(n_gold, n_pred)`` pairs) are split back into a missed gold (MIS) + a
+spurious prediction (SPU).
 
 ``MatchResult.categorize(scheme)`` maps each aligned pair to a MUC category
 (COR/INC/PAR/MIS/SPU) under one of four schemes (strict/exact/partial/type).
@@ -104,14 +123,24 @@ def _gold_forms(gold: dict) -> list[str]:
     return out
 
 
+# Type-match tie-break epsilon added to the *assignment weight* (never to the
+# unbonused similarity used for tier/threshold/forced-zero decisions). 5e-4 is
+# safely below the 1e-3 gap between EXACT's floor (1.0) and FUZZY's ceiling
+# (0.999), so it can never move a cell across a tier boundary — only settle a
+# same-tier, equal-ratio tie toward the type-matching gold.
+_TYPE_BONUS = 5e-4
+
+
 def _score(gold_forms: list[str], pred_norm: str, threshold: int) -> tuple[float, MatchTier]:
-    """Similarity and tier for one (gold, pred) cell.
+    """Unbonused similarity and tier for one (gold, pred) cell.
 
     EXACT (1.0) if the normalized prediction surface equals any gold form;
     else FUZZY (``min(ratio/100, 0.999)``) if the best token_set_ratio over the
     gold forms is >= threshold; else no match (0.0, NONE). The FUZZY cap keeps a
     ratio-100 subset/superset strictly below EXACT so the assignment solver can
-    never break a 1.0 vs 1.0 tie by input order (EXACT always outranks).
+    never break a 1.0 vs 1.0 tie by input order (EXACT always outranks). This
+    value is type-blind and is what all tier/threshold/forced-zero logic reads;
+    the type-match epsilon is applied separately in ``_assignment_weight``.
     """
     if pred_norm and pred_norm in gold_forms:
         return 1.0, MatchTier.EXACT
@@ -121,6 +150,24 @@ def _score(gold_forms: list[str], pred_norm: str, threshold: int) -> tuple[float
     if best >= threshold:
         return min(best / 100.0, 0.999), MatchTier.FUZZY
     return 0.0, MatchTier.NONE
+
+
+def _assignment_weight(similarity: float, tier: MatchTier, type_match: bool) -> float:
+    """Bonused weight for the maximum-weight matching (never for categorization).
+
+    Adds ``_TYPE_BONUS`` toward the type-matching gold without crossing a tier
+    boundary, giving the strict ordering
+    ``EXACT+type-match > EXACT+type-mismatch > FUZZY+type-match >= FUZZY+type-mismatch``:
+
+    * EXACT: ``1.0 + _TYPE_BONUS`` if the types match, else ``1.0``.
+    * FUZZY: ``similarity`` if the types match, else ``similarity - _TYPE_BONUS``.
+    * NONE:  ``0.0`` (unchanged; never aligned).
+    """
+    if tier is MatchTier.EXACT:
+        return 1.0 + (_TYPE_BONUS if type_match else 0.0)
+    if tier is MatchTier.FUZZY:
+        return similarity - (0.0 if type_match else _TYPE_BONUS)
+    return 0.0
 
 
 def align(gold: list[dict], pred: list[dict], fuzzy_threshold: int = 90) -> MatchResult:
@@ -143,18 +190,23 @@ def align(gold: list[dict], pred: list[dict], fuzzy_threshold: int = 90) -> Matc
     matched_pred: set[int] = set()
 
     if n_gold and n_pred:
+        # sim = unbonused similarity (drives tier/threshold/forced-zero logic);
+        # weight = the bonused matrix the solver maximizes (type-tie epsilon).
         sim = np.zeros((n_gold, n_pred), dtype=float)
+        weight = np.zeros((n_gold, n_pred), dtype=float)
         tiers: list[list[MatchTier]] = [[MatchTier.NONE] * n_pred for _ in range(n_gold)]
         for i in range(n_gold):
             for j in range(n_pred):
                 s, t = _score(gold_forms[i], pred_norms[j], fuzzy_threshold)
                 sim[i, j] = s
                 tiers[i][j] = t
+                type_match = gold[i].get("type") == pred[j].get("type")
+                weight[i, j] = _assignment_weight(s, t, type_match)
 
-        row_ind, col_ind = linear_sum_assignment(sim, maximize=True)
+        row_ind, col_ind = linear_sum_assignment(weight, maximize=True)
         for i, j in zip(row_ind, col_ind):
             i, j = int(i), int(j)
-            if sim[i, j] > 0.0:
+            if sim[i, j] > 0.0:  # unbonused: a real EXACT/FUZZY match, not a forced-zero pairing
                 type_match = gold[i].get("type") == pred[j].get("type")
                 pairs.append(
                     AlignedPair(gold_idx=i, pred_idx=j, tier=tiers[i][j], type_match=type_match)

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://commonplace.tools/schema/extraction.schema.json",
+  "$id": "https://commonplace.app/schema/extraction.schema.json",
   "title": "Commonplace extraction",
   "description": "A single extraction the engine emits about a saved item (ontology v3 §3–4). A discriminated union on `kind` over the four Referent kinds (NamedEntity, Concept, Claim, StructuredContent) plus FacetAssignment. Every extraction owns non-empty `evidence[]` (zero-evidence extractions are rejected — §4). Grounding lives on NamedEntity only and carries the nil/externalId invariant. Facet values are kept as strings here; membership in `vocab/facets.json` is enforced at runtime by schema_gate.validate_extraction so the vocab can evolve without a schema bump.",
   "type": "object",

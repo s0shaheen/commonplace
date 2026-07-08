@@ -126,6 +126,42 @@ def test_scorecard_end_to_end():
     assert "generated_by" in meta
 
 
+def test_calibration_pairs_and_brier_from_fixtures():
+    """Pin the single-source answered set and the hand-derived Brier on the fixtures.
+
+    Grounded (non-NIL) predictions, in ``answer_pairs`` order (in-universe aligned,
+    then spurious, then NON_ENTITY-trap):
+      Kill Bill  conf 0.95 -> correct  (musicbrainz id matches)
+      Joe's Pizza conf 0.80 -> wrong   (ChIJ_WRONG id)
+      The Matrix conf 0.90 -> correct  (Q83495 matches)
+      Fake Brand conf 0.60 -> wrong    (spurious, no gold)
+      pizza trap conf 0.70 -> wrong    (NON_ENTITY-aligned)
+    (obscure band is pred-NIL -> not answered.)
+
+    Brier = mean_i (conf_i - correct_i)^2, correct cast 1/0:
+      (0.95-1)^2 + (0.80-0)^2 + (0.90-1)^2 + (0.60-0)^2 + (0.70-0)^2
+      = 0.0025 + 0.64 + 0.01 + 0.36 + 0.49 = 1.5025 ;  1.5025 / 5 = 0.3005
+    """
+    from commonplace_eval.calibration import brier
+    from commonplace_eval.grounding_metrics import align_grounding, answer_pairs
+
+    gold = load_gold(FIXTURES / "gold_sample.jsonl")
+    pred = load_pred(FIXTURES / "pred_sample.jsonl")
+    alignment = align_grounding(gold, pred)
+
+    pairs = answer_pairs(alignment)
+    assert [ok for _, ok in pairs] == [True, False, True, False, False]
+    assert [conf for conf, _ in pairs] == pytest.approx([0.95, 0.80, 0.90, 0.60, 0.70])
+
+    confs = [conf for conf, _ in pairs]
+    correct = [ok for _, ok in pairs]
+    assert brier(confs, correct) == pytest.approx(0.3005)
+
+    # The scorecard's calibration adapter must report the same Brier end-to-end.
+    sc = _build()
+    assert sc["layers"]["named_entity"]["calibration"]["brier"] == pytest.approx(0.3005)
+
+
 def test_scorecard_determinism():
     """Same seed/B => identical CIs (seeded bootstrap)."""
     a = _build()

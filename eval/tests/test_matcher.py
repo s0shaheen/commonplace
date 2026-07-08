@@ -182,6 +182,52 @@ def test_exact_beats_fuzzy_tie_regardless_of_order():
         assert pred[matched[0].pred_idx]["surface"] == "Museum of Modern Art"
 
 
+def test_type_tie_exact_picks_type_match_regardless_of_gold_order():
+    # EXACT tier is 1.0 for BOTH gold rows (same surface "Dune"); only the type
+    # bonus separates them. gold [Dune/book, Dune/screen_work] vs pred
+    # Dune/screen_work must align the pred to the screen_work gold in BOTH input
+    # orders -> COR on screen_work (type match), MIS on book. Without the epsilon
+    # the solver would flip COR<->INC by gold order.
+    pred = [_m("Dune", "screen_work")]
+    for gold in (
+        [_m("Dune", "book"), _m("Dune", "screen_work")],
+        [_m("Dune", "screen_work"), _m("Dune", "book")],
+    ):
+        result = align(gold, pred)
+        cats = sorted(c.value for _, c in result.categorize("strict"))
+        assert cats == ["COR", "MIS"], f"gold order {[g['type'] for g in gold]}"
+        matched = [
+            p for p in result.pairs if p.gold_idx is not None and p.pred_idx is not None
+        ]
+        assert len(matched) == 1
+        assert matched[0].tier == MatchTier.EXACT
+        assert gold[matched[0].gold_idx]["type"] == "screen_work"
+        (cor_pair,) = [p for p, c in result.categorize("strict") if c == Category.COR]
+        assert cor_pair.type_match is True
+
+
+def test_type_tie_fuzzy_picks_type_match_regardless_of_gold_order():
+    # FUZZY-tier variant: two gold rows fuzzy-match the pred at the SAME ratio
+    # (identical surfaces); only one shares the pred's type. The epsilon must
+    # select the type-matching gold in BOTH orders. Under the "type" scheme that
+    # is COR (type match) rather than INC; the unmatched gold is MIS.
+    pred = [_m("MoMA Museum of Modern Art NYC", "place")]
+    for gold in (
+        [_m("Museum of Modern Art", "book"), _m("Museum of Modern Art", "place")],
+        [_m("Museum of Modern Art", "place"), _m("Museum of Modern Art", "book")],
+    ):
+        result = align(gold, pred)
+        matched = [
+            p for p in result.pairs if p.gold_idx is not None and p.pred_idx is not None
+        ]
+        assert len(matched) == 1
+        assert matched[0].tier == MatchTier.FUZZY
+        assert gold[matched[0].gold_idx]["type"] == "place"
+        assert matched[0].type_match is True
+        cats = sorted(c.value for _, c in result.categorize("type"))
+        assert cats == ["COR", "MIS"], f"gold order {[g['type'] for g in gold]}"
+
+
 def test_aligned_pair_indices_and_flags():
     gold = [_m("Dune", "book")]
     pred = [_m("Dune", "book")]

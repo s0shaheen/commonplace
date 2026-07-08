@@ -61,6 +61,7 @@ __all__ = [
     "GPair",
     "GAlignment",
     "align_grounding",
+    "answer_pairs",
     "disambiguation_accuracy",
     "inkb_prf",
     "nil_prf",
@@ -401,6 +402,37 @@ def effective_reliability(
     }
 
 
+# --- answered (confidence, correct) set --------------------------------------
+def answer_pairs(alignment: GAlignment) -> list[tuple[float, bool]]:
+    """(grounding_confidence, correct) for every non-NIL grounded prediction.
+
+    The single source for the "answered" set shared by ``risk_coverage`` (the
+    risk–coverage curve) and the scorecard's calibration metrics (Brier / smECE /
+    reliability bins), so the two can never drift on which predictions count or on
+    the correctness rule. Collected in the order they enter the grounding
+    universe: aligned in-universe pairs whose pred is non-NIL (correct iff gold is
+    InKB and the id matches ``_id_eq``), then every non-NIL **spurious** pred, then
+    every non-NIL pred aligned to a **NON_ENTITY** trap. The last two are always
+    ``False`` — a fabricated or trap-grounded durable id is a confident-wrong
+    assertion (consistent with Φ_c).
+    """
+    pairs: list[tuple[float, bool]] = []
+    for gold, pred in alignment.pairs:
+        if _pred_nonnil(pred):
+            conf = pred["grounding"].get("grounding_confidence", 0.0)
+            is_correct = _is_inkb(gold) and _id_eq(gold.get("gold_id"), pred.get("grounding"))
+            pairs.append((conf, bool(is_correct)))
+    for _gold, pred in alignment.spurious:
+        if _pred_nonnil(pred):
+            conf = pred["grounding"].get("grounding_confidence", 0.0)
+            pairs.append((conf, False))  # spurious link is always wrong
+    for _gold, pred in alignment.non_entity:
+        if _pred_nonnil(pred):
+            conf = pred["grounding"].get("grounding_confidence", 0.0)
+            pairs.append((conf, False))  # grounding a NON_ENTITY trap is always wrong
+    return pairs
+
+
 # --- risk–coverage / AURC ----------------------------------------------------
 def _trapezoid(ys: list[float], xs: list[float]) -> float:
     """Trapezoidal integral of ``ys`` over ``xs`` (assumes xs ascending)."""
@@ -435,23 +467,16 @@ def risk_coverage(
     ``coverage_at_risk_5pct`` = max coverage of any point with risk <= 0.05, or
     0.0 if none qualifies. ``gold_items``/``pred_items`` accepted for signature
     symmetry; all quantities derive from the alignment.
+
+    **Coverage can exceed 1.0.** The numerator (answered = non-NIL preds) includes
+    spurious and NON_ENTITY-trap groundings, which are *not* in-universe gold, but
+    the denominator ``n_gold`` is the in-universe gold count — so a run that
+    fabricates more durable ids than there are real targets reports coverage > 1.0
+    (a deliberate over-answering signal, not a bug).
     """
     n_gold = len(alignment.pairs) + len(alignment.missed)  # in-universe gold
 
-    answers: list[tuple[float, bool]] = []
-    for gold, pred in alignment.pairs:
-        if _pred_nonnil(pred):
-            conf = pred["grounding"].get("grounding_confidence", 0.0)
-            is_correct = _is_inkb(gold) and _id_eq(gold.get("gold_id"), pred.get("grounding"))
-            answers.append((conf, bool(is_correct)))
-    for _gold, pred in alignment.spurious:
-        if _pred_nonnil(pred):
-            conf = pred["grounding"].get("grounding_confidence", 0.0)
-            answers.append((conf, False))  # spurious link is always wrong
-    for _gold, pred in alignment.non_entity:
-        if _pred_nonnil(pred):
-            conf = pred["grounding"].get("grounding_confidence", 0.0)
-            answers.append((conf, False))  # grounding a NON_ENTITY trap is always wrong
+    answers = answer_pairs(alignment)
 
     thresholds = sorted({conf for conf, _ in answers}, reverse=True)
     curve: list[dict] = []

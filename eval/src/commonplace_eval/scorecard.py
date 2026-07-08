@@ -9,15 +9,14 @@ is the named flagship, the rest 'in calibration' until powered."
 
 ``build_scorecard`` assembles that matrix by *consuming* the pure metric modules
 (matcher / extraction / grounding / calibration / bootstrap / concept / facet /
-structured) — it computes no new statistic itself. The one place it must reach
-past a module's public surface is the **calibration adapter** (``_calibration_pairs``):
-the grounded-prediction (confidence, correct) pairs are computed *inside*
-``grounding_metrics.risk_coverage`` but not returned, so rather than reimplement
-the id-correctness rule here (and risk it drifting from the grounding module) the
-adapter reuses ``grounding_metrics``' own ``_pred_nonnil`` / ``_is_inkb`` /
-``_id_eq`` predicates. **This deliberate reuse of three underscore-prefixed
-helpers is the only cross-module private import and is flagged here and in the
-task report.**
+structured) — it computes no new statistic itself. The calibration metrics need
+the grounded-prediction (confidence, correct) set, which is the same set the
+risk–coverage curve sweeps; that set is now published as
+``grounding_metrics.answer_pairs`` and the **calibration adapter**
+(``_calibration_pairs``) is a thin split of it into the two parallel lists
+``brier`` / ``smece`` / ``reliability_bins`` expect. Single-sourcing that one
+collection keeps calibration and risk–coverage from drifting on the id-correctness
+rule, and there is **no cross-module private import** (only public surfaces).
 
 **Cluster-bootstrap CIs.** The two published flagship headlines (strict micro F1,
 Φ_c) get per-video clustered CIs (``bootstrap.cluster_bootstrap``). Because the
@@ -47,10 +46,8 @@ from commonplace_eval.concept_metrics import (
 from commonplace_eval.extraction_metrics import prf, score_extraction
 from commonplace_eval.facet_metrics import facet_scores
 from commonplace_eval.grounding_metrics import (
-    _id_eq,  # flagged private reuse: single-source id-correctness (see module docstring)
-    _is_inkb,
-    _pred_nonnil,
     align_grounding,
+    answer_pairs,
     disambiguation_accuracy,
     effective_reliability,
     inkb_prf,
@@ -63,36 +60,24 @@ from commonplace_eval.structured_metrics import structured_scores
 __all__ = ["build_scorecard", "render_markdown"]
 
 # The current frozen measurement-contract semver (schema/CHANGELOG.md).
-SCHEMA_VERSION = "1.0.0-rc.4"
+SCHEMA_VERSION = "1.0.0-rc.5"
 
 _CLAIM_NOTE = "faithfulness/coverage require validated judge (Phase 4)"
 
 
-# --- calibration adapter (flagged reuse of grounding_metrics predicates) -----
+# --- calibration adapter (single-source answered set) ------------------------
 def _calibration_pairs(alignment) -> tuple[list[float], list[bool]]:
-    """(grounding_confidence, correct) for every non-NIL grounded prediction.
+    """(grounding_confidence, correct) lists for the non-NIL grounded predictions.
 
-    Mirrors the ``answers`` collection inside ``grounding_metrics.risk_coverage``
-    (aligned in-universe pairs + spurious + NON_ENTITY-aligned), reusing that
-    module's own correctness predicates so the two never diverge. A spurious or
-    NON_ENTITY-aligned grounding is always wrong (consistent with Φ_c).
+    A thin adapter over ``grounding_metrics.answer_pairs`` — the single source for
+    the answered set that the risk–coverage curve also consumes — split into the
+    two parallel lists ``brier`` / ``smece`` / ``reliability_bins`` expect. Sharing
+    ``answer_pairs`` (rather than reimplementing the correctness rule here) is what
+    keeps calibration and the published risk–coverage curve from ever drifting.
     """
-    confs: list[float] = []
-    correct: list[bool] = []
-
-    for gold, pred in alignment.pairs:
-        if _pred_nonnil(pred):
-            confs.append(pred["grounding"].get("grounding_confidence", 0.0))
-            correct.append(bool(_is_inkb(gold) and _id_eq(gold.get("gold_id"), pred.get("grounding"))))
-    for _gold, pred in alignment.spurious:
-        if _pred_nonnil(pred):
-            confs.append(pred["grounding"].get("grounding_confidence", 0.0))
-            correct.append(False)
-    for _gold, pred in alignment.non_entity:
-        if _pred_nonnil(pred):
-            confs.append(pred["grounding"].get("grounding_confidence", 0.0))
-            correct.append(False)
-
+    pairs = answer_pairs(alignment)
+    confs = [conf for conf, _ in pairs]
+    correct = [ok for _, ok in pairs]
     return confs, correct
 
 

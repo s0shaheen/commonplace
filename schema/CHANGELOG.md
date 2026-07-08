@@ -3,6 +3,32 @@
 All schemas in `schema/json/` (and their SHACL/JSON-LD companions) are versioned
 together under one semver line. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-rc.5] — 2026-07-08
+
+Phase-1 close-out housekeeping — namespace unification, vocab version sync, and a
+stale-comment reword. Purely cosmetic/identifier changes: no schema shape, `$def`,
+constraint, or fixture is added, removed, or narrowed; every rc.4 fixture still
+validates unchanged.
+
+### Changed
+- **Namespace unified.** All five `schema/json/*.schema.json` `$id`s move from
+  `https://commonplace.tools/schema/…` to `https://commonplace.app/schema/…`, so
+  the JSON Schema `$id` host now matches the JSON-LD context namespace
+  (`cpl:` = `https://commonplace.app/ns#`). Cross-schema `$ref`s are relative
+  filenames and the eval registry resolves by filename, so resolution is
+  unaffected (verified: the full suite still validates every fixture). **The FINAL
+  domain is confirmed at the 1.0.0 freeze — rc identifiers (host and version) may
+  still churn before then; 1.0.0 may not.**
+- `vocab/facets.json` and `vocab/named-entity-anchors.json` — `version` bumped
+  `1.0.0-rc.1` → `1.0.0-rc.5` to rejoin the single measurement-contract semver
+  line (they had been left at the rc.1 freeze while the schemas advanced).
+- `item.schema.json` — reworded the two open-selector `description`s
+  (`Save.targetSelector`, `Annotation.selector`) from the stale "Open until Task 2
+  defines the Selector schema" to "kept open deliberately; the extraction-layer
+  Selector lives in extraction.schema.json" (the Selector `$def` has shipped in
+  `extraction.schema.json` since rc.3; these base-container selectors stay open by
+  design).
+
 ## [1.0.0-rc.4] — 2026-07-08
 
 The RDF/standards **conformance layer** — the machine-checkable form of the

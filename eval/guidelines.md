@@ -119,7 +119,9 @@ Q2. Is it a KIND / IDEA you can pin to an authority node within 2 searches?
         YES → it is a Concept (§8): give it concept_id + authority. Not a
               grounding entity.
         NO  → it is a free tag (no concept_id) / Facet value (§7);
-              record the searches in notes when you give up.
+              v1 ruling: a free tag is NOT a gold concept row (GoldConcept
+              requires concept_id) — record the surface + failed searches in
+              the item-level `notes` if worth keeping, and nowhere else.
 
 Orthogonally, regardless of Q1–Q2:
     • Is the mention a PROPOSITION (a claim, opinion, verdict)? → Claim (§8).
@@ -581,7 +583,10 @@ Gold block `GoldConcept`: `{ concept_id, authority, label }`.
 concept's **own page** (a class/topic item in **Wikidata**, or a term in **IPTC
 Media Topics**) within **2 searches**. If you cannot, record it as a **free tag**
 (a `label` with **no `concept_id`**; it stays an ungrounded descriptor, not a
-`GoldConcept` row) and note the searches you ran before giving up. "flow state",
+`GoldConcept` row) and note the searches you ran before giving up. **v1 ruling:**
+a free tag is **not** captured as a gold concept row at all — `GoldConcept`
+requires a `concept_id` — so if the surface is worth keeping, record it plus the
+failed searches in the item-level `notes` and nowhere else. "flow state",
 "progressive overload", "girl dinner" clear the bar; a hyper-specific coinage
 that has no authority page does not.
 

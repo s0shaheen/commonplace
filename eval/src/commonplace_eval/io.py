@@ -46,8 +46,17 @@ def _repo_root() -> Path:
 
 
 def _load_jsonl(path, validator: Callable[[dict], list[str]], kind: str) -> list[dict]:
-    """Read a JSONL file, validating each record; raise on the first bad line."""
+    """Read a JSONL file, validating each record; raise on the first bad line.
+
+    Also enforces ``item_id`` uniqueness across the file: a second record sharing
+    an ``item_id`` raises ``ValueError`` naming the duplicate id and both the
+    1-based line number of the offending record and of its first occurrence.
+    A duplicate id would silently collapse in the downstream ``item_id`` join
+    (last-wins) and break the per-video cluster bootstrap, so it is rejected at
+    the boundary rather than mis-scored.
+    """
     records: list[dict] = []
+    seen: dict[str, int] = {}
     with Path(path).open(encoding="utf-8") as fh:
         for lineno, raw in enumerate(fh, start=1):
             raw = raw.strip()
@@ -62,6 +71,14 @@ def _load_jsonl(path, validator: Callable[[dict], list[str]], kind: str) -> list
                 raise ValueError(
                     f"{kind} {path}: line {lineno} failed schema validation: {errors}"
                 )
+            item_id = obj.get("item_id")
+            if item_id is not None:
+                if item_id in seen:
+                    raise ValueError(
+                        f"{kind} {path}: line {lineno} duplicates item_id {item_id!r} "
+                        f"(first seen on line {seen[item_id]})"
+                    )
+                seen[item_id] = lineno
             records.append(obj)
     return records
 

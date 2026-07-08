@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://commonplace.tools/schema/extractor-output.schema.json",
+  "$id": "https://commonplace.app/schema/extractor-output.schema.json",
   "title": "Commonplace extractor output (model-facing)",
   "description": "The flat, Gemini `response_schema`-safe schema the extractor model emits under constrained decoding. NO `$ref`, NO `oneOf`/`allOf` anywhere; string enums only; the Evidence object is inlined at each of the four extraction arrays. Carries NO grounding fields — grounding is the downstream resolver's job, never the extractor's. Every extraction element requires >=1 evidence. Schema-validity is a hard gate, not a metric (_EVAL-METHOD.md §2).",
   "type": "object",

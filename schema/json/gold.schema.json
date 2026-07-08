@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://commonplace.tools/schema/gold.schema.json",
+  "$id": "https://commonplace.app/schema/gold.schema.json",
   "title": "Commonplace gold record",
   "description": "One human-verified gold record per item (a JSONL line), the ground truth the metric harness scores against (_EVAL-METHOD.md §3). Every layer block is optional except `item_id`. mentions[*]: exactly one of `gold_id` (object) or `nil` (\"NIL_NO_ID\"/\"NON_ENTITY\") is non-null; `nil=\"NIL_NO_ID\"` requires non-empty `failed_queries` (Learn-to-Not-Link). Facet values are checked against `vocab/facets.json` at runtime by schema_gate.validate_gold_record.",
   "type": "object",

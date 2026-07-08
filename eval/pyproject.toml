@@ -2,6 +2,7 @@
 name = "commonplace-eval"
 version = "0.1.0"
 description = "Commonplace eval instrument: schema gates, matcher, per-layer metrics"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
   "jsonschema>=4.23",
