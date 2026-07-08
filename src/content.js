@@ -1,5 +1,5 @@
 // ISOLATED-world content script. Relays MAIN-world captures to the service worker,
-// drives auto-scroll (Alt+Shift+A), manual export (Alt+Shift+S), text-only enrichment (Alt+Shift+E).
+// drives auto-scroll (Alt+Shift+A), manual export (Alt+Shift+S), starts the extraction queue (Alt+Shift+E).
 
 window.addEventListener("message", (e) => {
   if (e.source !== window || !e.data || e.data.__attic !== true) return;
@@ -123,25 +123,6 @@ async function autoScroll() {
   console.log(`[attic-spike] auto-scroll complete — ${prev} captured`);
 }
 
-async function runEnrichment() {
-  const { enrichItem } = await import(chrome.runtime.getURL("src/gemini.js"));
-  const { items = [] } = await chrome.storage.local.get("items");
-  const subset = items.slice(0, 20);
-  console.log(`[attic-spike] enriching ${subset.length} items (text-only)…`);
-  const results = [];
-  for (const item of subset) {
-    const out = await enrichItem(item);
-    results.push(out);
-    console.log(
-      `[attic-spike] enriched ${out.id}`,
-      out.error ? `ERROR ${out.error}` : `ok (subs:${out.subtitleStatus})`
-    );
-    await sleep(1000);
-  }
-  chrome.runtime.sendMessage({ kind: "export_enriched", results });
-  console.log("[attic-spike] enrichment done → attic-enriched.json");
-}
-
 // Path 2: content-script fetch → blob → anchor download. Needs DNR to set Referer (fix 403)
 // AND Access-Control-Allow-Origin (so JS can read the cross-origin bytes). If this works, we can
 // also read video bytes for local Gemini visual enrichment.
@@ -183,7 +164,10 @@ window.addEventListener("keydown", (e) => {
     chrome.runtime.sendMessage({ kind: "scroll_done" });
     console.log("[attic-spike] manual export triggered → attic-favorites.json");
   }
-  if (e.code === "KeyE") runEnrichment();
+  if (e.code === "KeyE") {
+    chrome.runtime.sendMessage({ kind: "queue_start" });
+    console.log("[commonplace] queue_start sent → extraction queue (Task 3)");
+  }
   if (e.code === "KeyK") killCV(); // manual kill-switch for content-visibility pruning
   if (e.code === "KeyD") {
     chrome.runtime.sendMessage({ kind: "download_test", n: 3 });
@@ -196,5 +180,5 @@ window.addEventListener("keydown", (e) => {
 });
 
 console.log(
-  "[attic-spike] ready — A:auto-scroll · S:export · E:enrich · K:kill-pruning · D:download(chrome.downloads) · F:download(fetch)"
+  "[commonplace] ready — A:auto-scroll · S:export · E:queue-start · K:kill-pruning · D:download(chrome.downloads) · F:download(fetch)"
 );

@@ -1,39 +1,38 @@
 {
   "manifest_version": 3,
-  "name": "Attic Spike — TikTok Favorites Capture",
-  "version": "0.0.1",
-  "description": "Throwaway spike: captures the logged-in user's own TikTok Favorites via MAIN-world interception.",
-  "permissions": ["storage", "downloads", "unlimitedStorage", "declarativeNetRequest"],
+  "name": "Commonplace (dev)",
+  "version": "0.1.0",
+  "description": "Commonplace — turn your saved short-form content into a searchable, structured personal archive. Dev build.",
+  "permissions": ["storage", "downloads", "unlimitedStorage", "declarativeNetRequest", "offscreen", "alarms"],
   "host_permissions": [
     "*://*.tiktok.com/*",
     "*://*.tiktokcdn.com/*",
     "*://*.tiktokcdn-us.com/*",
     "*://*.tiktokv.com/*",
     "*://*.ttwstatic.com/*",
-    "https://generativelanguage.googleapis.com/*"
+    "https://generativelanguage.googleapis.com/*",
+    "https://musicbrainz.org/*",
+    "https://www.wikidata.org/*",
+    "https://places.googleapis.com/*",
+    "http://localhost/*"
   ],
-  "background": { "service_worker": "src/background.js", "type": "module" },
+  "background": { "service_worker": "background.js", "type": "module" },
   "declarative_net_request": {
     "rule_resources": [{ "id": "ruleset_1", "enabled": true, "path": "rules.json" }]
   },
   "content_scripts": [
     {
       "matches": ["*://*.tiktok.com/*"],
-      "js": ["src/main-world.js"],
+      "js": ["main-world.js"],
       "world": "MAIN",
       "run_at": "document_start"
     },
     {
       "matches": ["*://*.tiktok.com/*"],
-      "js": ["src/content.js"],
+      "js": ["content.js"],
       "world": "ISOLATED",
       "run_at": "document_start"
     }
   ],
-  "web_accessible_resources": [
-    {
-      "resources": ["prompts/observe_video.md"],
-      "matches": ["*://*.tiktok.com/*"]
-    }
-  ]
+  "options_page": "options.html"
 }

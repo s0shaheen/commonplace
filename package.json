@@ -5,6 +5,8 @@
   "version": "0.0.1",
   "description": "Throwaway Phase 0 kill-gate spike for the Attic pivot.",
   "scripts": {
+    "build": "node scripts/build-validators.mjs && node scripts/build.mjs",
+    "dev": "npm run build -- --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:spike": "node --test",
@@ -13,9 +15,11 @@
     "schema:check": "cd eval && uv run pytest -q tests/test_schema_fixtures.py tests/test_shacl.py"
   },
   "devDependencies": {
+    "@types/chrome": "^0.2.2",
     "@types/node": "^20.19.41",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
+    "esbuild": "^0.28.1",
     "tsx": "^4.22.3",
     "typescript": "^5.9.3",
     "vitest": "^2.1.9"

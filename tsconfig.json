@@ -11,7 +11,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": ["node", "chrome"]
   },
   "include": ["src", "scripts", "vitest.config.ts"]
 }

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Commonplace — Settings</title>
+    <style>
+      body { font: 14px/1.5 system-ui, sans-serif; max-width: 560px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+      h1 { font-size: 1.3rem; margin: 0 0 0.25rem; }
+      p.sub { color: #666; margin: 0 0 1.5rem; }
+      fieldset { border: 1px solid #ddd; border-radius: 8px; margin: 0 0 1rem; padding: 0.75rem 1rem 1rem; }
+      legend { font-weight: 600; padding: 0 0.4rem; }
+      label { display: block; margin: 0.4rem 0; }
+      label.inline { display: inline-flex; align-items: center; gap: 0.4rem; margin-right: 1rem; }
+      input[type="text"], input[type="password"], input[type="number"] { width: 100%; padding: 0.4rem 0.5rem; box-sizing: border-box; border: 1px solid #ccc; border-radius: 6px; font: inherit; }
+      input[type="number"] { width: 6rem; }
+      .hint { color: #888; font-size: 0.85em; margin: 0.15rem 0 0; }
+      .disabled-note { color: #a00; font-size: 0.85em; }
+      button { font: inherit; font-weight: 600; padding: 0.5rem 1.1rem; border: 0; border-radius: 6px; background: #1a1a1a; color: #fff; cursor: pointer; }
+      button:hover { background: #333; }
+      #status { margin-left: 0.8rem; color: #178a3a; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>Commonplace — Settings</h1>
+    <p class="sub">Bring your own keys. Everything here is stored locally in this browser (chrome.storage.local), never in the extension source.</p>
+
+    <form id="cfg">
+      <fieldset>
+        <legend>Engine lane</legend>
+        <label class="inline"><input type="radio" name="engineLane" value="managed" /> Managed (Gemini, cloud)</label>
+        <label class="inline"><input type="radio" name="engineLane" value="local" /> Local (Ollama, on-device)</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Managed lane — Gemini</legend>
+        <label>API key
+          <input type="password" id="geminiKey" autocomplete="off" placeholder="AI… (kept in local storage only)" />
+        </label>
+        <p class="hint">Model is pinned to <code>gemini-2.5-flash-lite</code> (SPEC §15).</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Ingestion</legend>
+        <label class="inline"><input type="radio" name="ingestion" value="keyframes_vtt" /> Keyframes + VTT</label>
+        <label class="inline"><input type="radio" name="ingestion" value="native" /> Native</label>
+        <p class="hint">Provisional default; the Phase-4 ablation decides the final value.</p>
+        <label class="inline"><input type="checkbox" id="escalateNative" disabled /> Escalate to native on low confidence</label>
+        <p class="disabled-note">Locked off — set by the Phase-4 ablation (cascade retracted, SPEC §13).</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Places enrichment (optional)</legend>
+        <label class="inline"><input type="checkbox" id="placesEnabled" /> Enable Google Places grounding</label>
+        <label>Places API key
+          <input type="password" id="placesKey" autocomplete="off" placeholder="(not provisioned yet)" />
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Performance</legend>
+        <label>Concurrency
+          <input type="number" id="concurrency" min="1" max="16" step="1" />
+        </label>
+      </fieldset>
+
+      <button type="submit">Save</button>
+      <span id="status" role="status" aria-live="polite"></span>
+    </form>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>
