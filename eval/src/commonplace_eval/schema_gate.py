@@ -4,9 +4,10 @@
 == valid). `load_schema(name)` loads a schema from ``schema/json/`` by stem.
 Alongside it, ``validate_extraction`` / ``validate_extractor_output`` /
 ``validate_gold_record`` / ``validate_pred_record`` gate the extraction-layer,
-model-facing, and gold/pred record schemas respectively; the gold/pred/extraction
-validators additionally enforce facet values against ``schema/vocab/facets.json``
-(kept out of the JSON Schema so the vocabulary evolves without a schema bump).
+model-facing, and gold/pred record schemas respectively; the
+extraction/extractor-output/gold/pred validators additionally enforce facet
+values against ``schema/vocab/facets.json`` (kept out of the JSON Schema so the
+vocabulary evolves without a schema bump).
 
 The reference registry loads every ``schema/json/*.schema.json`` present on
 disk and keys it by its ``$id``. Cross-schema ``$ref``s resolve strictly from
@@ -130,8 +131,21 @@ def validate_extraction(obj: dict) -> list[str]:
 
 
 def validate_extractor_output(obj: dict) -> list[str]:
-    """Validate a model-facing extractor output against ``extractor-output.schema.json``."""
-    return _schema_errors("extractor-output", obj)
+    """Validate a model-facing extractor output against ``extractor-output.schema.json``.
+
+    In addition to JSON Schema validation, each facet assignment in the ``facets``
+    array has its ``value`` checked against ``vocab/facets.json`` for its ``facet``
+    axis (the schema keeps values bare strings so the vocabulary can evolve without
+    a schema bump), consistent with the gold/pred/extraction validators.
+    """
+    errors = _schema_errors("extractor-output", obj)
+    if isinstance(obj, Mapping) and isinstance(obj.get("facets"), list):
+        for i, assignment in enumerate(obj["facets"]):
+            if isinstance(assignment, Mapping):
+                facet, value = assignment.get("facet"), assignment.get("value")
+                if isinstance(facet, str) and isinstance(value, str):
+                    errors += _facet_vocab_errors({facet: value}, f"$.facets[{i}]")
+    return errors
 
 
 def validate_gold_record(obj: dict) -> list[str]:

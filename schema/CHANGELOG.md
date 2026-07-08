@@ -3,6 +3,52 @@
 All schemas in `schema/json/` (and their SHACL/JSON-LD companions) are versioned
 together under one semver line. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-rc.6] — 2026-07-08
+
+Provenance-first fix to the **model-facing** `extractor-output.schema.json`:
+facet labels now carry the model's own evidence, so no downstream step ever has
+to STAMP synthetic provenance to satisfy `extraction.schema.json`'s
+FacetAssignment (which has required non-empty `evidence[]` since rc.3). Scoped to
+the extractor-output schema and its gate/tests; **`extraction.schema.json`,
+`gold.schema.json`, and `pred.schema.json` are untouched.**
+
+### Changed
+- **`extractor-output.schema.json` — `facets` object → assignments array.** Was a
+  flat object of 9 optional string keys (`{topic?, affect?, …}`); it is now an
+  **array** of evidence-carrying assignments `{facet, value, evidence[]}`, each
+  `additionalProperties: false`, `required: [facet, value, evidence]`. `facet` is
+  the closed 9-axis enum (`affect|topic|genre|intent|creator_role|viewer_orientation|presentation|content_provenance|actionability`,
+  matching `extraction.schema.json`'s FacetAssignment `facet` enum); `value` is a
+  bare string (vocab enforced at runtime, see below); `evidence` is the same
+  inlined Evidence object shape used by mentions/concepts/claims/structured, with
+  `minItems 1`. **Rationale:** synthetic provenance is forbidden — the extractor
+  model must emit facet evidence itself rather than leave the pipeline to fabricate
+  it when converting to a FacetAssignment. Preserves the Gemini `response_schema`
+  safety constraints (NO `$ref`, NO `oneOf`/`allOf`; the Evidence shape is inlined
+  again verbatim; still no grounding fields). This is a **breaking** shape change,
+  permissible pre-`1.0.0` freeze (rc identifiers still churn; `1.0.0` will not).
+- `schema_gate.validate_extractor_output` — now enforces facet `value` membership
+  in `vocab/facets.json` for each assignment's `facet` axis (reusing
+  `_facet_vocab_errors`, keyed `$.facets[i]`), consistent with the
+  gold/pred/extraction validators. The schema keeps `value` a bare string so the
+  vocabulary can still evolve without a schema bump.
+- `test_extractor_output_schema.py` — fixtures updated (`facets: {}` → `facets: []`)
+  and four assignment tests added: valid assignment passes; zero-evidence
+  assignment rejected (schema `minItems`); off-vocab value rejected (runtime vocab
+  check); unknown facet axis rejected (schema enum). The no-`$ref`/`oneOf`/`allOf`
+  walker test still passes over the new inlined evidence shape.
+- Version line bumped to `1.0.0-rc.6` in `schema/README.md` and
+  `eval/src/commonplace_eval/scorecard.py` (`SCHEMA_VERSION`, mirrored into the
+  scorecard `meta` block).
+
+### Unchanged (deliberately)
+- **Pred/gold records still carry flat `{facet: value}` facets.** The pred/gold
+  contract is a scoring record, not the model's raw output: pipelines **flatten**
+  each extractor-output assignment down to `{facet: value}` when emitting a pred
+  record (dropping the per-assignment evidence, which the metric harness does not
+  score). `gold.schema.json`, `pred.schema.json`, and `extraction.schema.json` are
+  therefore untouched, and every prior gold/pred fixture still validates.
+
 ## [1.0.0-rc.5] — 2026-07-08
 
 Phase-1 close-out housekeeping — namespace unification, vocab version sync, and a

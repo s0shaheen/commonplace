@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://commonplace.app/schema/extractor-output.schema.json",
   "title": "Commonplace extractor output (model-facing)",
-  "description": "The flat, Gemini `response_schema`-safe schema the extractor model emits under constrained decoding. NO `$ref`, NO `oneOf`/`allOf` anywhere; string enums only; the Evidence object is inlined at each of the four extraction arrays. Carries NO grounding fields — grounding is the downstream resolver's job, never the extractor's. Every extraction element requires >=1 evidence. Schema-validity is a hard gate, not a metric (_EVAL-METHOD.md §2).",
+  "description": "The flat, Gemini `response_schema`-safe schema the extractor model emits under constrained decoding. NO `$ref`, NO `oneOf`/`allOf` anywhere; string enums only; the Evidence object is inlined at each extraction array (mentions/concepts/facets/claims/structured). `facets` is an array of evidence-carrying assignments ({facet, value, evidence[]}) so facet labels carry model-emitted provenance — never synthetic. Carries NO grounding fields — grounding is the downstream resolver's job, never the extractor's. Every extraction element (facet assignments included) requires >=1 evidence; facet `value` membership in `vocab/facets.json` is enforced at runtime by schema_gate. Schema-validity is a hard gate, not a metric (_EVAL-METHOD.md §2).",
   "type": "object",
   "additionalProperties": false,
   "required": ["mentions", "concepts", "facets", "claims", "structured"],
@@ -83,18 +83,42 @@
       }
     },
     "facets": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "affect": { "type": "string" },
-        "topic": { "type": "string" },
-        "genre": { "type": "string" },
-        "intent": { "type": "string" },
-        "creator_role": { "type": "string" },
-        "viewer_orientation": { "type": "string" },
-        "presentation": { "type": "string" },
-        "content_provenance": { "type": "string" },
-        "actionability": { "type": "string" }
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["facet", "value", "evidence"],
+        "properties": {
+          "facet": {
+            "type": "string",
+            "enum": ["affect", "topic", "genre", "intent", "creator_role", "viewer_orientation", "presentation", "content_provenance", "actionability"]
+          },
+          "value": { "type": "string" },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["channel", "assertion_mode", "confidence"],
+              "properties": {
+                "channel": {
+                  "type": "string",
+                  "enum": ["VERBAL_AUDIO", "VERBAL_TEXT", "VISUAL_SCENE", "VISUAL_TEXT", "NONVERBAL_AUDIO", "STRUCTURED_METADATA"]
+                },
+                "source_role": { "type": "string" },
+                "quote": { "type": "string" },
+                "t_start": { "type": "number" },
+                "t_end": { "type": "number" },
+                "assertion_mode": {
+                  "type": "string",
+                  "enum": ["STATED", "SHOWN", "REPORTED", "INFERRED"]
+                },
+                "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          }
+        }
       }
     },
     "claims": {
