@@ -1,5 +1,6 @@
 // ISOLATED-world content script. Relays MAIN-world captures to the service worker,
-// drives auto-scroll (Alt+Shift+A), manual export (Alt+Shift+S), starts the extraction queue (Alt+Shift+E).
+// drives auto-scroll (Alt+Shift+A), manual export (Alt+Shift+S), starts the extraction queue
+// (Alt+Shift+E), and logs queue status to the SW console (Alt+Shift+Q).
 
 window.addEventListener("message", (e) => {
   if (e.source !== window || !e.data || e.data.__attic !== true) return;
@@ -167,7 +168,11 @@ window.addEventListener("keydown", (e) => {
   }
   if (e.code === "KeyE") {
     chrome.runtime.sendMessage({ kind: "queue_start" });
-    console.log("[commonplace] queue_start sent → extraction queue (Task 3)");
+    console.log("[commonplace] queue_start sent → offscreen engine (capture → analyze → ground)");
+  }
+  if (e.code === "KeyQ") {
+    chrome.runtime.sendMessage({ kind: "queue_status" });
+    console.log("[commonplace] queue_status requested → see service-worker console");
   }
   if (e.code === "KeyK") killCV(); // manual kill-switch for content-visibility pruning
   if (e.code === "KeyD") {
@@ -181,5 +186,5 @@ window.addEventListener("keydown", (e) => {
 });
 
 console.log(
-  "[commonplace] ready — A:auto-scroll · S:export · E:queue-start · K:kill-pruning · D:download(chrome.downloads) · F:download(fetch)"
+  "[commonplace] ready — A:auto-scroll · S:export · E:queue-start · Q:queue-status · K:kill-pruning · D:download(chrome.downloads) · F:download(fetch)"
 );

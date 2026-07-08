@@ -41,7 +41,18 @@ interface ScrollDoneMsg { kind: "scroll_done" }
 interface ExportEnrichedMsg { kind: "export_enriched"; results: unknown[] }
 interface DownloadTestMsg { kind: "download_test"; n?: number }
 interface QueueStartMsg { kind: "queue_start" }
-type Msg = ItemListMsg | ScrollDoneMsg | ExportEnrichedMsg | DownloadTestMsg | QueueStartMsg;
+interface QueueStatusMsg { kind: "queue_status" }
+interface QueueProgressMsg { kind: "queue_progress"; done: number; total: number }
+interface QueueBlockedMsg { kind: "queue_blocked"; reason: string }
+type Msg =
+  | ItemListMsg
+  | ScrollDoneMsg
+  | ExportEnrichedMsg
+  | DownloadTestMsg
+  | QueueStartMsg
+  | QueueStatusMsg
+  | QueueProgressMsg
+  | QueueBlockedMsg;
 
 chrome.runtime.onMessage.addListener((msg: Msg, _sender, _sendResponse) => {
   if (msg.kind === "item_list") {
@@ -53,11 +64,64 @@ chrome.runtime.onMessage.addListener((msg: Msg, _sender, _sendResponse) => {
   } else if (msg.kind === "download_test") {
     void downloadFirst(msg.n || 3);
   } else if (msg.kind === "queue_start") {
-    // BRIDGE: the offscreen extraction queue (analyze → ground) lands in a later Phase-3 task.
-    console.log("[commonplace] queue_start received — extraction queue lands in a later task");
+    // The SW-side wake path: make sure the offscreen engine document exists, then tell it to drain.
+    void startQueue();
+  } else if (msg.kind === "queue_status") {
+    void logQueueStatus();
+  } else if (msg.kind === "queue_progress") {
+    console.log(`[commonplace] queue progress: ${msg.done}/${msg.total}`);
+  } else if (msg.kind === "queue_blocked") {
+    console.log(`[commonplace] queue blocked: ${msg.reason} — set your Gemini key in the options page`);
   }
   return true;
 });
+
+// ── Offscreen engine lifecycle + the service-worker-death revival alarm ─────────────
+//
+// The engine runs in the offscreen document (DOM + credentialed fetch). Only the SW can create it,
+// so every wake routes through here: content/alarm → queue_start → ensureOffscreen → queue_run.
+// The `cp_queue_revive` alarm (every minute) is the resumability spine: if the SW is killed
+// mid-drain, the alarm wakes it, and — as long as any job is unfinished — re-launches the engine,
+// whose first act (reviveJobs) sweeps the killed run's in-flight jobs back to pending.
+
+const OFFSCREEN_URL = "offscreen.html";
+
+async function ensureOffscreen(): Promise<void> {
+  if (await chrome.offscreen.hasDocument()) return; // createDocument throws if one already exists
+  await chrome.offscreen.createDocument({
+    url: OFFSCREEN_URL,
+    reasons: [chrome.offscreen.Reason.DOM_SCRAPING, chrome.offscreen.Reason.BLOBS],
+    justification: "video keyframe extraction + export blobs",
+  });
+}
+
+async function startQueue(): Promise<void> {
+  await ensureOffscreen();
+  // Swallow a transient no-receiver rejection (the doc may still be registering its listener).
+  void chrome.runtime.sendMessage({ kind: "queue_run" }).catch(() => {});
+}
+
+async function logQueueStatus(): Promise<void> {
+  const jobs = await (await store()).getJobs();
+  const by: Record<string, number> = {};
+  for (const j of jobs) by[j.status] = (by[j.status] ?? 0) + 1;
+  console.log(`[commonplace] queue status: ${jobs.length} jobs`, by);
+}
+
+chrome.alarms.create("cp_queue_revive", { periodInMinutes: 1 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "cp_queue_revive") void onReviveAlarm();
+});
+
+async function onReviveAlarm(): Promise<void> {
+  const jobs = await (await store()).getJobs();
+  // "Unfinished" = pending OR mid-flight (analyzing/grounding left behind by a killed run). If any
+  // exist, wake the engine; runEngine's reviveJobs recovers the mid-flight ones before draining.
+  const unfinished = jobs.some(
+    (j) => j.status === "pending" || j.status === "analyzing" || j.status === "grounding",
+  );
+  if (unfinished) await startQueue();
+}
 
 // Capture intake: normalize → store → refresh `count` → eagerly grab posters.
 async function handleItemList(msg: ItemListMsg): Promise<void> {
