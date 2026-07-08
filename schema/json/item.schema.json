@@ -1,0 +1,451 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://commonplace.tools/schema/item.schema.json",
+  "title": "Commonplace base container item",
+  "description": "The cross-platform base object (ontology v3 §2). Admission rule (write-time): the ONLY required fields are identity (>=1 handle) + >=1 save with a source `at`. Everything else is optional / profile-level. Encodes _ONTOLOGY.md v3 §2 exactly.",
+  "type": "object",
+  "required": ["identity", "saves"],
+  "additionalProperties": false,
+  "properties": {
+    "identity": { "$ref": "#/$defs/Identity" },
+    "saves": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Save" }
+    },
+    "origin": { "$ref": "#/$defs/Origin" },
+    "creator": { "$ref": "#/$defs/Creator" },
+    "createdAt": { "$ref": "#/$defs/Timestamped" },
+    "capturedAt": { "$ref": "#/$defs/Timestamped" },
+    "lastCheckedAt": { "$ref": "#/$defs/Timestamped" },
+    "title": { "type": "string" },
+    "body": { "type": "string" },
+    "mediaKind": {
+      "type": ["string", "null"],
+      "enum": ["photo", "video", "audio", "document", "rich", "link", "file", null]
+    },
+    "contentForm": { "type": "string" },
+    "assets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Asset" }
+    },
+    "timeline": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/TimelineEntry" }
+    },
+    "interactive": { "$ref": "#/$defs/Interactive" },
+    "contentCredentials": { "$ref": "#/$defs/ContentCredentials" },
+    "children": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ChildRef" }
+    },
+    "collections": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Collection" }
+    },
+    "references": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Reference" }
+    },
+    "depicts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Depicts" }
+    },
+    "workRef": { "$ref": "#/$defs/WorkRef" },
+    "versionRef": { "type": "string" },
+    "versions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Version" }
+    },
+    "lifecycle": { "$ref": "#/$defs/Lifecycle" },
+    "captureFidelity": { "$ref": "#/$defs/CaptureFidelity" },
+    "status": {
+      "type": "string",
+      "enum": ["live", "removed", "author_deleted", "locked", "archived", "unavailable"]
+    },
+    "statusObservedAt": { "type": "string", "format": "date-time" },
+    "scope": { "$ref": "#/$defs/Scope" },
+    "visibility": {
+      "type": "string",
+      "enum": ["public", "gated", "private"]
+    },
+    "metrics": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Metrics" }
+    },
+    "platformExtras": {
+      "type": "object",
+      "description": "Free namespaced proxy for platform-unique fields. Intentionally open (no additionalProperties:false)."
+    },
+    "extractions": {
+      "type": "array",
+      "items": { "$ref": "extraction.schema.json" }
+    }
+  },
+  "$defs": {
+    "Identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "anyOf": [
+        { "required": ["permalink"] },
+        { "required": ["canonicalId"] },
+        { "required": ["contentHash"] }
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["platform_verified", "inferred", "synthetic"]
+        },
+        "permalink": { "type": "string", "format": "uri" },
+        "permalinkStatus": {
+          "type": "string",
+          "enum": ["live", "login_gated", "expired", "none"]
+        },
+        "canonicalId": { "type": "string" },
+        "contentHash": { "type": "string", "pattern": "^ni:///sha-256;" },
+        "givenUrl": { "type": "string", "format": "uri" },
+        "resolvedUrl": { "type": "string", "format": "uri" },
+        "resolutionStatus": { "type": "string" }
+      }
+    },
+    "Timestamped": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "source"],
+      "properties": {
+        "value": { "type": "string", "format": "date-time" },
+        "source": {
+          "type": "string",
+          "enum": ["platform", "exif", "file_mtime", "http_header", "user", "inferred"]
+        },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "Origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "profile"],
+      "properties": {
+        "platform": { "type": "string" },
+        "profile": { "type": "string" }
+      }
+    },
+    "Creator": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "handle": { "type": "string" },
+            "name": { "type": "string" },
+            "id": { "type": "string" }
+          }
+        },
+        { "const": "SELF" },
+        { "const": "ASSERTED_NONE" },
+        { "const": "UNKNOWN" }
+      ]
+    },
+    "Save": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sources"],
+      "properties": {
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "at"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["favorites", "likes", "bookmark", "upload", "repost", "watch_later", "screenshot", "manual", "other"]
+              },
+              "at": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["post", "thread", "tree", "container", "fragment"]
+            },
+            "materializedMembers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "postId": { "type": "string" },
+                  "order": { "type": "integer" }
+                }
+              }
+            },
+            "materializedAt": { "type": "string", "format": "date-time" }
+          }
+        },
+        "targetSelector": {
+          "type": "object",
+          "description": "W3C Web Annotation selector. Open until Task 2 defines the Selector schema."
+        },
+        "annotations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Annotation" }
+        },
+        "collections": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "note": { "type": "string" }
+      }
+    },
+    "Asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role"],
+      "anyOf": [
+        { "required": ["url"] },
+        { "required": ["blobRef"] }
+      ],
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "blobRef": { "type": "string" },
+        "declaredMime": { "type": "string" },
+        "sniffedFormat": { "type": "string" },
+        "role": {
+          "type": "string",
+          "enum": ["rendition", "attachment", "sidecar", "export"]
+        },
+        "contentHash": { "type": "string" },
+        "perceptualHash": { "type": "string" }
+      }
+    },
+    "TimelineEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tStart", "title", "author"],
+      "properties": {
+        "tStart": { "type": "number" },
+        "tEnd": { "type": "number" },
+        "title": { "type": "string" },
+        "author": {
+          "type": "string",
+          "enum": ["creator", "platform", "derived"]
+        }
+      }
+    },
+    "Interactive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["poll", "quiz", "form"]
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "count": { "type": "integer" },
+              "isViewerChoice": { "type": "boolean" }
+            }
+          }
+        },
+        "closesAt": { "type": "string", "format": "date-time" },
+        "resultsFinal": { "type": "boolean" },
+        "resultsGated": { "type": "boolean" },
+        "snapshotAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ContentCredentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "c2paManifestRef": { "type": "string" },
+        "generator": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "model": { "type": "string" }
+          }
+        },
+        "isAIGenerated": {
+          "type": "string",
+          "enum": ["declared", "detected", "none"]
+        },
+        "remixParentRef": { "type": "string" }
+      }
+    },
+    "ChildRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["order", "post"],
+      "properties": {
+        "order": { "type": "integer" },
+        "post": { "$ref": "#" },
+        "ownTimestamp": { "$ref": "#/$defs/Timestamped" },
+        "perChildAnnotations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Annotation" }
+        }
+      }
+    },
+    "Collection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["postRef", "collectionKind"],
+      "properties": {
+        "postRef": { "type": "string" },
+        "collectionKind": {
+          "type": "string",
+          "enum": ["carousel", "playlist", "album", "board", "series", "course", "thread", "list"]
+        },
+        "order": { "type": "integer" },
+        "addedAt": { "type": "string", "format": "date-time" },
+        "memberAnnotation": { "$ref": "#/$defs/Annotation" }
+      }
+    },
+    "Reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rel", "target", "resolutionStatus"],
+      "properties": {
+        "rel": { "type": "string" },
+        "target": { "type": ["string", "object"] },
+        "targetSnapshotRef": { "type": "string" },
+        "resolutionStatus": {
+          "type": "string",
+          "enum": ["resolved", "tombstone_deleted", "tombstone_unavailable", "never_resolved"]
+        },
+        "lastCheckedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Depicts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "resolutionStatus", "assertion_mode"],
+      "properties": {
+        "target": { "type": "object" },
+        "resolutionStatus": {
+          "type": "string",
+          "enum": ["unresolved", "candidate", "resolved", "offline_referent", "dead"]
+        },
+        "assertion_mode": { "const": "INFERRED" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "WorkRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scheme", "id"],
+      "properties": {
+        "scheme": {
+          "type": "string",
+          "enum": ["doi", "isbn", "arxiv", "podcast_guid", "isrc", "iswc", "issn", "platform"]
+        },
+        "id": { "type": "string" }
+      }
+    },
+    "Version": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "canonicalId": { "type": "string" },
+        "capturedAt": { "type": "string", "format": "date-time" },
+        "bodyRef": { "type": "string" }
+      }
+    },
+    "Lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": ["scheduled", "live", "changed", "archived", "expired", "highlighted", "delisted", "deleted"]
+        },
+        "stateTimestamps": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scheduledStart": { "type": "string", "format": "date-time" },
+            "actualStart": { "type": "string", "format": "date-time" },
+            "endedAt": { "type": "string", "format": "date-time" },
+            "archiveExpiresAt": { "type": "string", "format": "date-time" },
+            "expiresAt": { "type": "string", "format": "date-time" }
+          }
+        },
+        "capturedDuringState": { "type": "string" },
+        "lastCheckedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "CaptureFidelity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level"],
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["complete", "partial", "metadata_only", "reference_only"]
+        },
+        "gates": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["paywall", "regwall", "login_wall", "vote_gate", "js_required", "drm", "expired"]
+          }
+        }
+      }
+    },
+    "Scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["containerType"],
+      "properties": {
+        "containerType": {
+          "type": "string",
+          "enum": ["community", "channel", "group", "none"]
+        },
+        "containerId": { "type": "string" },
+        "name": { "type": "string" }
+      }
+    },
+    "Metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observedAt"],
+      "properties": {
+        "likes": { "type": "integer" },
+        "shares": { "type": "integer" },
+        "views": { "type": "integer" },
+        "score": { "type": "integer" },
+        "comments": { "type": "integer" },
+        "observedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "body": { "type": "string" },
+        "selector": {
+          "type": "object",
+          "description": "W3C Web Annotation selector. Open until Task 2 defines the Selector schema."
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

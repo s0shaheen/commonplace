@@ -1,0 +1,32 @@
+{
+  "identity": {
+    "status": "platform_verified",
+    "permalink": "https://www.instagram.com/p/ABC123carousel/",
+    "canonicalId": "ABC123carousel"
+  },
+  "origin": { "platform": "instagram", "profile": "instagram/1.0" },
+  "creator": { "handle": "@travelgram" },
+  "mediaKind": null,
+  "contentForm": "carousel",
+  "children": [
+    {
+      "order": 0,
+      "post": {
+        "identity": { "status": "inferred", "contentHash": "ni:///sha-256;slide0" },
+        "mediaKind": "photo",
+        "saves": [{ "sources": [{ "kind": "favorites", "at": "2026-07-06T00:00:00Z" }] }]
+      }
+    },
+    {
+      "order": 1,
+      "post": {
+        "identity": { "status": "inferred", "contentHash": "ni:///sha-256;slide1" },
+        "mediaKind": "photo",
+        "saves": [{ "sources": [{ "kind": "favorites", "at": "2026-07-06T00:00:00Z" }] }]
+      }
+    }
+  ],
+  "saves": [
+    { "sources": [{ "kind": "favorites", "at": "2026-07-06T00:00:00Z" }] }
+  ]
+}

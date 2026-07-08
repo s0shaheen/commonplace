@@ -1,0 +1,53 @@
+{
+  "identity": {
+    "status": "platform_verified",
+    "permalink": "https://www.tiktok.com/@chefexample/video/7300000000000000000",
+    "permalinkStatus": "live",
+    "canonicalId": "7300000000000000000"
+  },
+  "origin": { "platform": "tiktok", "profile": "tiktok/1.0" },
+  "creator": { "handle": "@chefexample", "name": "Chef Example", "id": "user-123" },
+  "createdAt": { "value": "2026-06-01T12:00:00Z", "source": "platform", "confidence": 1 },
+  "capturedAt": { "value": "2026-07-08T00:00:00Z", "source": "inferred", "confidence": 0.9 },
+  "title": "60-second weeknight pasta",
+  "body": "The easiest pasta you'll make this week. #pasta #weeknight #dinner",
+  "mediaKind": "video",
+  "contentForm": "short_video",
+  "assets": [
+    {
+      "url": "https://cdn.tiktok.com/video/7300000000000000000.mp4",
+      "declaredMime": "video/mp4",
+      "sniffedFormat": "mp4",
+      "role": "rendition",
+      "contentHash": "ni:///sha-256;def456",
+      "perceptualHash": "phash:9f2c1a0b"
+    },
+    {
+      "url": "https://cdn.tiktok.com/video/7300000000000000000.en.vtt",
+      "declaredMime": "text/vtt",
+      "sniffedFormat": "vtt",
+      "role": "sidecar"
+    }
+  ],
+  "metrics": [
+    {
+      "likes": 120000,
+      "shares": 4200,
+      "views": 3400000,
+      "comments": 890,
+      "observedAt": "2026-07-08T00:00:00Z"
+    }
+  ],
+  "visibility": "public",
+  "saves": [
+    {
+      "sources": [{ "kind": "favorites", "at": "2026-07-07T18:30:00Z" }],
+      "note": "try this weekend"
+    }
+  ],
+  "platformExtras": {
+    "musicName": "original sound - chefexample",
+    "musicAuthor": "chefexample",
+    "soundId": "7300000000000000001"
+  }
+}

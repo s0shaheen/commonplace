@@ -1,0 +1,16 @@
+{
+  "identity": {
+    "status": "platform_verified",
+    "permalink": "https://www.reddit.com/r/cooking/comments/abc123/whats_your_goto_weeknight_dinner/",
+    "canonicalId": "t3_abc123"
+  },
+  "origin": { "platform": "reddit", "profile": "reddit/1.0" },
+  "creator": { "handle": "u/someone" },
+  "title": "What's your go-to weeknight dinner?",
+  "body": "Looking for ideas that take under 30 minutes and don't need a dozen ingredients.",
+  "scope": { "containerType": "community", "containerId": "r/cooking", "name": "cooking" },
+  "visibility": "public",
+  "saves": [
+    { "sources": [{ "kind": "bookmark", "at": "2026-07-05T20:00:00Z" }] }
+  ]
+}

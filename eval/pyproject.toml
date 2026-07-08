@@ -1,0 +1,23 @@
+[project]
+name = "commonplace-eval"
+version = "0.1.0"
+description = "Commonplace eval instrument: schema gates, matcher, per-layer metrics"
+requires-python = ">=3.12"
+dependencies = [
+  "jsonschema>=4.23",
+  "rdflib>=7.0",
+  "pyshacl>=0.30",
+  "rapidfuzz>=3.9",
+  "scipy>=1.14",
+  "numpy>=2.0",
+  "relplot>=1.0",
+]
+[project.scripts]
+commonplace-eval = "commonplace_eval.cli:main"
+[dependency-groups]
+dev = ["pytest>=8.3"]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+[tool.hatch.build.targets.wheel]
+packages = ["src/commonplace_eval"]

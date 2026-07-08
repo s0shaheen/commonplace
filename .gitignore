@@ -24,3 +24,8 @@ spikes/pipeline/*.log
 spikes/pipeline/manifest.jsonl
 spikes/pipeline/experiment.out
 spikes/pipeline/results.jsonl
+
+# Python eval package (uv-managed)
+eval/.venv/
+__pycache__/
+.pytest_cache/

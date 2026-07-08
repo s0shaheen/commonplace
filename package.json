@@ -8,7 +8,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:spike": "node --test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "eval:test": "cd eval && uv run pytest -q",
+    "schema:check": "cd eval && uv run pytest -q tests/test_schema_fixtures.py tests/test_shacl.py"
   },
   "devDependencies": {
     "@types/node": "^20.19.41",
