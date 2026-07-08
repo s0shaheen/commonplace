@@ -29,7 +29,10 @@ function toMention(item: CapturedItem, m: MentionOut): Mention {
   const hints: Record<string, string> = {};
   // music_recording: the item's music author is the strongest disambiguator for MusicBrainz.
   if (m.type === "music_recording" && item.music?.author) hints.artist = item.music.author;
-  // place: hints.locale would come from caption geo words — v1 extracts none, so hints stay empty.
+  // The clip caption is the disambiguation context the LLM `select` needs — e.g. which "Dune"
+  // (2021 film / 1984 film / the novel). Capped so a long desc can't blow up the select prompt.
+  if (item.desc && item.desc.trim()) hints.context = item.desc.trim().slice(0, 500);
+  // place: hints.locale would come from caption geo words — v1 extracts none.
   return {
     surface: m.surface,
     type: m.type,

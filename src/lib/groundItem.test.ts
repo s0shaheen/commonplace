@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { groundItemMentions } from "./groundItem.js";
-import type { Candidate, GroundedEntity, KbResolver, Selector } from "./grounding.js";
+import type { Candidate, GroundedEntity, KbResolver, Mention, Selector } from "./grounding.js";
 import type { CapturedItem, MentionOut, NamedEntityType } from "./types.js";
 
 function makeItem(over: Partial<CapturedItem> = {}): CapturedItem {
@@ -162,5 +162,45 @@ describe("groundItemMentions", () => {
       cachePut: cache.cachePut,
     });
     expect(seen).toBe("SZA");
+  });
+
+  it("passes the clip caption to the selector as hints.context (disambiguation context)", async () => {
+    const item = makeItem({ desc: "the 2021 Denis Villeneuve film, in IMAX" });
+    let seen: Mention | undefined;
+    const wd = countingResolver("wikidata", "screen_work", [
+      { id: "Q1", source: "wikidata", name: "Dune (2021 film)", score: 100 },
+    ]);
+    const select: Selector = async (m) => {
+      seen = m;
+      return { index: 0, confidence: 0.9 };
+    };
+    const cache = makeCache();
+    await groundItemMentions(item, [mention("Dune", "screen_work")], {
+      resolvers: [wd.resolver],
+      select,
+      cacheGet: cache.cacheGet,
+      cachePut: cache.cachePut,
+    });
+    expect(seen?.hints?.context).toContain("2021 Denis Villeneuve film");
+  });
+
+  it("caps the injected caption at 500 chars so a long desc can't blow the prompt", async () => {
+    const item = makeItem({ desc: "x".repeat(900) });
+    let seen: Mention | undefined;
+    const wd = countingResolver("wikidata", "screen_work", [
+      { id: "Q1", source: "wikidata", name: "Dune (2021 film)", score: 100 },
+    ]);
+    const select: Selector = async (m) => {
+      seen = m;
+      return { index: 0, confidence: 0.9 };
+    };
+    const cache = makeCache();
+    await groundItemMentions(item, [mention("Dune", "screen_work")], {
+      resolvers: [wd.resolver],
+      select,
+      cacheGet: cache.cacheGet,
+      cachePut: cache.cachePut,
+    });
+    expect(seen?.hints?.context?.length).toBe(500);
   });
 });

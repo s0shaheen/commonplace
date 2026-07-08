@@ -50,6 +50,21 @@ describe("createLlmSelector", () => {
     expect(prompt.toLowerCase()).toContain("abstain");
   });
 
+  it("renders an arbitrary hint (e.g. context) into the prompt so the caption reaches the model", async () => {
+    let prompt = "";
+    const select = createLlmSelector(async (p) => {
+      prompt = p;
+      return '{"index":0,"confidence":0.7}';
+    });
+    const withContext: Mention = {
+      surface: "Dune",
+      type: "screen_work",
+      hints: { context: "the 2021 Denis Villeneuve film" },
+    };
+    await select(withContext, three);
+    expect(prompt).toContain("context=the 2021 Denis Villeneuve film");
+  });
+
   it("tolerates a code-fenced JSON reply", async () => {
     const select = createLlmSelector(async () => '```json\n{"index":2,"confidence":0.6}\n```');
     expect(await select(mention, three)).toEqual({ index: 2, confidence: 0.6 });

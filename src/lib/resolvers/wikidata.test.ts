@@ -55,4 +55,16 @@ describe("createWikidataResolver", () => {
     expect(calledUrl).toContain("search=Dune");
     expect(calledUrl).toContain("format=json");
   });
+
+  it("percent-encodes a multi-word surface (encodeURIComponent: space → %20)", async () => {
+    let calledUrl = "";
+    const resolver = createWikidataResolver({
+      fetchJson: async (url: string) => {
+        calledUrl = url;
+        return { search: [] };
+      },
+    });
+    await resolver.search({ surface: "Kill Bill", type: "screen_work" });
+    expect(calledUrl).toContain("search=Kill%20Bill");
+  });
 });
