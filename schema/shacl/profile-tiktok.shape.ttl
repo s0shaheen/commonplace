@@ -1,0 +1,61 @@
+# Commonplace TikTok application profile — SHACL form of tiktok.dctap.csv.
+#
+# Zero-base-fields rule (_KOE-STANDARD.md, founder directive 2): a platform
+# profile is an Application Profile (DCTAP -> SHACL) that touches ZERO base
+# fields — i.e. it never introduces a NEW base constraint that would change how
+# the base shape validates a non-TikTok item. The two allowed moves are:
+#   (a) require a profile-specific path (a field the base object does not have), and
+#   (b) TIGHTEN the cardinality/value of a base OPTIONAL field for this platform.
+# Every constraint below is stance (b): a tighten of an already-defined base
+# field, applied only to nodes whose origin.platform == "tiktok". The base shape
+# is unchanged, so the cross-analyzability gate still holds for every platform.
+#
+# This shape is loaded ALONGSIDE base.shape.ttl (never instead of it); a TikTok
+# item must satisfy both.
+
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix cpl: <https://commonplace.app/ns#> .
+
+cpl:TikTokItemShape a sh:NodeShape ;
+
+    # Target: every item whose origin.platform is "tiktok". A SPARQL-based target
+    # (SHACL Advanced Features; pyshacl advanced=True) selects the ITEM (?this) via
+    # the origin blank node, so the constraints below apply to the item, not origin.
+    sh:target [
+        a sh:SPARQLTarget ;
+        sh:select """
+            SELECT ?this
+            WHERE {
+                ?this <https://commonplace.app/ns#origin> ?origin .
+                ?origin <https://commonplace.app/ns#platform> "tiktok" .
+            }
+        """
+    ] ;
+
+    # TIGHTEN (base optional handle). Base requires >=1 of
+    # {permalink, canonicalId, contentHash} (sh:or). TikTok pins the specific
+    # handle: canonicalId (the platform video id) MUST be present.
+    sh:property [
+        sh:path ( cpl:identity cpl:canonicalId ) ;
+        sh:minCount 1 ;
+        sh:message "TikTok items must carry identity.canonicalId (the platform video id)." ;
+    ] ;
+
+    # TIGHTEN-VALUE (base field identity.status). Base leaves identity.status's
+    # value open; a TikTok save is first-party-resolvable, so it must be
+    # platform_verified. sh:hasValue also enforces presence.
+    sh:property [
+        sh:path ( cpl:identity cpl:status ) ;
+        sh:hasValue "platform_verified" ;
+        sh:message "TikTok items must have identity.status = platform_verified." ;
+    ] ;
+
+    # TIGHTEN (base optional mediaKind). Base allows the 7 kinds or null; a TikTok
+    # post is a video or a photo (slideshow), and mediaKind is REQUIRED here
+    # (minCount 1) rather than optional.
+    sh:property [
+        sh:path cpl:mediaKind ;
+        sh:in ( "video" "photo" ) ;
+        sh:minCount 1 ;
+        sh:message "TikTok items must have mediaKind in {video, photo}." ;
+    ] .

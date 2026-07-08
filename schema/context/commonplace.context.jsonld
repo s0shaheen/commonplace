@@ -1,0 +1,39 @@
+{
+  "@context": {
+    "cpl": "https://commonplace.app/ns#",
+    "schema": "https://schema.org/",
+    "oa": "http://www.w3.org/ns/oa#",
+    "prov": "http://www.w3.org/ns/prov#",
+    "as": "https://www.w3.org/ns/activitystreams#",
+    "dcterms": "http://purl.org/dc/terms/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+
+    "@vocab": "https://commonplace.app/ns#",
+
+    "title": "schema:name",
+    "body": "schema:text",
+    "creator": "schema:creator",
+    "permalink": { "@id": "schema:url", "@type": "@id" },
+
+    "children": { "@id": "cpl:children", "@container": "@set" },
+
+    "saves": { "@id": "cpl:saves", "@container": "@set" },
+    "sources": { "@id": "cpl:sources", "@container": "@set" },
+    "at": { "@id": "cpl:savedAt", "@type": "xsd:dateTime" },
+
+    "extractions": { "@id": "cpl:extractions", "@container": "@set" },
+    "evidence": { "@id": "cpl:evidence", "@container": "@set" },
+    "assertion_mode": "cpl:assertionMode",
+    "channel": "cpl:channel",
+
+    "wasDerivedFrom": { "@id": "prov:wasDerivedFrom", "@type": "@id" },
+
+    "selector": { "@id": "oa:hasSelector" },
+    "exact": "oa:exact",
+    "prefix": "oa:prefix",
+    "suffix": "oa:suffix",
+    "start": "oa:start",
+    "end": "oa:end",
+    "conformsTo": { "@id": "dcterms:conformsTo" }
+  }
+}

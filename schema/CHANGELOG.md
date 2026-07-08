@@ -3,6 +3,50 @@
 All schemas in `schema/json/` (and their SHACL/JSON-LD companions) are versioned
 together under one semver line. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-rc.4] — 2026-07-08
+
+The RDF/standards **conformance layer** — the machine-checkable form of the
+KOE-STANDARD validation checklist (`_KOE-STANDARD.md`). Purely additive: no JSON
+Schema, `$def`, or fixture changes; every rc.3 item still validates unchanged.
+This turns the "Cross-platform" and "Provenance & evidence" checklist items into
+CI-enforceable SHACL.
+
+### Added
+- `context/commonplace.context.jsonld` — the JSON-LD context that lifts item
+  JSON into RDF. `@vocab` = `cpl:` (`https://commonplace.app/ns#`) so no field is
+  silently dropped; overrides map to reused standard vocabularies where clean —
+  `title`→`schema:name`, `body`→`schema:text`, `permalink`→`schema:url`,
+  `creator`→`schema:creator`, evidence `selector`→W3C Web Annotation (`oa:`),
+  `wasDerivedFrom`→`prov:wasDerivedFrom` — and `cpl:` terms elsewhere
+  (`children`, etc.) where no clean standard term exists. `saves[].sources[].at`
+  is renamed to `cpl:savedAt`; `evidence`/`saves`/`sources` are `@container:@set`.
+- `shacl/base.shape.ttl` — the base shape, the **cross-analyzability gate**.
+  `cpl:ItemShape` (`sh:targetClass cpl:Item`): `sh:or` over the three identity
+  handles; a `saves→sources→savedAt` sequence-path `minCount 1`; `mediaKind`
+  `sh:in` the 7 kinds when present. `cpl:ExtractionShape`
+  (`sh:targetClass cpl:Extraction`): `cpl:evidence minCount 1` (the zero-evidence
+  provenance gate), and `sh:in` on evidence `assertion_mode` (4) / `channel` (6).
+  **Conforms on 100% of `fixtures/valid/` regardless of platform.**
+- `shacl/profile-tiktok.shape.ttl` — the TikTok application profile. A
+  SPARQL-based target on `origin.platform == "tiktok"` selects the item; three
+  constraints TIGHTEN base optional fields (canonicalId required,
+  identity.status = platform_verified, mediaKind ∈ {video, photo}) and touch zero
+  base fields for any other platform (verified: a Reddit item that breaks every
+  TikTok rule still passes under the profile).
+- `profiles/tiktok.dctap.csv` — the DCTAP table mirroring the profile, one row
+  per constraint (`shapeID,propertyID,propertyLabel,mandatory,repeatable,valueDataType,valueConstraint,note`).
+
+### Changed
+- `shacl_gate.py` (new module) — `validate_shacl(item, profile=None) ->
+  (conforms, report)`. Lifts the item through the context (stamping
+  `@type cpl:Item` on the root and `cpl:Extraction` on each extraction node in
+  context-processing code), parses to an rdflib graph, and runs pyshacl
+  (`advanced=True` for the profile's SPARQL target) against the base shape (+ the
+  profile shape when given). Mirrors `schema_gate.py`'s cached-loader patterns.
+- `tests/test_shacl.py` (new) — the base shape parametrized across every
+  `fixtures/valid/*.json` (the headline gate), the zero-evidence negative (proves
+  the shape fires — no vacuous pass), and the TikTok profile.
+
 ## [1.0.0-rc.3] — 2026-07-08
 
 Additive extraction layer: the schemas the engine emits, the model-facing

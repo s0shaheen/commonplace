@@ -1,0 +1,84 @@
+# Commonplace base SHACL shape — the cross-platform analyzability gate.
+#
+# This is the machine-checkable form of the KOE-STANDARD "Cross-platform" and
+# "Provenance & evidence" checklist items (_KOE-STANDARD.md §validation checklist):
+#   - "One base object ... each platform is an Application Profile ... touching
+#      zero base fields", and
+#   - "The base SHACL shape passes on 100% of items regardless of platform
+#      (the cross-analyzability gate)."
+#
+# It keys off the JSON field names lifted into RDF by
+# schema/context/commonplace.context.jsonld (item JSON --@context--> JSON-LD -->
+# rdflib graph). The item root is stamped @type cpl:Item and every extraction
+# node @type cpl:Extraction by shacl_gate.py before validation.
+#
+# Encodes item.schema.json + extraction.schema.json (ontology v3 §2 & §4).
+
+@prefix sh:     <http://www.w3.org/ns/shacl#> .
+@prefix cpl:    <https://commonplace.app/ns#> .
+@prefix schema: <https://schema.org/> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+
+##
+## The base container item.
+##
+cpl:ItemShape a sh:NodeShape ;
+    sh:targetClass cpl:Item ;
+
+    # (1) Admission rule, half one: at least one identity handle.
+    #     permalink (schema:url) OR canonicalId OR contentHash (RFC 6920 ni:///).
+    #     Mirrors item.schema.json Identity `anyOf`. sh:or => >= one branch holds.
+    sh:or (
+        [ sh:path ( cpl:identity schema:url )      ; sh:minCount 1 ]
+        [ sh:path ( cpl:identity cpl:canonicalId ) ; sh:minCount 1 ]
+        [ sh:path ( cpl:identity cpl:contentHash ) ; sh:minCount 1 ]
+    ) ;
+
+    # (2) Admission rule, half two: at least one save carrying a source date.
+    #     Sequence path Item -> saves -> sources -> savedAt (JSON saves[].sources[].at).
+    sh:property [
+        sh:path ( cpl:saves cpl:sources cpl:savedAt ) ;
+        sh:minCount 1 ;
+        sh:message "Every item needs >=1 save with a source date (saves[].sources[].at)." ;
+    ] ;
+
+    # (6) mediaKind, WHEN PRESENT, is one of the 7 media kinds.
+    #     No minCount: mediaKind is optional (and JSON null lifts to no triple),
+    #     so an item without a media kind still conforms.
+    sh:property [
+        sh:path cpl:mediaKind ;
+        sh:in ( "photo" "video" "audio" "document" "rich" "link" "file" ) ;
+        sh:message "mediaKind, when present, must be one of photo/video/audio/document/rich/link/file." ;
+    ] .
+
+##
+## An extraction the engine emits about the item (ontology v3 §4).
+##
+cpl:ExtractionShape a sh:NodeShape ;
+    sh:targetClass cpl:Extraction ;
+
+    # (3) Provenance gate: every extraction owns a non-empty evidence[].
+    #     This is the KOE "zero-evidence extraction is rejected at write time"
+    #     invariant, and the guard that proves this whole shape actually fires
+    #     (see tests/test_shacl.py::test_zero_evidence_fails_shacl).
+    sh:property [
+        sh:path cpl:evidence ;
+        sh:minCount 1 ;
+        sh:message "Every extraction must carry >=1 evidence (zero-evidence rejected — KOE provenance gate)." ;
+    ] ;
+
+    # (4) assertion_mode of each evidence is one of the 4 modes.
+    #     Sequence path Extraction -> evidence -> assertionMode; sh:in checks
+    #     every value reached.
+    sh:property [
+        sh:path ( cpl:evidence cpl:assertionMode ) ;
+        sh:in ( "STATED" "SHOWN" "REPORTED" "INFERRED" ) ;
+        sh:message "evidence assertion_mode must be one of STATED/SHOWN/REPORTED/INFERRED." ;
+    ] ;
+
+    # (5) channel of each evidence is one of the 6 channels.
+    sh:property [
+        sh:path ( cpl:evidence cpl:channel ) ;
+        sh:in ( "VERBAL_AUDIO" "VERBAL_TEXT" "VISUAL_SCENE" "VISUAL_TEXT" "NONVERBAL_AUDIO" "STRUCTURED_METADATA" ) ;
+        sh:message "evidence channel must be one of the 6 channels." ;
+    ] .

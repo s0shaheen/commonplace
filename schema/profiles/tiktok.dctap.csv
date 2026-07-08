@@ -1,0 +1,4 @@
+shapeID,propertyID,propertyLabel,mandatory,repeatable,valueDataType,valueConstraint,note
+cpl:TikTokItemShape,cpl:canonicalId,identity.canonicalId,true,false,xsd:string,,"path cpl:identity/cpl:canonicalId. TIGHTEN base optional handle: base requires 1-of {permalink,canonicalId,contentHash} — TikTok pins canonicalId (the platform video id)."
+cpl:TikTokItemShape,cpl:status,identity.status,true,false,,platform_verified,"path cpl:identity/cpl:status; valueConstraint is a picklist of one. TIGHTEN-VALUE base field identity.status — a TikTok save is first-party-resolvable."
+cpl:TikTokItemShape,cpl:mediaKind,mediaKind,true,false,,video photo,"valueConstraint is a picklist (space-separated). TIGHTEN base optional mediaKind (7->2) and require present."

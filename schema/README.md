@@ -17,12 +17,17 @@ extraction is validated against. Derived from the governing ontology,
 | `json/pred.schema.json` | The system **prediction record** scored against gold; mentions carry grounding. |
 | `vocab/facets.json` | The frozen v1.0 **facet vocabulary** — the closed enum source kept out of the JSON Schemas so it evolves additively. Enforced at runtime by `schema_gate`. |
 | `vocab/named-entity-anchors.json` | The 9 groundable NamedEntity **types + KB anchors** (from `_EVAL-METHOD.md` §2). Reference table, not a validated schema. |
+| `context/commonplace.context.jsonld` | The **JSON-LD context** that lifts item JSON into RDF (`@vocab` = `cpl:`, with schema.org / W3C Web Annotation / PROV-O overrides). The bridge from the JSON layer to the SHACL layer; every field a SHACL shape keys off is mapped here. |
+| `shacl/base.shape.ttl` | The **base SHACL shape** (`sh:targetClass cpl:Item` / `cpl:Extraction`): the KOE cross-analyzability gate. Enforces the admission rule (≥1 identity handle, ≥1 dated save), the evidence-provenance gate (every extraction ≥1 evidence), and the assertion_mode/channel/mediaKind enums. **Must conform on 100% of `fixtures/valid/` regardless of platform.** |
+| `shacl/profile-tiktok.shape.ttl` | The **TikTok application profile** (DCTAP → SHACL). Targets `origin.platform == "tiktok"` via a SPARQL-based target and tightens base optional fields (canonicalId required, identity.status = platform_verified, mediaKind ∈ {video, photo}) — touching zero base fields for any other platform. |
+| `profiles/tiktok.dctap.csv` | The **DCTAP** table mirroring the TikTok profile, one row per constraint. The human-editable source-of-truth convention for application profiles. |
 | `fixtures/valid/*.json` | Items that MUST validate — the contract's positive examples (minimal item, full-fat TikTok video, self-authored note, carousel, text post, grounded-extraction item). |
 | `fixtures/invalid/*.json` | Items that MUST fail — the admission-rule guards (missing identity handle, empty saves) and extraction guards (zero-evidence, bad assertion mode, bad entity type). |
 | `CHANGELOG.md` | The semver history of the contract. |
 | `LICENSE` | MIT. |
 
-Later Phase-1 tasks add `shacl/` and the JSON-LD context alongside these.
+The Python gates live in `eval/src/commonplace_eval/`: `schema_gate.py`
+(JSON Schema) and `shacl_gate.py` (`validate_shacl(item, profile=None)` — RDF/SHACL).
 
 ## The admission rule (write-time)
 
@@ -40,7 +45,7 @@ and a pooled benchmark possible.
 
 ## Versioning policy
 
-- **Semver**, one line for all contract files together. Current: `1.0.0-rc.3`
+- **Semver**, one line for all contract files together. Current: `1.0.0-rc.4`
   (release-candidate freeze from ontology v3). Formal `1.0.0` is cut at
   eval-sequence step 6 per `_EVAL-METHOD.md` §1.
 - **Additive and durable.** Fields are **never deleted, only deprecated.** A
@@ -58,8 +63,8 @@ From the repo root:
 ```sh
 npm run schema:check     # runs the schema-fixture + SHACL pytest gates
 # or directly:
-cd eval && uv run pytest -q tests/test_schema_fixtures.py
+cd eval && uv run pytest -q tests/test_schema_fixtures.py tests/test_shacl.py
 ```
 
-The Python gate lives in `eval/src/commonplace_eval/schema_gate.py`
-(`validate_item`, `load_schema`).
+The Python gates live in `eval/src/commonplace_eval/`: `schema_gate.py`
+(`validate_item`, `load_schema`) and `shacl_gate.py` (`validate_shacl`).
