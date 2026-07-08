@@ -22,7 +22,10 @@ What SPEC v5 settles (evidence: `_RESEARCH-2026-07-06.md`, 7 Fable research trac
 
 ## Next move: BUILD — Block 0 (in motion since 2026-07-06 evening)
 
-## CURRENT (2026-07-07): Block 0.5 — Eval Foundation (the engine's real first work)
+## CURRENT (2026-07-08): Roadmap execution in motion — Phase 1 COMPLETE
+Phase 1 (schema freeze + eval harness) is done and final-reviewed: `schema/` (JSON Schema 1.0.0-rc.5, SHACL base+TikTok, JSON-LD context, facet vocab, fixtures) + `eval/` (`commonplace_eval`, 194 tests green: matcher, per-layer metric matrix, Φ_c, bootstrap CIs, calibration, scorecard CLI) + `eval/construct.md` + `eval/guidelines.md`. Status log + carry-forwards live in `_ROADMAP.md`. Next unchecked phases: **Phase 3** (wire engine into MV3 shell — AUTO; Places resolver waits on the API key) and **Phase 2 prep** (pilot gold set auto-label → founder spot-check gate).
+
+## (superseded 2026-07-08 — kept for lineage) Block 0.5 — Eval Foundation (the engine's real first work)
 
 Capture + backend feasibility are done (IG-live + zero-knowledge sync spikes PASS). But the **pipeline experiment (native-vs-VTT) was retracted** — it was run before any eval instrument existed (ad-hoc ontology, exact-string matching, no ground truth → uninterpretable). Founder correction: *"think like an ai engineer/scientist… don't skip steps."* → **Block 0.5 now precedes the engine build.** Two governing docs written (cited research in `_RESEARCH-eval-method-*` + `_RESEARCH-ontology-*`):
 - **`_EVAL-METHOD.md`** — instrument-before-experiment; the full sequence (construct → ontology+schema → guidelines → gold set dev/**sealed-test** → validated matcher/metric → prompt-on-dev → freeze → ablations → report-once); nervaluate matching, GERBIL/ELEVANT grounding, Φ_c asymmetric headline, smECE, cluster-bootstrap CIs, solo-annotator protocol.
