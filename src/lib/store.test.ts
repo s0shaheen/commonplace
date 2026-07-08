@@ -94,6 +94,40 @@ describe("CpStore", () => {
     expect(await s.getPoster("a")).toBeUndefined();
   });
 
+  it("concurrent saveAnalysis + saveGroundings on the same id: neither write is lost", async () => {
+    // Regression for the Critical lost-update race. saveAnalysis and saveGroundings each do a
+    // read-modify-write on the SAME `items` record. Under the old code each read-then-wrote in
+    // SEPARATE auto-committing transactions: interleaving two writers, the second put clobbers
+    // the record the first writer never saw, silently dropping a field. Here both writers `get`
+    // the record first, so the old separate-tx code demonstrably drops `analysis` (verified: the
+    // groundings put overwrites the analysis put). With each RMW in ONE transaction both survive.
+    // fake-indexeddb runs real IDB transaction semantics, so this genuinely exercises the race.
+    const s = await openStore("t-race-ag");
+    await s.upsertItems([mkItem("a")], "2026-07-08T00:00:00Z");
+
+    await Promise.all([s.saveAnalysis("a", mkAnalysis()), s.saveGroundings("a", [] as GroundedEntity[], ["place"])]);
+
+    const rec = (await s.getRecord("a"))!;
+    expect(rec.analysis).toBeDefined(); // dropped by the old separate-tx code
+    expect(rec.regroundPending).toEqual(["place"]);
+  });
+
+  it("concurrent saveAnalysis + putPoster on the same id: both survive (no lost update)", async () => {
+    // putPoster's RMW spans two stores (posters + items) — under the fix that whole read-stamp-put
+    // is one transaction, so a concurrent writer to the same record can't drop the posterRef stamp
+    // (nor can putPoster drop the analysis). Assert the invariant the fix guarantees; separate-tx
+    // code could drop one of these two fields depending on scheduling.
+    const s = await openStore("t-race-ap");
+    await s.upsertItems([mkItem("a")], "2026-07-08T00:00:00Z");
+
+    await Promise.all([s.saveAnalysis("a", mkAnalysis()), s.putPoster("a", new Blob(["x"], { type: "image/jpeg" }))]);
+
+    const rec = (await s.getRecord("a"))!;
+    expect(rec.analysis).toBeDefined();
+    expect(rec.posterRef).toBe("poster:a");
+    expect((await s.getPoster("a"))!.type).toBe("image/jpeg");
+  });
+
   it("jobs and meta round-trip", async () => {
     const s = await openStore("t4");
     await s.putJobs([

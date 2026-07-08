@@ -127,6 +127,7 @@ async function autoScroll() {
 // AND Access-Control-Allow-Origin (so JS can read the cross-origin bytes). If this works, we can
 // also read video bytes for local Gemini visual enrichment.
 async function downloadViaFetch(n) {
+  // NOTE: reads the retired legacy `items` key (removed in Phase 3 Task 3); dead dev-only path, kept for reference — see store.ts migration.
   const { items = [] } = await chrome.storage.local.get("items");
   for (const item of items.slice(0, n)) {
     if (!item.playUrl) continue;

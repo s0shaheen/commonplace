@@ -118,31 +118,47 @@ function makeStore(db: IDBPDatabase<CommonplaceDB>): CpStore {
     },
 
     async saveAnalysis(id, analysis) {
-      const rec = await db.get("items", id);
-      if (!rec) return;
-      rec.analysis = analysis;
-      rec.status = "analyzed";
-      rec.updatedAt = analysis.analyzedAt;
-      await db.put("items", rec);
+      // Read-modify-write in ONE transaction so a concurrent writer to the same record
+      // between the get and the put cannot silently drop this analysis (lost update).
+      const tx = db.transaction("items", "readwrite");
+      const store = tx.objectStore("items");
+      const rec = await store.get(id);
+      if (rec) {
+        rec.analysis = analysis;
+        rec.status = "analyzed";
+        rec.updatedAt = analysis.analyzedAt;
+        await store.put(rec);
+      }
+      await tx.done;
     },
 
     async saveGroundings(id, g, pending) {
-      const rec = await db.get("items", id);
-      if (!rec) return;
-      rec.groundings = g;
-      rec.regroundPending = pending;
-      rec.status = "grounded";
-      await db.put("items", rec);
+      // Single-transaction RMW: see saveAnalysis. Missing record → no-op (don't create one).
+      const tx = db.transaction("items", "readwrite");
+      const store = tx.objectStore("items");
+      const rec = await store.get(id);
+      if (rec) {
+        rec.groundings = g;
+        rec.regroundPending = pending;
+        rec.status = "grounded";
+        await store.put(rec);
+      }
+      await tx.done;
     },
 
     async putPoster(id, blob) {
       const ref = `poster:${id}`;
-      await db.put("posters", { id, blob });
-      const rec = await db.get("items", id);
+      // Span BOTH stores in one transaction so the poster blob and the record's posterRef
+      // stamp commit atomically, and the item RMW can't lose a concurrent write to the record.
+      const tx = db.transaction(["posters", "items"], "readwrite");
+      await tx.objectStore("posters").put({ id, blob });
+      const items = tx.objectStore("items");
+      const rec = await items.get(id);
       if (rec) {
         rec.posterRef = ref;
-        await db.put("items", rec);
+        await items.put(rec);
       }
+      await tx.done;
       return ref;
     },
 
