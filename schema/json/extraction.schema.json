@@ -48,23 +48,11 @@
             "assertion_mode": { "$ref": "#/$defs/AssertionMode" },
             "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
           }
-        },
-        "extractor_ref": {
-          "description": "The producer of this extraction (model + version + prompt + run).",
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["model"],
-          "properties": {
-            "model": { "type": "string" },
-            "version": { "type": "string" },
-            "prompt": { "type": "string" },
-            "run": { "type": "string" }
-          }
         }
       }
     },
     "Evidence": {
-      "description": "Provenance for one extraction (ontology §4). REQUIRED, multi-valued at the extraction level. `channel`, `assertion_mode`, `confidence` are mandatory; `source_role` is the open narrower axis. `source_polarity`/`source_certainty` are Claim-oriented.",
+      "description": "Provenance for one extraction (ontology §4). REQUIRED, multi-valued at the extraction level. `channel`, `assertion_mode`, `confidence` are mandatory; `source_role` is the open narrower axis. `extractor_ref` records which extractor produced this span (load-bearing for fused multi-extractor cascades — ontology §4 places it on Evidence, not the extraction). `source_polarity`/`source_certainty` are Claim-oriented.",
       "type": "object",
       "additionalProperties": false,
       "required": ["channel", "assertion_mode", "confidence"],
@@ -76,6 +64,18 @@
         "source_role": { "type": "string" },
         "assertion_mode": { "$ref": "#/$defs/AssertionMode" },
         "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "extractor_ref": {
+          "description": "The producer of this evidence span (model + version + prompt + run). Stamped by the pipeline, not the model.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model"],
+          "properties": {
+            "model": { "type": "string" },
+            "version": { "type": "string" },
+            "prompt": { "type": "string" },
+            "run": { "type": "string" }
+          }
+        },
         "source_polarity": { "type": "string" },
         "source_certainty": { "type": "string" }
       }

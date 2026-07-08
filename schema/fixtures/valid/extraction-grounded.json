@@ -40,11 +40,11 @@
             "conformsTo": "http://www.w3.org/TR/media-frags/"
           },
           "assertion_mode": "SHOWN",
-          "confidence": 0.9
+          "confidence": 0.9,
+          "extractor_ref": { "model": "gemini-2.5", "version": "2026-06", "prompt": "extract@v1", "run": "run-001" }
         }
       ],
       "rollup": { "assertion_mode": "SHOWN", "confidence": 0.9 },
-      "extractor_ref": { "model": "gemini-2.5", "version": "2026-06", "prompt": "extract@v1", "run": "run-001" },
       "grounding": {
         "authority": "musicbrainz",
         "externalId": "5a7c1234-0000-4000-8000-000000000000",

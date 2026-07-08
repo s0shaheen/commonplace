@@ -51,6 +51,24 @@ to; base-container fixtures without `extractions` are unaffected.
   strictly from disk; an unknown/typo'd `$ref` raises `NoSuchResource` (fails
   loudly) instead of resolving to a permissive `{"type":"object"}` stub.
 
+### Fixed
+- `extraction.schema.json` — `extractor_ref` (`{model, version?, prompt?, run?}`)
+  now lives on **Evidence**, not at the extraction (`Common`) level. Ontology v3
+  §4 places it on Evidence: each evidence span records which extractor produced
+  it, which is load-bearing for fused multi-extractor cascades (one extraction can
+  carry spans from different extractors). Corrected before any consumer read the
+  extraction-level field (rc.3 is unreleased; no fixture or test exercised it). The
+  `extraction-grounded` fixture moves its `extractor_ref` into `evidence[0]`
+  accordingly. **`extractor-output.schema.json` is deliberately left untouched:** it
+  is what the model itself emits under constrained decoding, and the model cannot
+  know its own runtime ref (model/version/prompt/run are stamped by the pipeline
+  downstream, not the extractor) — so evidence there carries no `extractor_ref`.
+- `test_extractor_output_schema.py` — added two negative regression tests guarding
+  load-bearing constraints that previously had no committed guard: a mention
+  carrying a `grounding` object is rejected (`additionalProperties: false` — the
+  model never emits grounding), and a mention with `evidence: []` is rejected
+  (`minItems 1`).
+
 ## [1.0.0-rc.2] — 2026-07-08
 
 Additive fidelity pass on `item.schema.json` to close three ontology v3 §2 gaps

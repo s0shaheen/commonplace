@@ -23,3 +23,23 @@ def test_valid_output_passes():
                           "quote": "", "assertion_mode": "STATED", "confidence": 0.9}]}],
            "concepts": [], "facets": {}, "claims": [], "structured": []}
     assert validate_extractor_output(out) == []
+
+
+def _one_mention(mention):
+    return {"mentions": [mention], "concepts": [], "facets": {}, "claims": [], "structured": []}
+
+
+def test_grounding_field_rejected():
+    """The model never emits grounding — it's the downstream resolver's job.
+    `additionalProperties: false` on the mention object must reject a `grounding`."""
+    mention = {"surface": "SZA", "type": "person",
+               "evidence": [{"channel": "VERBAL_AUDIO", "assertion_mode": "STATED", "confidence": 0.9}],
+               "grounding": {"authority": "musicbrainz", "externalId": "5a7c...",
+                             "nil": False, "grounding_confidence": 0.93}}
+    assert validate_extractor_output(_one_mention(mention)) != []
+
+
+def test_zero_evidence_rejected():
+    """Every extraction element requires >=1 evidence (minItems 1)."""
+    mention = {"surface": "SZA", "type": "person", "evidence": []}
+    assert validate_extractor_output(_one_mention(mention)) != []
