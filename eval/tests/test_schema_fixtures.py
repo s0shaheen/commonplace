@@ -21,3 +21,18 @@ def test_minimal_admission_rule():
     item = {"identity": {"status": "inferred", "contentHash": "ni:///sha-256;abc"},
             "saves": [{"sources": [{"kind": "manual", "at": "2026-07-08T00:00:00Z"}]}]}
     assert validate_item(item) == []
+
+
+def test_root_gates_and_repeatable_capturedat():
+    """Ontology §2.5/§2.6: root `gates`, `captureStatus`, and repeatable `capturedAt`."""
+    item = {
+        "identity": {"status": "inferred", "contentHash": "ni:///sha-256;abc"},
+        "saves": [{"sources": [{"kind": "manual", "at": "2026-07-08T00:00:00Z"}]}],
+        "gates": {"replyControls": "everyone", "quoteControls": "followers"},
+        "captureStatus": "recaptured",
+        "capturedAt": [
+            {"value": "2026-07-08T00:00:00Z", "source": "inferred", "confidence": 0.9},
+            {"value": "2026-07-09T09:15:00Z", "source": "user", "confidence": 1},
+        ],
+    }
+    assert validate_item(item) == []

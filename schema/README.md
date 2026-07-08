@@ -35,7 +35,7 @@ and a pooled benchmark possible.
 
 ## Versioning policy
 
-- **Semver**, one line for all contract files together. Current: `1.0.0-rc.1`
+- **Semver**, one line for all contract files together. Current: `1.0.0-rc.2`
   (release-candidate freeze from ontology v3). Formal `1.0.0` is cut at
   eval-sequence step 6 per `_EVAL-METHOD.md` §1.
 - **Additive and durable.** Fields are **never deleted, only deprecated.** A

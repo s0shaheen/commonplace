@@ -3,6 +3,30 @@
 All schemas in `schema/json/` (and their SHACL/JSON-LD companions) are versioned
 together under one semver line. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-rc.2] — 2026-07-08
+
+Additive fidelity pass on `item.schema.json` to close three ontology v3 §2 gaps
+the base container omitted. All changes are purely additive — every rc.1 fixture
+and `$def` still validates unchanged; no field removed or narrowed.
+
+### Added
+- Root `gates` (ontology §2.6 context) via new `$defs/ContextGates` —
+  `{ replyControls?: string, quoteControls?: string }`, `additionalProperties:
+  false`. Captures reply/quote controls for X Communities, subreddits, Discord
+  guilds. Distinct from the `gates[]` enum inside `CaptureFidelity` (capture
+  obstacles); this one is context, not capture state.
+- Root `captureStatus` (ontology §2.5) — optional free-form `{ "type":
+  "string" }`. The ontology names the field without pinning a shape, so an open
+  string is the deliberate minimal-commitment encoding; it will be tightened
+  when the ontology defines a value set. (`item.schema.json`'s `description` now
+  notes this instead of claiming §2 is encoded "exactly".)
+
+### Changed
+- Root `capturedAt` is now repeatable (ontology §2.5 "repeatable `capturedAt`
+  on re-capture") — an `anyOf` of a single `Timestamped` **or** a non-empty
+  array of `Timestamped`. Back-compatible: an existing single-object
+  `capturedAt` still validates.
+
 ## [1.0.0-rc.1] — 2026-07-08
 
 Initial freeze from `_ONTOLOGY.md` v3; formal 1.0.0 at eval-sequence step 6
