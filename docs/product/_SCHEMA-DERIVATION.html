@@ -1,0 +1,579 @@
+<title>From a link to a library</title>
+<style>
+  :root {
+    --paper: #FAF8F1;
+    --ink: #28231B;
+    --muted: #6E6759;
+    --faint: #A39B8B;
+    --rubric: #A03A28;
+    --rubric-tint: rgba(160, 58, 40, 0.07);
+    --line: #DDD6C8;
+    --card: #F3EFE4;
+    --mono-bg: #F4F1E7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #211D17;
+      --ink: #E9E2D3;
+      --muted: #A89F8D;
+      --faint: #7A7263;
+      --rubric: #D2694F;
+      --rubric-tint: rgba(210, 105, 79, 0.10);
+      --line: #3A342A;
+      --card: #2A251D;
+      --mono-bg: #272219;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #211D17; --ink: #E9E2D3; --muted: #A89F8D; --faint: #7A7263;
+    --rubric: #D2694F; --rubric-tint: rgba(210, 105, 79, 0.10);
+    --line: #3A342A; --card: #2A251D; --mono-bg: #272219;
+  }
+  :root[data-theme="light"] {
+    --paper: #FAF8F1; --ink: #28231B; --muted: #6E6759; --faint: #A39B8B;
+    --rubric: #A03A28; --rubric-tint: rgba(160, 58, 40, 0.07);
+    --line: #DDD6C8; --card: #F3EFE4; --mono-bg: #F4F1E7;
+  }
+
+  html { background: var(--paper); }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background: var(--paper);
+    font-family: Charter, 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+    font-size: 1.075rem;
+    line-height: 1.62;
+  }
+  .wrap { max-width: 44rem; margin: 0 auto; padding: 4rem 1.4rem 6rem; }
+  p { margin: 0 0 1.05em; }
+  h1, h2, h3 { text-wrap: balance; font-weight: 600; }
+
+  .kicker {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--rubric); margin-bottom: 1.1rem;
+  }
+  h1 { font-size: 2.5rem; line-height: 1.12; margin: 0 0 1rem; }
+  .dek { font-size: 1.16rem; color: var(--muted); margin-bottom: 0; }
+
+  .toc {
+    margin: 2.6rem 0 0; padding: 1.2rem 1.4rem;
+    border: 1px solid var(--line); background: var(--card);
+  }
+  .toc b { font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .toc ol { margin: 0.6rem 0 0; padding-left: 1.4rem; columns: 2; column-gap: 2.2rem; font-size: 0.92rem; }
+  .toc li { margin-bottom: 0.28rem; break-inside: avoid; }
+  @media (max-width: 600px) { .toc ol { columns: 1; } }
+
+  .act {
+    margin: 4.2rem 0 2.2rem; padding-top: 1.6rem;
+    border-top: 3px double var(--line);
+  }
+  .act .label {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+  }
+  .act h2 { font-size: 1.6rem; margin: 0.3rem 0 0.4rem; }
+  .act p { color: var(--muted); font-size: 1rem; margin: 0; }
+
+  .step { margin: 3rem 0 0; }
+  .stepnum {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.72rem; letter-spacing: 0.13em; text-transform: uppercase;
+    color: var(--rubric);
+  }
+  .step h3 { font-size: 1.32rem; margin: 0.2rem 0 0.7rem; }
+
+  .break-line { color: var(--ink); }
+  .break-line em { font-style: italic; }
+
+  pre.schema {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.83rem; line-height: 1.58;
+    background: var(--mono-bg); border: 1px solid var(--line);
+    padding: 0.9rem 0 0.9rem 0; margin: 1.2rem 0;
+    overflow-x: auto; color: var(--muted);
+  }
+  pre.schema .ln { display: block; padding: 0 1rem 0 1.6rem; white-space: pre; }
+  pre.schema .new {
+    color: var(--ink); background: var(--rubric-tint);
+    border-left: 3px solid var(--rubric); padding-left: calc(1.6rem - 3px);
+    position: relative;
+  }
+  pre.schema .cm { color: var(--faint); }
+  pre.schema .new .cm { color: var(--muted); }
+
+  .rule {
+    display: flex; gap: 0.9rem; align-items: baseline;
+    border: 1px solid var(--line); border-left: 3px solid var(--rubric);
+    background: var(--card); padding: 0.85rem 1.1rem; margin: 1.3rem 0 0.4rem;
+  }
+  .rule .n {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--rubric); white-space: nowrap;
+  }
+  .rule .t { font-size: 0.98rem; line-height: 1.5; }
+
+  .diagram { margin: 1.4rem 0; border: 1px solid var(--line); background: var(--card); padding: 1.2rem 1.2rem 1rem; overflow-x: auto; }
+  .diagram .cap {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); margin-top: 0.9rem;
+  }
+
+  /* three clocks */
+  .clocks { display: flex; align-items: flex-start; gap: 0; min-width: 480px; }
+  .clock { flex: 1; position: relative; padding-top: 1.1rem; }
+  .clock::before {
+    content: ""; position: absolute; top: 0.35rem; left: 0; right: 0;
+    border-top: 1px solid var(--faint);
+  }
+  .clock::after {
+    content: ""; position: absolute; top: 0.13rem; left: 50%;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--rubric); transform: translateX(-50%);
+  }
+  .clock div { text-align: center; font-size: 0.85rem; }
+  .clock .who { color: var(--muted); font-size: 0.76rem; }
+  .clock code { font-family: ui-monospace, Menlo, monospace; font-size: 0.78rem; color: var(--ink); }
+
+  /* ladder */
+  .ladder { display: flex; flex-direction: column; gap: 0; max-width: 30rem; }
+  .rung { border: 1px solid var(--faint); padding: 0.65rem 0.9rem; background: var(--paper); }
+  .rung b { font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem; letter-spacing: 0.06em; }
+  .rung span { display: block; font-size: 0.86rem; color: var(--muted); }
+  .rung-arrow { align-self: center; color: var(--muted); font-size: 0.8rem; padding: 0.18rem 0; font-family: ui-monospace, Menlo, monospace; }
+
+  /* six doors */
+  .doors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; min-width: 480px; }
+  .door { border: 1px solid var(--faint); padding: 0.6rem 0.75rem; background: var(--paper); }
+  .door b { font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; letter-spacing: 0.05em; display: block; margin-bottom: 0.15rem; }
+  .door span { font-size: 0.82rem; color: var(--muted); line-height: 1.4; display: block; }
+
+  /* fork */
+  .fork { min-width: 500px; font-size: 0.88rem; }
+  .fork .q { border: 1px solid var(--faint); display: inline-block; padding: 0.4rem 0.8rem; background: var(--paper); }
+  .fork .branch { display: flex; gap: 0.8rem; margin-top: 0.55rem; }
+  .fork .arm { flex: 1; }
+  .fork .lead { font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--muted); padding: 0.1rem 0 0.3rem 0.2rem; }
+  .fork .out { border: 1px solid var(--faint); border-left: 3px solid var(--rubric); padding: 0.5rem 0.7rem; background: var(--paper); }
+  .fork .out b { font-size: 0.86rem; }
+  .fork .out span { display: block; font-size: 0.8rem; color: var(--muted); }
+
+  /* nesting */
+  .nest { border: 1px solid var(--faint); padding: 0.8rem; background: var(--paper); max-width: 30rem; }
+  .nest .tag { font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--muted); display: block; margin-bottom: 0.4rem; }
+  .nest .nest { margin: 0; border-left: 3px solid var(--rubric); }
+
+  /* receipt anatomy */
+  .receipt { display: grid; grid-template-columns: minmax(15rem, 1.25fr) 1fr; gap: 0 1.1rem; min-width: 520px; align-items: center; }
+  .receipt .r {
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem;
+    background: var(--paper); border: 1px solid var(--faint); border-bottom: none;
+    padding: 0.45rem 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .receipt .r:nth-last-child(2) { border-bottom: 1px solid var(--faint); }
+  .receipt .a { font-size: 0.82rem; color: var(--muted); padding: 0.2rem 0; }
+  .receipt .a b { color: var(--ink); font-weight: 600; }
+
+  .rules-recap { margin-top: 1rem; padding: 0; list-style: none; counter-reset: r; }
+  .rules-recap li {
+    counter-increment: r; padding: 0.5rem 0 0.5rem 3.4rem; position: relative;
+    border-top: 1px solid var(--line); font-size: 0.95rem;
+  }
+  .rules-recap li::before {
+    content: counter(r, decimal-leading-zero);
+    position: absolute; left: 0.2rem; top: 0.55rem;
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.78rem; color: var(--rubric);
+  }
+
+  .aside { font-size: 0.93rem; color: var(--muted); border-left: 2px solid var(--line); padding-left: 1rem; margin: 1.1em 0; }
+  .footer { margin-top: 4rem; padding-top: 1.4rem; border-top: 3px double var(--line); color: var(--muted); font-size: 0.9rem; }
+  code { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.86em; background: var(--mono-bg); padding: 0.06em 0.3em; border: 1px solid var(--line); }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+  <div class="kicker">Commonplace · working notes · 2026</div>
+  <h1>From a link to a library</h1>
+  <p class="dek">How the schema behind a personal media library gets derived, one honest failure at a time. Nothing here is decreed. We start with the smallest thing a person can save, let real examples break the design over and over, and let each break earn exactly one new piece. By the end, every field has a story you can retell at a whiteboard.</p>
+
+  <div class="toc">
+    <b>The sixteen steps</b>
+    <ol>
+      <li>Start with a link</li>
+      <li>The thing with no address</li>
+      <li>Links rot</li>
+      <li>You are part of the data</li>
+      <li>One episode, two apps</li>
+      <li>One save, many things</li>
+      <li>A photo of a tweet</li>
+      <li>Six doors</li>
+      <li>Manufactured witnesses</li>
+      <li>Which Joe's?</li>
+      <li>Ideas have no address</li>
+      <li>"Worth the hype"</li>
+      <li>Content with a shape</li>
+      <li>Same subject, different creature</li>
+      <li>No claim without a receipt</li>
+      <li>The whole record</li>
+    </ol>
+  </div>
+
+  <!-- ═══════════════ ACT I ═══════════════ -->
+  <div class="act">
+    <div class="label">Act one</div>
+    <h2>The thing you saved</h2>
+    <p>Before we can understand content, we have to be able to hold it. Act one is about the container: identity, time, ownership, and multiplicity.</p>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 1</div>
+    <h3>Start with a link</h3>
+    <p>"Save this for later." The smallest schema that keeps the promise is one field:</p>
+    <pre class="schema"><span class="ln new">{ "url": "https://www.tiktok.com/@bhaihours/video/752102..." }</span></pre>
+    <p>For a bookmark manager circa 2005, we are done. Everything that follows is what happens when you take the promise seriously: later might be years away, the thing might be gone by then, and "this" turns out to be a slippery word.</p>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 2</div>
+    <h3>The thing with no address</h3>
+    <p class="break-line"><em>What breaks it:</em> you drag a screenshot in from your camera roll. It has no URL. Nothing ever gave it one.</p>
+    <p>If <code>url</code> is required, an honest piece of content gets rejected at the door. And once you see it, you see the deeper mistake: a URL was never the identity of anything. It was one kind of handle. A TikTok also has a platform ID that outlives URL changes. A local file has only its bytes, and bytes can be fingerprinted: run them through a hash function and the same file always produces the same short string.</p>
+    <pre class="schema"><span class="ln new">{ "identity": {</span>
+<span class="ln new">    "status": "platform_verified | inferred | synthetic",</span>
+<span class="ln new">    "permalink":   "https://...",        <span class="cm">// when one exists</span></span>
+<span class="ln new">    "canonicalId": "7521027298...",      <span class="cm">// the platform's own ID</span></span>
+<span class="ln new">    "contentHash": "sha-256:9f2ab..."    <span class="cm">// the bytes themselves</span></span>
+<span class="ln new">} }</span>                                     <span class="ln cm">// at least one handle, any kind</span></pre>
+    <div class="rule"><span class="n">Rule 1</span><span class="t">Never require a field that some real thing cannot supply. Only two facts are universal: the thing exists, and you saved it at some moment.</span></div>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 3</div>
+    <h3>Links rot</h3>
+    <p class="break-line"><em>What breaks it:</em> you click a saved link two years later. Paywall. Or the article was edited. Or the account is gone and the page is a 404.</p>
+    <p>What you saved and what is out there stopped being the same thing the moment you saved it. So the library stores its own copy where it can, records when it looked, and admits how much it actually got. A paywalled article where we only captured the headline should say so, on the record, forever. And the live thing keeps its own status, checked over time: still up, changed, delisted, dead.</p>
+    <pre class="schema"><span class="ln">{ "identity": { ... },</span>
+<span class="ln new">  "assets": [ { "blobRef": "...", "contentHash": "..." } ],   <span class="cm">// our copy</span></span>
+<span class="ln new">  "capturedAt": "2026-07-06T20:14Z",</span>
+<span class="ln new">  "captureFidelity": { "level": "full | partial | metadata_only",</span>
+<span class="ln new">                       "gate": "none | paywall | login | drm" },</span>
+<span class="ln new">  "lifecycle": { "state": "live | changed | delisted | dead",</span>
+<span class="ln new">                 "lastCheckedAt": "..." } }</span></pre>
+    <div class="diagram">
+      <div class="clocks">
+        <div class="clock"><div><code>createdAt</code></div><div class="who">the creator posted it<br>(their clock)</div></div>
+        <div class="clock"><div><code>savedAt</code></div><div class="who">you tapped save<br>(your clock)</div></div>
+        <div class="clock"><div><code>capturedAt</code></div><div class="who">we stored a copy<br>(our clock)</div></div>
+        <div class="clock"><div><code>lastCheckedAt</code></div><div class="who">we looked again<br>(ongoing)</div></div>
+      </div>
+      <div class="cap">Four different moments. Collapsing them into one "date" field is how libraries quietly lie.</div>
+    </div>
+    <div class="rule"><span class="n">Rule 2</span><span class="t">A save is an observation of the world at a moment. Observations carry timestamps, and different clocks never share a field.</span></div>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 4</div>
+    <h3>You are part of the data</h3>
+    <p class="break-line"><em>What breaks it:</em> which folder you filed it in. The note you wrote on it. The fact that you favorited it on Tuesday and liked it again on Friday.</p>
+    <p>None of those are facts about the video. They are facts about you and the video. Mix them into one object and you can never share a record, dedupe a record, or answer "when did I save this" separately from "when was this made." So the object splits in two. Libraries solved this centuries ago: the book is one thing, the catalog card that says where it sits and who checked it out is another.</p>
+    <pre class="schema"><span class="ln new">{ "save": {                                <span class="cm">// yours</span></span>
+<span class="ln new">    "sources": [ { "kind": "favorites", "at": "Tue" },</span>
+<span class="ln new">                 { "kind": "likes",     "at": "Fri" } ],</span>
+<span class="ln new">    "collections": ["food"], "note": "..." },</span>
+<span class="ln new">  "post": {                                <span class="cm">// the world's</span></span>
+<span class="ln">    "identity": { ... }, "capturedAt": ..., "lifecycle": ... } }</span></pre>
+    <div class="rule"><span class="n">Rule 3</span><span class="t">Facts about the world and facts about you live in different objects.</span></div>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 5</div>
+    <h3>One episode, two apps</h3>
+    <p class="break-line"><em>What breaks it:</em> the same podcast episode exists on Spotify and on Apple Podcasts. Two pages, two platform IDs. One episode.</p>
+    <p>Save both and a naive library counts two unrelated things. The fix is a third level above the post: the work itself. And here the world helps us, because it already maintains identities at this level. Podcast feeds carry a shared GUID by spec. Papers have DOIs. Books have ISBNs. Recordings have ISRCs. When such an identifier exists, we record it, and the two posts join.</p>
+    <pre class="schema"><span class="ln">{ "post": {</span>
+<span class="ln new">    "workRef": { "scheme": "podcast_guid | doi | isbn | isrc",</span>
+<span class="ln new">                 "id": "..." },   <span class="cm">// same on Spotify + Apple</span></span>
+<span class="ln">    ... } }</span></pre>
+    <div class="diagram">
+      <div class="ladder">
+        <div class="rung"><b>Work</b><span>the episode itself · "Ep. 214" · one podcast GUID</span></div>
+        <div class="rung-arrow">▲ appears as</div>
+        <div class="rung"><b>Post</b><span>its appearance on Spotify · its appearance on Apple</span></div>
+        <div class="rung-arrow">▲ kept by</div>
+        <div class="rung"><b>Save</b><span>your act of keeping it · folder, note, moment</span></div>
+      </div>
+      <div class="cap">Librarians formalized this ladder in the 1990s (they call it FRBR). We walked into it backwards, which is a good sign.</div>
+    </div>
+    <div class="rule"><span class="n">Rule 4</span><span class="t">Reuse identities the world already maintains before minting your own.</span></div>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 6</div>
+    <h3>One save, many things</h3>
+    <p class="break-line"><em>What breaks it:</em> an Instagram carousel. Twelve images, one permalink. Or you save a thread: thirty-nine posts you want kept as one item.</p>
+    <p>A flat object cannot hold an ordered list of other objects. And there is a subtle cousin hiding here: a playlist also holds many things, but differently. The carousel's slides belong to it and have no life of their own. A playlist merely points at songs that exist independently. Two relationships, so two fields, and the save itself records its scope: did you mean the one post, or the whole thread it sits in?</p>
+    <pre class="schema"><span class="ln">{ "post": {</span>
+<span class="ln new">    "children":   [ { "order": 1, "post": {...} }, ... ],   <span class="cm">// parts of it</span></span>
+<span class="ln new">    "membership": [ { "container": "...", "order": 7 } ],   <span class="cm">// listed in</span></span>
+<span class="ln">    ... },</span>
+<span class="ln">  "save": {</span>
+<span class="ln new">    "scope": { "kind": "post | thread | container",</span>
+<span class="ln new">               "members": ["...", "..."] },</span>
+<span class="ln">    ... } }</span></pre>
+    <div class="rule"><span class="n">Rule 5</span><span class="t">Containment and curation are different relationships. One field cannot hold both.</span></div>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 7</div>
+    <h3>A photo of a tweet</h3>
+    <p class="break-line"><em>What breaks it:</em> you screenshot a tweet and save the image.</p>
+    <p>What you saved is a photo. What you meant is the tweet, which has an author, a claim, and a life of its own. Treat the screenshot as a mere image and the same tweet saved natively and saved by screenshot count as strangers. So a post can declare that it depicts another thing, as an inference, with a confidence attached, and the link can chain: a screenshot of a quote-tweet of a TikTok is three layers, each recorded.</p>
+    <pre class="schema"><span class="ln">{ "post": { "mediaKind": "photo",</span>
+<span class="ln new">    "references": [ { "rel": "depicts",</span>
+<span class="ln new">        "target": { "platform": "x", "identity": { "status": "inferred" } },</span>
+<span class="ln new">        "confidence": 0.86 } ],</span>
+<span class="ln">    ... } }</span></pre>
+    <div class="diagram">
+      <div class="nest">
+        <span class="tag">what you saved: a photo (has a content hash, no permalink)</span>
+        <div class="nest">
+          <span class="tag">what it depicts: a tweet (inferred, confidence 0.86)</span>
+          <div class="nest" style="border-bottom: 1px solid var(--faint);">
+            <span class="tag" style="margin-bottom:0;">what the tweet quotes: a TikTok (chain continues)</span>
+          </div>
+        </div>
+      </div>
+      <div class="cap">Dedup and search land on the innermost thing you meant. The outer photo is still kept, untouched.</div>
+    </div>
+    <div class="rule"><span class="n">Rule 6</span><span class="t">Model what the user meant without losing what they actually saved.</span></div>
+  </div>
+
+  <!-- ═══════════════ ACT II ═══════════════ -->
+  <div class="act">
+    <div class="label">Act two</div>
+    <h2>What the thing means</h2>
+    <p>The container is sound. Now the harder half: a library you can search by meaning has to know what each item says, shows, and refers to. This is where most tools wave their hands. We will not.</p>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 8</div>
+    <h3>Six doors</h3>
+    <p class="break-line"><em>What breaks it:</em> "what does this TikTok say?" is really several questions wearing one coat.</p>
+    <p>A voice says one thing. The caption says another. Text burned into the frames says a third. The pictures themselves show something, the song sets a mood, and the platform attaches its own labels. Mash them into one text blob and you can never again ask "was that said out loud, or written on screen?" So content arrives through named doors, and we chose the names by how a person perceives, not by what a platform ships. That choice is what lets a TikTok and a Reddit post live in one library: the Reddit post simply has fewer doors open.</p>
+    <div class="diagram">
+      <div class="doors">
+        <div class="door"><b>VERBAL_AUDIO</b><span>spoken words: narration, dialogue</span></div>
+        <div class="door"><b>VERBAL_TEXT</b><span>written words: caption, body, title</span></div>
+        <div class="door"><b>VISUAL_TEXT</b><span>text inside the frames: overlays, signs</span></div>
+        <div class="door"><b>VISUAL_SCENE</b><span>the imagery itself: places, objects, faces</span></div>
+        <div class="door"><b>NONVERBAL_AUDIO</b><span>music and sound that is not speech</span></div>
+        <div class="door"><b>STRUCTURED_METADATA</b><span>platform fields: hashtags, music tag, subreddit</span></div>
+      </div>
+      <div class="cap">Six doors, fixed forever. A new platform opens some and leaves others shut. The list never grows per platform.</div>
+    </div>
+    <pre class="schema"><span class="ln new">"signals": [</span>
+<span class="ln new">  { "id": "audio",   "channel": "VERBAL_AUDIO" },</span>
+<span class="ln new">  { "id": "caption", "channel": "VERBAL_TEXT" },</span>
+<span class="ln new">  { "id": "frames",  "channel": "VISUAL_SCENE" } ]</span></pre>
+    <div class="rule"><span class="n">Rule 7</span><span class="t">Describe content by human perception, not platform feature. Perception is what survives the next platform.</span></div>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 9</div>
+    <h3>Manufactured witnesses</h3>
+    <p class="break-line"><em>What breaks it:</em> "the transcript" sounds like a fact about the video. It is a machine's guess at the audio.</p>
+    <p>Speech recognition mishears names. Text recognition misreads stylized fonts. These manufactured signals are enormously useful and quietly fallible, so each one records what it was made from and by what. When a name looks misspelled you can then ask the right question: did the creator misspeak, or did the transcriber mishear? Each signal also carries its language, and a translation is simply one more manufactured signal pointing back at its source.</p>
+    <pre class="schema"><span class="ln">"signals": [</span>
+<span class="ln">  { "id": "audio",      "channel": "VERBAL_AUDIO" },</span>
+<span class="ln new">  { "id": "transcript", "channel": "VERBAL_TEXT",</span>
+<span class="ln new">    "producer": "asr:whisper-v3", "wasDerivedFrom": "audio",</span>
+<span class="ln new">    "language": "ko" },</span>
+<span class="ln new">  { "id": "transcript-en", "wasDerivedFrom": "transcript",</span>
+<span class="ln new">    "producer": "translation:...", "language": "en" } ]</span></pre>
+    <div class="rule"><span class="n">Rule 8</span><span class="t">When a witness is manufactured from another, keep the manufacturing record.</span></div>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 10</div>
+    <h3>Which Joe's?</h3>
+    <p class="break-line"><em>What breaks it:</em> a video praises a restaurant called Yoo Yee. Next month you search "that Cantonese place." The strings do not match. You did not save a spelling; you saved a place.</p>
+    <p>For the library to connect them, "Yoo Yee" has to stop being text and become a thing: the restaurant, with a public identifier that the rest of the world also uses. A Google place ID. A MusicBrainz recording ID for a song. A Wikidata number for a film. This step, called grounding, is where two hard rules were earned the painful way.</p>
+    <p>First: the language model never writes the identifier. Ask a model for an ID and it produces something plausible, and a plausible wrong ID poisons a library silently. The model may only say "a song called X by artist Y plays here." Ordinary, boring code then searches the registry and finds the match, or does not.</p>
+    <p>Second: "no match" is an answer, and a good one. From our own corpus: the song "jazz is for ordinary people" by berlioz resolves to a real MusicBrainz recording. The audio labeled "original sound - sunny" resolves to nothing, because TikTok original sounds have no global registry, and the correct record says exactly that instead of inventing one.</p>
+    <pre class="schema"><span class="ln new">"extractions": [</span>
+<span class="ln new">  { "role": "named_entity",</span>
+<span class="ln new">    "referent": { "kind": "place", "surface": "Yoo Yee" },</span>
+<span class="ln new">    "grounding": { "authority": "google_places",</span>
+<span class="ln new">                   "externalId": "ChIJ...", "confidence": 0.91 } },</span>
+<span class="ln new">  { "role": "named_entity",</span>
+<span class="ln new">    "referent": { "kind": "music_recording",</span>
+<span class="ln new">                  "surface": "original sound - sunny" },</span>
+<span class="ln new">    "grounding": { "authority": "musicbrainz",</span>
+<span class="ln new">                   "externalId": null,          <span class="cm">// honest</span></span>
+<span class="ln new">                   "nil": "no_match_exists" } } ]</span></pre>
+    <div class="rule"><span class="n">Rule 9</span><span class="t">The model never writes the ID, and an honest "no match" outranks a confident wrong answer.</span></div>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 11</div>
+    <h3>Ideas have no address</h3>
+    <p class="break-line"><em>What breaks it:</em> the same video is also about sourdough hydration. No registry hands out IDs for ideas with pins on a map.</p>
+    <p>Yet "about sourdough hydration" is exactly what you will search for. The test that separates the cases: could there be many of it? Yoo Yee names one specific place, an instance. Sourdough hydration names a kind of thing, a concept. Concepts resolve against subject vocabularies instead of registries (Wikipedia's concept entries, the news industry's topic lists), and near misses earn partial credit: tagging "bread baking" when the truth is "sourdough hydration" is close, and the grading knows it. For an instance, close does not exist. You either found the right restaurant or you did not.</p>
+    <div class="diagram">
+      <div class="fork">
+        <span class="q">a mention: is it one specific thing?</span>
+        <div class="branch">
+          <div class="arm">
+            <div class="lead">yes, an instance</div>
+            <div class="out"><b>Named entity</b><span>resolve to a registry ID.<br>right or wrong, no middle.</span></div>
+          </div>
+          <div class="arm">
+            <div class="lead">no, a kind or idea</div>
+            <div class="out"><b>Concept</b><span>resolve to a subject vocabulary.<br>near misses count.</span></div>
+          </div>
+          <div class="arm">
+            <div class="lead">no confident match anywhere</div>
+            <div class="out"><b>Free tag</b><span>kept as-is. promoted to the<br>vocabulary if it keeps recurring.</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="cap">The routing question every mention passes through. Memes and trends ride the concept arm with their own anchor list.</div>
+    </div>
+    <div class="rule"><span class="n">Rule 10</span><span class="t">Things and ideas ground differently. Forcing one machinery onto both breaks both.</span></div>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 12</div>
+    <h3>"Worth the hype"</h3>
+    <p class="break-line"><em>What breaks it:</em> the caption says Yoo Yee is worth every bit of the hype. That is not a thing and not an idea. It is a claim.</p>
+    <p>You cannot look a claim up anywhere. The only fair questions are: did the video actually assert this, and did we capture the assertion faithfully? So claims are stored as propositions, linked to the things and ideas they are about, and graded on faithfulness to the source. Note what the library refuses to do: it certifies "this video said this." It never certifies "this is true." Deciding truth is a fact-checker's job, and a tag generator that pretends otherwise is a misinformation machine with a nice interface.</p>
+    <pre class="schema"><span class="ln new">{ "role": "claim",</span>
+<span class="ln new">  "referent": { "text": "Yoo Yee lives up to its hype",</span>
+<span class="ln new">                "predicate": "recommends",</span>
+<span class="ln new">                "about": ["#the-yoo-yee-entity"] },</span>
+<span class="ln new">  "grounding": null }                <span class="cm">// by design: graded on faithfulness, never linked</span></pre>
+    <div class="rule"><span class="n">Rule 11</span><span class="t">Record assertions as assertions. Grade faithfulness to the source, never truth about the world.</span></div>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 13</div>
+    <h3>Content with a shape</h3>
+    <p class="break-line"><em>What breaks it:</em> a recipe video. "About pasta" is true and useless. The value is in the parts: ingredients, quantities, steps in order.</p>
+    <p>Some content has a known shape, and when it does, the shape is worth more than any summary. So the schema recognizes templates (a recipe, a workout, a ranked list, a how-to) and fills their slots, with each slot pointing back down at the layers below: an ingredient is a food concept, a mentioned brand of pan is an entity. Capture the shape and "what can I cook from what's in my fridge" becomes a query instead of a wish.</p>
+    <pre class="schema"><span class="ln new">{ "role": "structured_content",</span>
+<span class="ln new">  "shell": "Recipe",</span>
+<span class="ln new">  "slots": { "ingredients": [ { "concept": "#brown-butter", "qty": "3 tbsp",</span>
+<span class="ln new">                                "observedAt": "..." } ],</span>
+<span class="ln new">             "steps": [ "...", "..." ] } }</span></pre>
+    <div class="rule"><span class="n">Rule 12</span><span class="t">When content has a known shape, capture the shape, not just a summary of it.</span></div>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 14</div>
+    <h3>Same subject, different creature</h3>
+    <p class="break-line"><em>What breaks it:</em> two videos about knee pain. One is a physiotherapist's careful tutorial. The other is a comedian's skit.</p>
+    <p>Identical subject, opposite nature, and "about knee pain" describes both. What separates them is not another subject but a different kind of descriptor: genre, intent, mood, who is speaking. Each of these is an independent dial with a small fixed set of values, and the dials combine freely. The tempting alternative, one big tree of categories, explodes on contact: you would need a branch for funny tutorials about health by professionals, and then another for every other combination. A librarian in 1930s India, S. R. Ranganathan, worked this out for physical libraries. Independent dials multiply cleanly; trees do not.</p>
+    <pre class="schema"><span class="ln new">"facets": { "genre": "tutorial",   <span class="cm">// or: skit, review, haul...</span></span>
+<span class="ln new">            "intent": "teach",     <span class="cm">// or: sell, entertain, vent...</span></span>
+<span class="ln new">            "affect": "calm",</span>
+<span class="ln new">            "creatorRole": "professional" }</span></pre>
+    <div class="rule"><span class="n">Rule 13</span><span class="t">Independent descriptors stay independent. Dials, never one giant tree.</span></div>
+  </div>
+
+  <!-- ═══════════════ ACT III ═══════════════ -->
+  <div class="act">
+    <div class="label">Act three</div>
+    <h2>Proof</h2>
+    <p>Acts one and two produce descriptions. Act three is what makes them trustworthy, which is the difference between a library and a rumor mill.</p>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 15</div>
+    <h3>No claim without a receipt</h3>
+    <p class="break-line"><em>What breaks it:</em> the machine says this video mentions Nike. Says who? Based on what?</p>
+    <p>If you cannot ask, you cannot trust, and an untrusted library is decoration. So every extraction, whether entity, concept, claim, or facet, must carry evidence: which signal it came from, where exactly inside it (a quoted phrase, a time range, a region of a frame), and how it knew. Said out loud, shown on screen, reported secondhand, or inferred from context. Evidence is plural because arrival is plural: the swoosh in frame two and the word in the caption are two receipts for one entity, each with its own confidence. And it is required. An extraction arriving with zero receipts is rejected as a bug.</p>
+    <p>One requirement, three payoffs. The user can see why the library believes something. The accuracy becomes measurable, since receipts can be graded against a human-labeled answer key. And uncertainty becomes honest: inferred is labeled inferred, and scores can be reported separately for said versus guessed.</p>
+    <div class="diagram">
+      <div class="receipt">
+        <div class="r">"signal": "caption"</div><div class="a"><b>where it came from</b> · which door</div>
+        <div class="r">"selector": { "quote": "Yoo Yee" }</div><div class="a"><b>where exactly</b> · a span, a time range, a frame region</div>
+        <div class="r">"assertionMode": "STATED"</div><div class="a"><b>how it knew</b> · stated, shown, reported, inferred</div>
+        <div class="r">"confidence": 0.98</div><div class="a"><b>how sure</b> · calibrated, not decorative</div>
+        <div class="r">"extractor": "engine@1.4.0"</div><div class="a"><b>who says so</b> · model and version, for the audit trail</div>
+      </div>
+      <div class="cap">Anatomy of one receipt. Every extracted fact carries at least one.</div>
+    </div>
+    <div class="rule"><span class="n">Rule 14</span><span class="t">An extraction without evidence is a bug, not a row.</span></div>
+  </div>
+
+  <div class="step">
+    <div class="stepnum">Step 16</div>
+    <h3>The whole record</h3>
+    <p>Here is the Yoo Yee video, a real item from a real 4,661-item corpus, assembled. Every field below was earned by one of the fifteen steps above.</p>
+    <pre class="schema"><span class="ln">{ "save":  { "sources": [{"kind":"favorites","at":"..."},{"kind":"likes","at":"..."}],</span>
+<span class="ln">             "scope": { "kind": "post" } },</span>
+<span class="ln">  "post":  { "identity": { "status": "platform_verified", "canonicalId": "7643844...",</span>
+<span class="ln">                           "permalink": "https://tiktok.com/..." },</span>
+<span class="ln">             "creator": "@...", "mediaKind": "video",</span>
+<span class="ln">             "body": "Yoo Yee is worth every bit of the hype...",</span>
+<span class="ln">             "assets": [ { "blobRef": "poster", "contentHash": "..." } ],</span>
+<span class="ln">             "capturedAt": "...", "captureFidelity": { "level": "full" },</span>
+<span class="ln">             "lifecycle": { "state": "live", "lastCheckedAt": "..." } },</span>
+<span class="ln">  "signals": [ "caption", "audio", "transcript ⇠ audio", "frames", "metadata" ],</span>
+<span class="ln">  "extractions": [</span>
+<span class="ln">    entity   "Yoo Yee" → google_places ChIJ...        (caption STATED + frames SHOWN),</span>
+<span class="ln">    entity   "Coffee &amp; Vinyl - Emi Izumi" → NIL       (metadata STATED),</span>
+<span class="ln">    concept  "Cantonese cuisine" → wikidata Q...      (transcript INFERRED),</span>
+<span class="ln">    claim    "lives up to its hype" → faithfulness    (caption STATED),</span>
+<span class="ln">    facets   genre: review · intent: persuade         (whole item) ] }</span></pre>
+    <p>Three meta-rules keep the object alive for the next decade rather than the next sprint.</p>
+    <p><strong>Grow by adding.</strong> A field, once shipped, never changes meaning. Retired fields are marked deprecated and kept, because thousands of stored items cannot be re-asked. Everything in this derivation was additive for exactly this reason.</p>
+    <p><strong>One base, many profiles.</strong> Every platform is an adapter plus a small profile of platform-only extras. The base object never changes when a platform is added, and the test is mechanical: every item, from a TikTok to a screenshot to a PDF, validates against the same base shape. That single check is what makes "show me every restaurant I ever saved, from any app" a query rather than a feature request.</p>
+    <p><strong>Grade each layer with its own ruler.</strong> Entity IDs are right or wrong. Concepts earn partial credit. Claims are graded on faithfulness, facets on plain classification accuracy. Averaging those into one number would be statistically meaningless, so the published scorecard is a small table, one honest metric per layer, with "no match" rates shown rather than hidden.</p>
+    <div class="rule"><span class="n">Rule 15</span><span class="t">Grow by addition. Validate everything against one base. Grade each kind of meaning on its own terms.</span></div>
+  </div>
+
+  <!-- ═══════════════ EPILOGUE ═══════════════ -->
+  <div class="act">
+    <div class="label">Epilogue</div>
+    <h2>What writing this exposed</h2>
+    <p>Deriving a design in public doubles as a review of it. Four things surfaced during the writing.</p>
+  </div>
+
+  <div class="step">
+    <p><strong>Language was missing.</strong> Nothing recorded that a transcript is in Korean, or that a translation exists. Signals now carry a language tag, and a translation is just another manufactured signal under rule 8. No new machinery.</p>
+    <p><strong>Save timestamps were too coarse.</strong> "Favorited Tuesday, liked Friday" is two moments, and the old shape kept one. Each source on a save now carries its own time.</p>
+    <p><strong>Volatile values wanted one pattern.</strong> A price, a like count, and a "still alive?" check are the same species: a value plus the moment we observed it. One observation pattern now covers all of them instead of three ad hoc fields, and re-observing simply appends.</p>
+    <p><strong>Your own notes need nothing new.</strong> A note you write yourself is a post whose creator is you and whose only open door is written words. The schema absorbed it without an edit. When a case you never designed for fits without change, the derivation is doing its job.</p>
+
+    <div class="aside">The old name for a book like this library is a commonplace book: collected fragments, indexed by subject, annotated in the margins, kept for reuse. Every field above exists to keep that old promise, with receipts.</div>
+
+    <h3 style="margin-top:2.4rem;">The fifteen rules, in one place</h3>
+    <ol class="rules-recap">
+      <li>Never require a field that some real thing cannot supply.</li>
+      <li>A save is an observation; observations carry timestamps, and different clocks never share a field.</li>
+      <li>Facts about the world and facts about you live in different objects.</li>
+      <li>Reuse identities the world already maintains before minting your own.</li>
+      <li>Containment and curation are different relationships.</li>
+      <li>Model what the user meant without losing what they actually saved.</li>
+      <li>Describe content by human perception, not platform feature.</li>
+      <li>When a witness is manufactured from another, keep the manufacturing record.</li>
+      <li>The model never writes the ID; an honest "no match" outranks a confident wrong answer.</li>
+      <li>Things and ideas ground differently.</li>
+      <li>Record assertions as assertions; grade faithfulness, never truth.</li>
+      <li>When content has a known shape, capture the shape.</li>
+      <li>Independent descriptors stay independent.</li>
+      <li>An extraction without evidence is a bug, not a row.</li>
+      <li>Grow by addition; one base, many profiles; grade each layer on its own terms.</li>
+    </ol>
+  </div>
+
+  <div class="footer">
+    Commonplace, working notes. The schema described here is the v3 draft; the derivation is also its design review, and the four epilogue fixes fold into the next revision.
+  </div>
+
+</div>
