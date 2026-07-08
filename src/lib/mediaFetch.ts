@@ -67,3 +67,20 @@ export async function fetchSubtitles(url: string): Promise<string> {
     return "";
   }
 }
+
+// Fetch the post's cover/poster image as a single inline keyframe. Used for slideshows (no
+// seekable video) and as the poster-adjacent fallback when a clip can't be decoded for
+// keyframe extraction (keyframeTimes returns [1] for null/0 duration). Returns [] on any
+// failure so the orchestrator records media_fetch_failed rather than throwing.
+export async function fetchPosterFrames(item: CapturedItem): Promise<MediaPart[]> {
+  if (!item.cover) return [];
+  try {
+    const res = await fetch(item.cover, { credentials: "include" });
+    if (!res.ok) return [];
+    const blob = await res.blob();
+    if (blob.size > INLINE_LIMIT) return [];
+    return [{ mimeType: blob.type || "image/jpeg", data: await blobToBase64(blob) }];
+  } catch {
+    return [];
+  }
+}

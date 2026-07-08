@@ -61,7 +61,8 @@ export function buildMediaBody(prompt: string, media: MediaPart[]): GeminiBody {
   return { contents: [{ parts }], generationConfig: buildGenerationConfig() };
 }
 
-function stripFences(text: string): string {
+// Shared with the Ollama lane: strip a ```json … ``` fence the model may wrap output in.
+export function stripFences(text: string): string {
   return text
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
@@ -148,6 +149,14 @@ function validateExtractorOutput(v: unknown): v is ExtractorOutput {
   return true;
 }
 
+// The validation core, SHARED by both lane clients (Gemini + Ollama). Given an already
+// JSON-parsed value, apply the hard gate: valid → ok; anything else → schema_invalid.
+// Invalid output is rejected, never silently repaired (the iron rule is structural).
+export function gateExtractorOutput(parsed: unknown): ExtractorResult {
+  if (!validateExtractorOutput(parsed)) return { ok: false, error: "schema_invalid" };
+  return { ok: true, output: parsed };
+}
+
 export function parseExtractorResponse(json: unknown): ExtractorResult {
   const text = (json as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
     ?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -158,6 +167,5 @@ export function parseExtractorResponse(json: unknown): ExtractorResult {
   } catch {
     return { ok: false, error: "parse_fail" };
   }
-  if (!validateExtractorOutput(parsed)) return { ok: false, error: "schema_invalid" };
-  return { ok: true, output: parsed };
+  return gateExtractorOutput(parsed);
 }
