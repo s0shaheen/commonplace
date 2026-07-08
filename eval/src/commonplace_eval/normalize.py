@@ -10,15 +10,23 @@ form, leading articles, and punctuation so those variants collapse.
 Pipeline, in order:
 1. Unicode NFKC (fold fullwidth/compatibility forms, e.g. "Ｊｏｅ" -> "Joe").
 2. casefold (aggressive, Unicode-aware lowercasing).
-3. strip a single LEADING article followed by whitespace
-   (``the|a|an`` + common non-English ``el|la|le|les|der|die|das``). The
-   pattern tolerates leading whitespace so "  The Matrix" still strips, but is
-   anchored at the start so mid-string article substrings ("Isla", "La La
-   Land"'s second "la") are untouched.
-4. remove INTRA-WORD apostrophes so "Joe's" -> "joes" (and "O'Brien" ->
+3. remove INTRA-WORD apostrophes so "Joe's" -> "joes" (and "O'Brien" ->
    "obrien"); every other punctuation/symbol char (incl. hyphens, dashes,
-   colons) maps to a space.
-5. collapse runs of whitespace and strip the ends.
+   colons, surrounding quotes) maps to a space.
+4. collapse runs of whitespace and strip the ends.
+5. strip a single LEADING article followed by whitespace (``the|a|an`` ONLY).
+   Punctuation is handled BEFORE this step, so a quoted title
+   (``"The Matrix"``) has its quotes stripped first and the leading article
+   then strips just like the bare title. The pattern is anchored at the start,
+   so mid-string article substrings ("Isla") and non-leading articles ("Bear
+   The") are untouched, and only a SINGLE article strips ("The The Band" ->
+   "the band", not "band").
+6. final whitespace collapse / trim.
+
+Articles are English-only by deliberate choice. Foreign leading articles
+(``el|la|le|les|der|die|das``) are NOT stripped: they false-strip English
+titles ("Die Hard" -> "hard", "La La Land" -> degraded). Foreign-article
+variants belong in gold aliases, not the normalizer.
 
 **Deviation from the Task-5 brief, flagged deliberately.** The brief's
 normalize spec says map intra-word apostrophes/hyphens *to space* ("Joe's" ->
@@ -41,9 +49,9 @@ import unicodedata
 
 __all__ = ["normalize_mention"]
 
-# Longer forms first for readability; the trailing ``\s+`` anchor disambiguates
-# overlapping prefixes ("les" vs "le") on its own via backtracking.
-_ARTICLES = ("the", "an", "a", "el", "les", "le", "la", "der", "die", "das")
+# English-only articles. Foreign leading articles are deliberately excluded
+# (see module docstring): they false-strip English titles ("Die Hard").
+_ARTICLES = ("the", "an", "a")
 # Leading article: optional leading whitespace, one article token, then
 # whitespace. Anchored at ``^`` so only a LEADING article strips.
 _LEADING_ARTICLE = re.compile(r"^\s*(?:" + "|".join(_ARTICLES) + r")\s+", re.UNICODE)
@@ -59,8 +67,11 @@ def normalize_mention(s: str) -> str:
     """Return the canonical form of a mention surface string."""
     s = unicodedata.normalize("NFKC", s)
     s = s.casefold()
-    s = _LEADING_ARTICLE.sub("", s, count=1)
+    # Punctuation BEFORE article-stripping so quoted titles ('"The Matrix"')
+    # lose their quotes first and then strip the leading article as normal.
     s = _INTRAWORD_APOSTROPHE.sub("", s)
     s = _PUNCT.sub(" ", s)
     s = _WHITESPACE.sub(" ", s).strip()
-    return s
+    # Single leading-article strip (count=1, not a loop).
+    s = _LEADING_ARTICLE.sub("", s, count=1)
+    return _WHITESPACE.sub(" ", s).strip()

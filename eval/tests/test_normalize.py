@@ -40,16 +40,32 @@ def test_article_substring_is_not_stripped():
 
 
 def test_only_one_leading_article_stripped():
-    # "La La Land": strip the single leading "la ", leaving "la land" — NOT
-    # recursively (that would give "land"). (Do not assert == n("la land"):
-    # normalization is intentionally non-idempotent on stacked articles, since
-    # n("la land") strips again to "land".)
-    assert n("La La Land") == "la land"
+    # "The The Band": strip the single leading "the ", leaving "the band" — NOT
+    # recursively (that would give "band"). One strip pass, not a loop. (Do not
+    # assert == n("the band"): normalization is intentionally non-idempotent on
+    # stacked articles, since n("the band") strips again to "band".)
+    assert n("The The Band") == "the band"
 
 
-def test_non_english_leading_articles():
-    assert n("Der Spiegel") == n("spiegel")
-    assert n("Les Misérables") == n("misérables")
+def test_foreign_articles_not_stripped():
+    # English-only articles: foreign leading articles are NOT stripped (they
+    # false-strip English titles). Foreign-article variants are gold-alias
+    # territory, not normalizer territory.
+    assert n("Der Spiegel") == "der spiegel"
+    assert n("Les Misérables") == "les misérables"
+
+
+def test_die_hard_not_stripped():
+    # "Die"/"La" are not English articles: the titles survive intact.
+    assert n("Die Hard") == "die hard"
+    assert n("La La Land") == "la la land"
+
+
+def test_quoted_title_article_strips():
+    # Punctuation is handled before article-stripping, so a quoted title loses
+    # its quotes first and then strips the leading article exactly like the bare
+    # title. All three collapse to "matrix".
+    assert n('"The Matrix"') == n("The Matrix") == "matrix"
 
 
 def test_collapses_whitespace_and_casefolds():

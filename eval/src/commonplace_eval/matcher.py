@@ -9,7 +9,9 @@ error. The fix is two match tiers plus optimal 1:1 alignment:
 * **EXACT** — normalized (see ``normalize.normalize_mention``) equality of the
   prediction surface against the gold surface OR any gold alias. Similarity 1.0.
 * **FUZZY** — ``rapidfuzz.fuzz.token_set_ratio`` (of normalized strings) at or
-  above ``fuzzy_threshold`` (default 90). Similarity = ratio / 100.
+  above ``fuzzy_threshold`` (default 90). Similarity = ``min(ratio / 100, 0.999)``
+  — capped strictly below EXACT's 1.0 so a pure token subset/superset (ratio
+  100) can never tie an exact match and steal its alignment by input order.
 * otherwise similarity 0 (never aligned).
 
 Alignment is a maximum-weight bipartite matching via
@@ -106,8 +108,10 @@ def _score(gold_forms: list[str], pred_norm: str, threshold: int) -> tuple[float
     """Similarity and tier for one (gold, pred) cell.
 
     EXACT (1.0) if the normalized prediction surface equals any gold form;
-    else FUZZY (ratio/100) if the best token_set_ratio over the gold forms is
-    >= threshold; else no match (0.0, NONE).
+    else FUZZY (``min(ratio/100, 0.999)``) if the best token_set_ratio over the
+    gold forms is >= threshold; else no match (0.0, NONE). The FUZZY cap keeps a
+    ratio-100 subset/superset strictly below EXACT so the assignment solver can
+    never break a 1.0 vs 1.0 tie by input order (EXACT always outranks).
     """
     if pred_norm and pred_norm in gold_forms:
         return 1.0, MatchTier.EXACT
@@ -115,7 +119,7 @@ def _score(gold_forms: list[str], pred_norm: str, threshold: int) -> tuple[float
     for form in gold_forms:
         best = max(best, fuzz.token_set_ratio(pred_norm, form))
     if best >= threshold:
-        return best / 100.0, MatchTier.FUZZY
+        return min(best / 100.0, 0.999), MatchTier.FUZZY
     return 0.0, MatchTier.NONE
 
 

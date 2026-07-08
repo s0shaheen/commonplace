@@ -142,6 +142,46 @@ def test_type_scheme_fuzzy_type_mismatch_is_INC():
     assert [c for _, c in align(gold, pred).categorize("type")] == [Category.INC]
 
 
+def test_type_scheme_exact_type_match_is_COR():
+    # EXACT tier + matching type -> COR under the "type" scheme.
+    gold = [_m("Dune", "book")]
+    pred = [_m("Dune", "book")]
+    (pair, cat), = align(gold, pred).categorize("type")
+    assert pair.tier == MatchTier.EXACT
+    assert cat == Category.COR
+
+
+def test_type_scheme_exact_type_mismatch_is_INC():
+    # EXACT tier + mismatched type -> INC under the "type" scheme.
+    gold = [_m("Dune", "screen_work")]
+    pred = [_m("Dune", "book")]
+    (pair, cat), = align(gold, pred).categorize("type")
+    assert pair.tier == MatchTier.EXACT
+    assert cat == Category.INC
+
+
+# --- deterministic EXACT>FUZZY tie-break -------------------------------------
+def test_exact_beats_fuzzy_tie_regardless_of_order():
+    # A pure token superset ("Museum of Modern Art NYC") scores token_set_ratio
+    # 100 -> FUZZY sim would tie EXACT's 1.0, letting the assignment solver pick
+    # the alignment by input ORDER. The FUZZY cap (0.999 < 1.0) must make the
+    # exact-surface pred win in BOTH orderings: {COR, SPU} with the COR pair
+    # aligned to the exact pred (asserted via pred_idx + EXACT tier).
+    gold = [_m("Museum of Modern Art", "place")]
+    exact = _m("Museum of Modern Art", "place")
+    superset = _m("Museum of Modern Art NYC", "place")
+    for pred in ([exact, superset], [superset, exact]):
+        result = align(gold, pred)
+        cats = sorted(c.value for _, c in result.categorize("strict"))
+        assert cats == ["COR", "SPU"], f"order {[p['surface'] for p in pred]}"
+        matched = [
+            p for p in result.pairs if p.gold_idx is not None and p.pred_idx is not None
+        ]
+        assert len(matched) == 1
+        assert matched[0].tier == MatchTier.EXACT
+        assert pred[matched[0].pred_idx]["surface"] == "Museum of Modern Art"
+
+
 def test_aligned_pair_indices_and_flags():
     gold = [_m("Dune", "book")]
     pred = [_m("Dune", "book")]
