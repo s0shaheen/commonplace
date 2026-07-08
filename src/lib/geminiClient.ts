@@ -1,5 +1,5 @@
 import type { ExtractorResult, ExtractorOutput } from "./types.js";
-import { isNamedEntityType, isChannel, isAssertionMode } from "./ontology.js";
+import { isNamedEntityType, isChannel, isAssertionMode, isFacetName } from "./ontology.js";
 import rawSchema from "../../schema/json/extractor-output.schema.json";
 
 export interface MediaPart {
@@ -71,11 +71,29 @@ function stripFences(text: string): string {
 
 // ── Hard gate: invalid extractor output is rejected, never silently repaired ───────
 
+// Allowed-key allowlists per shape — mirror the frozen schema's `properties` keys
+// EXACTLY (extractor-output.schema.json). The schema pins `additionalProperties:false`
+// on each of these shapes; the runtime gate reproduces that backstop so an element
+// carrying a leaked field (e.g. a mention with `mbid`/`externalId`) is rejected. This
+// enforces the iron rule structurally: the model never emits IDs.
+const MENTION_KEYS = ["surface", "type", "aliases", "evidence"];
+const CONCEPT_KEYS = ["surface", "evidence"];
+const FACET_KEYS = ["facet", "value", "evidence"];
+const CLAIM_KEYS = ["statement", "evidence"];
+const STRUCTURED_KEYS = ["schemaOrgType", "slots", "steps", "evidence"];
+const EVIDENCE_KEYS = ["channel", "source_role", "quote", "t_start", "t_end", "assertion_mode", "confidence"];
+
+// True iff `obj` carries no key outside `allowed` (additionalProperties:false backstop).
+function hasOnlyKeys(obj: Record<string, unknown>, allowed: readonly string[]): boolean {
+  return Object.keys(obj).every((k) => allowed.includes(k));
+}
+
 function isEvidenceArray(ev: unknown): boolean {
   if (!Array.isArray(ev) || ev.length < 1) return false;
   for (const e of ev) {
-    if (!e || typeof e !== "object") return false;
+    if (!e || typeof e !== "object" || Array.isArray(e)) return false;
     const o = e as Record<string, unknown>;
+    if (!hasOnlyKeys(o, EVIDENCE_KEYS)) return false;
     if (typeof o.channel !== "string" || !isChannel(o.channel)) return false;
     if (typeof o.assertion_mode !== "string" || !isAssertionMode(o.assertion_mode)) return false;
     if (typeof o.confidence !== "number" || o.confidence < 0 || o.confidence > 1) return false;
@@ -88,7 +106,8 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 // Shape-checks all five top-level arrays, every mention type via isNamedEntityType,
-// and every evidence array (non-empty, valid channel/assertion_mode, 0<=confidence<=1).
+// every facet axis via isFacetName, the no-unknown-keys backstop per element, and every
+// evidence array (non-empty, valid channel/assertion_mode, 0<=confidence<=1).
 function validateExtractorOutput(v: unknown): v is ExtractorOutput {
   if (!isRecord(v)) return false;
   const { mentions, concepts, facets, claims, structured } = v;
@@ -96,28 +115,33 @@ function validateExtractorOutput(v: unknown): v is ExtractorOutput {
 
   for (const m of mentions as unknown[]) {
     if (!isRecord(m)) return false;
+    if (!hasOnlyKeys(m, MENTION_KEYS)) return false;
     if (typeof m.surface !== "string") return false;
     if (typeof m.type !== "string" || !isNamedEntityType(m.type)) return false;
     if (!isEvidenceArray(m.evidence)) return false;
   }
   for (const c of concepts as unknown[]) {
     if (!isRecord(c)) return false;
+    if (!hasOnlyKeys(c, CONCEPT_KEYS)) return false;
     if (typeof c.surface !== "string") return false;
     if (!isEvidenceArray(c.evidence)) return false;
   }
   for (const f of facets as unknown[]) {
     if (!isRecord(f)) return false;
-    if (typeof f.facet !== "string") return false;
+    if (!hasOnlyKeys(f, FACET_KEYS)) return false;
+    if (typeof f.facet !== "string" || !isFacetName(f.facet)) return false;
     if (typeof f.value !== "string") return false;
     if (!isEvidenceArray(f.evidence)) return false;
   }
   for (const cl of claims as unknown[]) {
     if (!isRecord(cl)) return false;
+    if (!hasOnlyKeys(cl, CLAIM_KEYS)) return false;
     if (typeof cl.statement !== "string") return false;
     if (!isEvidenceArray(cl.evidence)) return false;
   }
   for (const s of structured as unknown[]) {
     if (!isRecord(s)) return false;
+    if (!hasOnlyKeys(s, STRUCTURED_KEYS)) return false;
     if (typeof s.schemaOrgType !== "string") return false;
     if (!isEvidenceArray(s.evidence)) return false;
   }

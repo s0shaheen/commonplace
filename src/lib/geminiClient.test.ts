@@ -144,4 +144,39 @@ describe("parseExtractorResponse", () => {
     void structured;
     expect(parseExtractorResponse(wrap(JSON.stringify(rest)))).toEqual({ ok: false, error: "schema_invalid" });
   });
+
+  test("schema_invalid for a facet assignment with an unknown axis ('vibe')", () => {
+    const bad = {
+      ...grounded,
+      facets: [
+        { facet: "vibe", value: "chill", evidence: [{ channel: "VISUAL_SCENE", assertion_mode: "INFERRED", confidence: 0.8 }] },
+      ],
+    };
+    expect(parseExtractorResponse(wrap(JSON.stringify(bad)))).toEqual({ ok: false, error: "schema_invalid" });
+  });
+
+  test("schema_invalid when a mention carries a leaked id key (externalId) — additionalProperties backstop", () => {
+    const bad = {
+      ...grounded,
+      mentions: [
+        { surface: "Kill Bill", type: "music_recording", externalId: "Q123", evidence: [{ channel: "VERBAL_AUDIO", assertion_mode: "SHOWN", confidence: 0.9 }] },
+      ],
+    };
+    expect(parseExtractorResponse(wrap(JSON.stringify(bad)))).toEqual({ ok: false, error: "schema_invalid" });
+  });
+
+  test("schema_invalid when an evidence object carries an unknown key", () => {
+    const bad = {
+      ...grounded,
+      mentions: [
+        { surface: "Kill Bill", type: "music_recording", evidence: [{ channel: "VERBAL_AUDIO", assertion_mode: "SHOWN", confidence: 0.9, mbid: "abc" }] },
+      ],
+    };
+    expect(parseExtractorResponse(wrap(JSON.stringify(bad)))).toEqual({ ok: false, error: "schema_invalid" });
+  });
+
+  test("schema_invalid when facets is a flat object, not an array of assignments", () => {
+    const bad = { ...grounded, facets: { topic: "food" } };
+    expect(parseExtractorResponse(wrap(JSON.stringify(bad)))).toEqual({ ok: false, error: "schema_invalid" });
+  });
 });

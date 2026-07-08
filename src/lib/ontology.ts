@@ -75,3 +75,12 @@ export function isAssertionMode(value: string): value is AssertionMode {
 export const FACETS = Object.fromEntries(
   Object.entries(facetsVocab.facets).map(([facet, def]) => [facet, def.values]),
 ) as unknown as Record<FacetName, readonly string[]>;
+
+// The 9 facet axis names — the vocab KEYS (same source FACETS derives from). This is
+// the axis-name enum the JSON schema pins on `facets[].facet`; the runtime gate mirrors
+// it. (Value-in-vocab membership is the eval layer's job, not the runtime gate's.)
+export const FACET_NAMES: readonly FacetName[] = Object.keys(facetsVocab.facets) as FacetName[];
+
+export function isFacetName(value: string): value is FacetName {
+  return (FACET_NAMES as readonly string[]).includes(value);
+}

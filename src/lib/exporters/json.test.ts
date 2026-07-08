@@ -43,7 +43,7 @@ describe("toJsonBundle", () => {
   test("emits a v2 bundle with the schema tag, items, and a mention index", () => {
     const out = JSON.parse(toJsonBundle(items));
     expect(out.version).toBe(2);
-    expect(out.schema).toBe("commonplace/1.0.0-rc.5");
+    expect(out.schema).toBe("commonplace/1.0.0-rc.6");
     expect(out.items).toHaveLength(1);
     expect(out.mentions[0].key).toBe("place:lilia");
     expect(out.mentions[0].itemIds).toEqual(["7001"]);
