@@ -1,0 +1,15 @@
+{
+  "version": "1.0.0-rc.1",
+  "description": "Frozen v1.0 facet vocabulary (ontology v3 §3 Facets). The closed enum source for facet values, kept OUT of the JSON Schemas so the vocab can evolve additively without a schema bump. schema_gate.validate_extraction / validate_gold_record / validate_pred_record enforce membership at runtime. Additive-only: values are never removed, only appended (a removal would invalidate previously-labelled gold). Sources: `topic` ported from FACET_TOPICS in src/lib/ontology.ts; `presentation` ported from prompts/observe_video.md presentation_style.primary_format; `intent` seeded from doc-03 §268; remaining facets marked v1.0-proposal, tunable per the annotation guideline (Task 4).",
+  "facets": {
+    "topic":   {"values": ["food", "travel", "fitness", "fashion", "tech", "finance", "home", "entertainment", "education", "other"], "status": "ported"},
+    "intent":  {"values": ["how_to", "review", "recommendation", "haul", "demo", "meme", "explainer", "storytime", "news", "inspiration", "other"], "status": "v1.0-proposal"},
+    "genre":   {"values": ["tutorial", "vlog", "skit", "edit", "compilation", "reaction", "interview", "documentary", "performance", "slideshow", "other"], "status": "v1.0-proposal"},
+    "affect":  {"values": ["funny", "heartwarming", "motivational", "calming", "exciting", "sad", "outrage", "awe", "cringe", "neutral"], "status": "v1.0-proposal"},
+    "creator_role": {"values": ["expert", "enthusiast", "brand", "journalist", "entertainer", "educator", "unknown"], "status": "v1.0-proposal"},
+    "viewer_orientation": {"values": ["do", "buy", "go", "watch", "learn", "feel", "save_for_later"], "status": "v1.0-proposal"},
+    "presentation": {"values": ["talking_head", "voiceover", "text_overlay", "cinematic", "tutorial_demo", "skit", "compilation", "reaction", "slideshow", "before_after", "pov", "room_tour", "outfit_showcase", "edit", "other"], "status": "ported"},
+    "content_provenance": {"values": ["original", "repost", "clipped", "ai_generated", "ai_assisted", "unknown"], "status": "v1.0-proposal"},
+    "actionability": {"values": ["genuine_rec", "informational", "entertainment_only", "promotional", "ragebait_suspect"], "status": "v1.0-proposal"}
+  }
+}

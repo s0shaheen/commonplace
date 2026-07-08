@@ -1,0 +1,14 @@
+{
+  "identity": { "status": "inferred", "contentHash": "ni:///sha-256;badtype" },
+  "saves": [{ "sources": [{ "kind": "manual", "at": "2026-07-08T00:00:00Z" }] }],
+  "extractions": [
+    {
+      "kind": "named_entity",
+      "surface": "Joe's Pizza",
+      "type": "restaurant",
+      "evidence": [
+        { "channel": "VISUAL_TEXT", "assertion_mode": "SHOWN", "confidence": 0.8 }
+      ]
+    }
+  ]
+}

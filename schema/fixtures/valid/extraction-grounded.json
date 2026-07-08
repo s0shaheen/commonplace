@@ -1,0 +1,64 @@
+{
+  "identity": {
+    "status": "platform_verified",
+    "permalink": "https://www.tiktok.com/@sza/video/7234567890123456789",
+    "permalinkStatus": "live",
+    "canonicalId": "7234567890123456789"
+  },
+  "origin": { "platform": "tiktok", "profile": "tiktok/1.0" },
+  "creator": { "handle": "@sza", "name": "SZA", "id": "user-sza" },
+  "createdAt": { "value": "2026-05-20T15:00:00Z", "source": "platform", "confidence": 1 },
+  "capturedAt": { "value": "2026-07-08T00:00:00Z", "source": "inferred", "confidence": 0.9 },
+  "title": "Kill Bill snippet",
+  "mediaKind": "video",
+  "assets": [
+    {
+      "url": "https://cdn.tiktok.com/video/7234567890123456789.mp4",
+      "declaredMime": "video/mp4",
+      "sniffedFormat": "mp4",
+      "role": "rendition",
+      "contentHash": "ni:///sha-256;abc123"
+    }
+  ],
+  "saves": [
+    { "sources": [{ "kind": "favorites", "at": "2026-07-07T18:30:00Z" }] }
+  ],
+  "extractions": [
+    {
+      "kind": "named_entity",
+      "surface": "Kill Bill",
+      "type": "music_recording",
+      "aliases": ["SZA — Kill Bill"],
+      "evidence": [
+        {
+          "signal_ref": "audio:0",
+          "channel": "VERBAL_AUDIO",
+          "source_role": "song_audio",
+          "selector": {
+            "type": "FragmentSelector",
+            "value": "t=12,19",
+            "conformsTo": "http://www.w3.org/TR/media-frags/"
+          },
+          "assertion_mode": "SHOWN",
+          "confidence": 0.9
+        }
+      ],
+      "rollup": { "assertion_mode": "SHOWN", "confidence": 0.9 },
+      "extractor_ref": { "model": "gemini-2.5", "version": "2026-06", "prompt": "extract@v1", "run": "run-001" },
+      "grounding": {
+        "authority": "musicbrainz",
+        "externalId": "5a7c1234-0000-4000-8000-000000000000",
+        "nil": false,
+        "grounding_confidence": 0.93
+      }
+    },
+    {
+      "kind": "facet",
+      "facet": "topic",
+      "value": "entertainment",
+      "evidence": [
+        { "channel": "STRUCTURED_METADATA", "assertion_mode": "INFERRED", "confidence": 0.7 }
+      ]
+    }
+  ]
+}

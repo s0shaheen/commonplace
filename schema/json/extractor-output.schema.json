@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://commonplace.tools/schema/extractor-output.schema.json",
+  "title": "Commonplace extractor output (model-facing)",
+  "description": "The flat, Gemini `response_schema`-safe schema the extractor model emits under constrained decoding. NO `$ref`, NO `oneOf`/`allOf` anywhere; string enums only; the Evidence object is inlined at each of the four extraction arrays. Carries NO grounding fields — grounding is the downstream resolver's job, never the extractor's. Every extraction element requires >=1 evidence. Schema-validity is a hard gate, not a metric (_EVAL-METHOD.md §2).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mentions", "concepts", "facets", "claims", "structured"],
+  "properties": {
+    "mentions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["surface", "type", "evidence"],
+        "properties": {
+          "surface": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["music_recording", "place", "screen_work", "book", "person", "product", "brand_org", "software_app", "game"]
+          },
+          "aliases": { "type": "array", "items": { "type": "string" } },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["channel", "assertion_mode", "confidence"],
+              "properties": {
+                "channel": {
+                  "type": "string",
+                  "enum": ["VERBAL_AUDIO", "VERBAL_TEXT", "VISUAL_SCENE", "VISUAL_TEXT", "NONVERBAL_AUDIO", "STRUCTURED_METADATA"]
+                },
+                "source_role": { "type": "string" },
+                "quote": { "type": "string" },
+                "t_start": { "type": "number" },
+                "t_end": { "type": "number" },
+                "assertion_mode": {
+                  "type": "string",
+                  "enum": ["STATED", "SHOWN", "REPORTED", "INFERRED"]
+                },
+                "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "concepts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["surface", "evidence"],
+        "properties": {
+          "surface": { "type": "string" },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["channel", "assertion_mode", "confidence"],
+              "properties": {
+                "channel": {
+                  "type": "string",
+                  "enum": ["VERBAL_AUDIO", "VERBAL_TEXT", "VISUAL_SCENE", "VISUAL_TEXT", "NONVERBAL_AUDIO", "STRUCTURED_METADATA"]
+                },
+                "source_role": { "type": "string" },
+                "quote": { "type": "string" },
+                "t_start": { "type": "number" },
+                "t_end": { "type": "number" },
+                "assertion_mode": {
+                  "type": "string",
+                  "enum": ["STATED", "SHOWN", "REPORTED", "INFERRED"]
+                },
+                "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "facets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "affect": { "type": "string" },
+        "topic": { "type": "string" },
+        "genre": { "type": "string" },
+        "intent": { "type": "string" },
+        "creator_role": { "type": "string" },
+        "viewer_orientation": { "type": "string" },
+        "presentation": { "type": "string" },
+        "content_provenance": { "type": "string" },
+        "actionability": { "type": "string" }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["statement", "evidence"],
+        "properties": {
+          "statement": { "type": "string" },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["channel", "assertion_mode", "confidence"],
+              "properties": {
+                "channel": {
+                  "type": "string",
+                  "enum": ["VERBAL_AUDIO", "VERBAL_TEXT", "VISUAL_SCENE", "VISUAL_TEXT", "NONVERBAL_AUDIO", "STRUCTURED_METADATA"]
+                },
+                "source_role": { "type": "string" },
+                "quote": { "type": "string" },
+                "t_start": { "type": "number" },
+                "t_end": { "type": "number" },
+                "assertion_mode": {
+                  "type": "string",
+                  "enum": ["STATED", "SHOWN", "REPORTED", "INFERRED"]
+                },
+                "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "structured": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schemaOrgType", "evidence"],
+        "properties": {
+          "schemaOrgType": { "type": "string" },
+          "slots": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "value"],
+              "properties": {
+                "name": { "type": "string" },
+                "value": { "type": "string" }
+              }
+            }
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["order", "text"],
+              "properties": {
+                "order": { "type": "integer" },
+                "text": { "type": "string" }
+              }
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["channel", "assertion_mode", "confidence"],
+              "properties": {
+                "channel": {
+                  "type": "string",
+                  "enum": ["VERBAL_AUDIO", "VERBAL_TEXT", "VISUAL_SCENE", "VISUAL_TEXT", "NONVERBAL_AUDIO", "STRUCTURED_METADATA"]
+                },
+                "source_role": { "type": "string" },
+                "quote": { "type": "string" },
+                "t_start": { "type": "number" },
+                "t_end": { "type": "number" },
+                "assertion_mode": {
+                  "type": "string",
+                  "enum": ["STATED", "SHOWN", "REPORTED", "INFERRED"]
+                },
+                "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

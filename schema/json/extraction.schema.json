@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://commonplace.tools/schema/extraction.schema.json",
+  "title": "Commonplace extraction",
+  "description": "A single extraction the engine emits about a saved item (ontology v3 §3–4). A discriminated union on `kind` over the four Referent kinds (NamedEntity, Concept, Claim, StructuredContent) plus FacetAssignment. Every extraction owns non-empty `evidence[]` (zero-evidence extractions are rejected — §4). Grounding lives on NamedEntity only and carries the nil/externalId invariant. Facet values are kept as strings here; membership in `vocab/facets.json` is enforced at runtime by schema_gate.validate_extraction so the vocab can evolve without a schema bump.",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/NamedEntityExtraction" },
+    { "$ref": "#/$defs/ConceptExtraction" },
+    { "$ref": "#/$defs/ClaimExtraction" },
+    { "$ref": "#/$defs/StructuredContentExtraction" },
+    { "$ref": "#/$defs/FacetAssignment" }
+  ],
+  "$defs": {
+    "Kind": {
+      "type": "string",
+      "enum": ["named_entity", "concept", "claim", "structured_content", "facet"]
+    },
+    "AssertionMode": {
+      "type": "string",
+      "enum": ["STATED", "SHOWN", "REPORTED", "INFERRED"]
+    },
+    "Channel": {
+      "type": "string",
+      "enum": ["VERBAL_AUDIO", "VERBAL_TEXT", "VISUAL_SCENE", "VISUAL_TEXT", "NONVERBAL_AUDIO", "STRUCTURED_METADATA"]
+    },
+    "NamedEntityType": {
+      "type": "string",
+      "enum": ["music_recording", "place", "screen_work", "book", "person", "product", "brand_org", "software_app", "game"]
+    },
+    "Common": {
+      "description": "Fields shared by every extraction kind. Left open (no additionalProperties/unevaluatedProperties) so each kind branch can add its own fields under allOf and close with `unevaluatedProperties: false`.",
+      "type": "object",
+      "required": ["kind", "evidence"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/Kind" },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Evidence" }
+        },
+        "rollup": {
+          "description": "Aggregate over the evidence: strongest assertion mode + aggregate confidence (ontology §4).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["assertion_mode", "confidence"],
+          "properties": {
+            "assertion_mode": { "$ref": "#/$defs/AssertionMode" },
+            "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "extractor_ref": {
+          "description": "The producer of this extraction (model + version + prompt + run).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model"],
+          "properties": {
+            "model": { "type": "string" },
+            "version": { "type": "string" },
+            "prompt": { "type": "string" },
+            "run": { "type": "string" }
+          }
+        }
+      }
+    },
+    "Evidence": {
+      "description": "Provenance for one extraction (ontology §4). REQUIRED, multi-valued at the extraction level. `channel`, `assertion_mode`, `confidence` are mandatory; `source_role` is the open narrower axis. `source_polarity`/`source_certainty` are Claim-oriented.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "assertion_mode", "confidence"],
+      "properties": {
+        "signal_ref": { "type": "string" },
+        "selector": { "$ref": "#/$defs/Selector" },
+        "quote": { "type": "string" },
+        "channel": { "$ref": "#/$defs/Channel" },
+        "source_role": { "type": "string" },
+        "assertion_mode": { "$ref": "#/$defs/AssertionMode" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "source_polarity": { "type": "string" },
+        "source_certainty": { "type": "string" }
+      }
+    },
+    "Selector": {
+      "description": "W3C Web Annotation selector suite (ontology §4), discriminated on `type`, composable via `refinedBy`. Left open (extensible registry — geo selectors seeded) rather than additionalProperties:false.",
+      "type": "object",
+      "required": ["type"],
+      "oneOf": [
+        { "$ref": "#/$defs/TextQuoteSelector" },
+        { "$ref": "#/$defs/TextPositionSelector" },
+        { "$ref": "#/$defs/FragmentSelector" },
+        { "$ref": "#/$defs/CfiSelector" },
+        { "$ref": "#/$defs/RangeSelector" }
+      ]
+    },
+    "TextQuoteSelector": {
+      "type": "object",
+      "required": ["type", "exact"],
+      "properties": {
+        "type": { "const": "TextQuoteSelector" },
+        "exact": { "type": "string" },
+        "prefix": { "type": "string" },
+        "suffix": { "type": "string" },
+        "refinedBy": { "$ref": "#/$defs/Selector" }
+      }
+    },
+    "TextPositionSelector": {
+      "type": "object",
+      "required": ["type", "start", "end"],
+      "properties": {
+        "type": { "const": "TextPositionSelector" },
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 },
+        "refinedBy": { "$ref": "#/$defs/Selector" }
+      }
+    },
+    "FragmentSelector": {
+      "description": "Media Fragments (`#t=`, `#xywh=`), RFC 8118 PDF (`#page=`), RFC 5147 plain text. `conformsTo` names the fragment spec.",
+      "type": "object",
+      "required": ["type", "value"],
+      "properties": {
+        "type": { "const": "FragmentSelector" },
+        "value": { "type": "string" },
+        "conformsTo": { "type": "string" },
+        "refinedBy": { "$ref": "#/$defs/Selector" }
+      }
+    },
+    "CfiSelector": {
+      "description": "EPUB Canonical Fragment Identifier.",
+      "type": "object",
+      "required": ["type", "value"],
+      "properties": {
+        "type": { "const": "CfiSelector" },
+        "value": { "type": "string" },
+        "refinedBy": { "$ref": "#/$defs/Selector" }
+      }
+    },
+    "RangeSelector": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "RangeSelector" },
+        "startSelector": { "$ref": "#/$defs/Selector" },
+        "endSelector": { "$ref": "#/$defs/Selector" },
+        "refinedBy": { "$ref": "#/$defs/Selector" }
+      }
+    },
+    "Grounding": {
+      "description": "Resolution of a NamedEntity to a durable external ID (ontology §4/§5). Invariant: nil=false ⇒ externalId is a non-null string; nil=true ⇒ externalId is null.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority", "externalId", "nil", "grounding_confidence"],
+      "properties": {
+        "authority": { "type": "string" },
+        "externalId": { "type": ["string", "null"] },
+        "nil": { "type": "boolean" },
+        "grounding_confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "nil": { "const": false } }, "required": ["nil"] },
+          "then": { "properties": { "externalId": { "type": "string" } } }
+        },
+        {
+          "if": { "properties": { "nil": { "const": true } }, "required": ["nil"] },
+          "then": { "properties": { "externalId": { "type": "null" } } }
+        }
+      ]
+    },
+    "Observation": {
+      "description": "Ontology §6 Observation pattern: a volatile value stamped with when/where it was observed. Slot values in StructuredContent are Observations (a price without a date is future misinformation).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value"],
+      "properties": {
+        "value": { "description": "The observed value (any JSON scalar or structure)." },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "source": { "type": "string" }
+      }
+    },
+    "NamedEntityExtraction": {
+      "type": "object",
+      "allOf": [{ "$ref": "#/$defs/Common" }],
+      "required": ["kind", "surface", "type"],
+      "properties": {
+        "kind": { "const": "named_entity" },
+        "surface": { "type": "string" },
+        "type": { "$ref": "#/$defs/NamedEntityType" },
+        "aliases": { "type": "array", "items": { "type": "string" } },
+        "grounding": { "$ref": "#/$defs/Grounding" },
+        "referentLocator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scheme", "value"],
+          "properties": {
+            "scheme": { "type": "string", "enum": ["page", "chapter", "timestamp", "cfi"] },
+            "value": { "type": "string" }
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "ConceptExtraction": {
+      "type": "object",
+      "allOf": [{ "$ref": "#/$defs/Common" }],
+      "required": ["kind", "surface"],
+      "properties": {
+        "kind": { "const": "concept" },
+        "surface": { "type": "string" },
+        "conceptId": { "type": "string" },
+        "authority": { "type": "string" },
+        "isCulturalReference": { "type": "boolean" }
+      },
+      "unevaluatedProperties": false
+    },
+    "ClaimExtraction": {
+      "type": "object",
+      "allOf": [{ "$ref": "#/$defs/Common" }],
+      "required": ["kind", "statement"],
+      "properties": {
+        "kind": { "const": "claim" },
+        "statement": { "type": "string" },
+        "about": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "ref"],
+            "properties": {
+              "kind": { "type": "string", "enum": ["named_entity", "concept"] },
+              "ref": { "type": "string" }
+            }
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "StructuredContentExtraction": {
+      "type": "object",
+      "allOf": [{ "$ref": "#/$defs/Common" }],
+      "required": ["kind", "schemaOrgType"],
+      "properties": {
+        "kind": { "const": "structured_content" },
+        "schemaOrgType": { "type": "string" },
+        "slots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "value"],
+            "properties": {
+              "name": { "type": "string" },
+              "value": { "$ref": "#/$defs/Observation" }
+            }
+          }
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["order", "text"],
+            "properties": {
+              "order": { "type": "integer" },
+              "text": { "type": "string" }
+            }
+          }
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "FacetAssignment": {
+      "type": "object",
+      "allOf": [{ "$ref": "#/$defs/Common" }],
+      "required": ["kind", "facet", "value"],
+      "properties": {
+        "kind": { "const": "facet" },
+        "facet": {
+          "type": "string",
+          "enum": ["affect", "topic", "genre", "intent", "creator_role", "viewer_orientation", "presentation", "content_provenance", "actionability"]
+        },
+        "value": { "type": "string" }
+      },
+      "unevaluatedProperties": false
+    }
+  }
+}

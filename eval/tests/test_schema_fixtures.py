@@ -36,3 +36,17 @@ def test_root_gates_and_repeatable_capturedat():
         ],
     }
     assert validate_item(item) == []
+
+
+def test_zero_evidence_extraction_rejected():
+    item = json.loads((FIXTURES / "valid" / "extraction-grounded.json").read_text())
+    item["extractions"][0]["evidence"] = []
+    assert validate_item(item) != []
+
+
+def test_grounding_nil_invariant():
+    from commonplace_eval.schema_gate import validate_extraction
+    g = {"kind": "named_entity", "surface": "Joe's Pizza", "type": "place",
+         "evidence": [{"channel": "VISUAL_TEXT", "assertion_mode": "SHOWN", "confidence": 0.9}],
+         "grounding": {"authority": "google_places", "externalId": None, "nil": False, "grounding_confidence": 0.5}}
+    assert validate_extraction(g) != []  # nil=false requires an id

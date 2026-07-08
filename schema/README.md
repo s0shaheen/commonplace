@@ -11,13 +11,18 @@ extraction is validated against. Derived from the governing ontology,
 | Path | What it is |
 |------|------------|
 | `json/item.schema.json` | The cross-platform **base container** (ontology v3 §2). One base object; each platform is an Application Profile that touches zero base fields. Draft 2020-12. |
-| `fixtures/valid/*.json` | Items that MUST validate — the contract's positive examples (minimal item, full-fat TikTok video, self-authored note, carousel, text post). |
-| `fixtures/invalid/*.json` | Items that MUST fail — the admission-rule guards (missing identity handle, empty saves). |
+| `json/extraction.schema.json` | A single **extraction** the engine emits (ontology v3 §3–4): a `oneOf` on `kind` over the four Referent kinds (NamedEntity, Concept, Claim, StructuredContent) + FacetAssignment. Every extraction owns non-empty `evidence[]`; NamedEntity carries the grounding nil/externalId invariant. `item.schema.json`'s `extractions[]` validates against this. |
+| `json/extractor-output.schema.json` | The flat, **Gemini `response_schema`-safe** model-facing schema (no `$ref`/`oneOf`/`allOf`, string enums). Carries no grounding fields — grounding is a downstream resolver step. |
+| `json/gold.schema.json` | The human-verified **gold record** (one per item, JSONL) the metric harness scores against. Mentions enforce `gold_id` XOR `nil` and `nil="NIL_NO_ID"` ⇒ non-empty `failed_queries`. |
+| `json/pred.schema.json` | The system **prediction record** scored against gold; mentions carry grounding. |
+| `vocab/facets.json` | The frozen v1.0 **facet vocabulary** — the closed enum source kept out of the JSON Schemas so it evolves additively. Enforced at runtime by `schema_gate`. |
+| `vocab/named-entity-anchors.json` | The 9 groundable NamedEntity **types + KB anchors** (from `_EVAL-METHOD.md` §2). Reference table, not a validated schema. |
+| `fixtures/valid/*.json` | Items that MUST validate — the contract's positive examples (minimal item, full-fat TikTok video, self-authored note, carousel, text post, grounded-extraction item). |
+| `fixtures/invalid/*.json` | Items that MUST fail — the admission-rule guards (missing identity handle, empty saves) and extraction guards (zero-evidence, bad assertion mode, bad entity type). |
 | `CHANGELOG.md` | The semver history of the contract. |
 | `LICENSE` | MIT. |
 
-Later Phase-1 tasks add `json/extraction.schema.json`, gold/pred schemas, the
-facet vocabulary, `shacl/`, and the JSON-LD context alongside these.
+Later Phase-1 tasks add `shacl/` and the JSON-LD context alongside these.
 
 ## The admission rule (write-time)
 
@@ -35,7 +40,7 @@ and a pooled benchmark possible.
 
 ## Versioning policy
 
-- **Semver**, one line for all contract files together. Current: `1.0.0-rc.2`
+- **Semver**, one line for all contract files together. Current: `1.0.0-rc.3`
   (release-candidate freeze from ontology v3). Formal `1.0.0` is cut at
   eval-sequence step 6 per `_EVAL-METHOD.md` §1.
 - **Additive and durable.** Fields are **never deleted, only deprecated.** A

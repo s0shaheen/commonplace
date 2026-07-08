@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://commonplace.tools/schema/pred.schema.json",
+  "title": "Commonplace prediction record",
+  "description": "One system-prediction record per item (a JSONL line), scored against the gold record by the metric harness (_EVAL-METHOD.md §4). The grounding-resolved counterpart of extractor-output: mentions carry `grounding` with the same nil/externalId invariant as extraction.schema.json. Every layer block is optional except `item_id`. Facet values are checked against `vocab/facets.json` at runtime by schema_gate.validate_pred_record.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["item_id"],
+  "properties": {
+    "item_id": { "type": "string" },
+    "mentions": { "type": "array", "items": { "$ref": "#/$defs/PredMention" } },
+    "concepts": { "type": "array", "items": { "$ref": "#/$defs/PredConcept" } },
+    "facets": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "structured": { "type": "array", "items": { "$ref": "#/$defs/PredStructured" } },
+    "claims": { "type": "array", "items": { "$ref": "#/$defs/PredClaim" } }
+  },
+  "$defs": {
+    "Grounding": {
+      "description": "Same invariant as extraction.schema.json#/$defs/Grounding (inlined so pred records are self-contained). nil=false => externalId non-null string; nil=true => externalId null.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority", "externalId", "nil", "grounding_confidence"],
+      "properties": {
+        "authority": { "type": "string" },
+        "externalId": { "type": ["string", "null"] },
+        "nil": { "type": "boolean" },
+        "grounding_confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "nil": { "const": false } }, "required": ["nil"] },
+          "then": { "properties": { "externalId": { "type": "string" } } }
+        },
+        {
+          "if": { "properties": { "nil": { "const": true } }, "required": ["nil"] },
+          "then": { "properties": { "externalId": { "type": "null" } } }
+        }
+      ]
+    },
+    "PredMention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["surface", "type"],
+      "properties": {
+        "surface": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["music_recording", "place", "screen_work", "book", "person", "product", "brand_org", "software_app", "game"]
+        },
+        "grounding": { "$ref": "#/$defs/Grounding" }
+      }
+    },
+    "PredConcept": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concept_id"],
+      "properties": {
+        "concept_id": { "type": "string" },
+        "authority": { "type": "string" },
+        "score": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "PredStructured": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaOrgType"],
+      "properties": {
+        "schemaOrgType": { "type": "string" },
+        "slots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "value"],
+            "properties": {
+              "name": { "type": "string" },
+              "value": { "description": "The predicted slot value (any JSON scalar or structure)." }
+            }
+          }
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["order", "text"],
+            "properties": {
+              "order": { "type": "integer" },
+              "text": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "PredClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement"],
+      "properties": {
+        "statement": { "type": "string" }
+      }
+    }
+  }
+}

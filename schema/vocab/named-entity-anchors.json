@@ -1,0 +1,69 @@
+{
+  "version": "1.0.0-rc.1",
+  "description": "The 9 groundable NamedEntity types + their KB anchors, copied verbatim from _EVAL-METHOD.md §2's ontology table. Each type is pinned to a KB target and (where the table spells one out) a Wikidata P31/P279 anchor so 'is this a place-entity?' is decidable, not vibes (the ad-freiburg type-whitelist approach). This is a reference table, not a validated schema; authority tokens are normalized to the `grounding.authority` casing used elsewhere (musicbrainz, google_places, wikidata, openlibrary). `wikidata_anchor` is null where the source table gives no explicit anchor. `restaurant` is NOT a type — it is absorbed into `place` as a facet/subtype (the place/restaurant split is exactly what broke the retracted matcher).",
+  "types": [
+    {
+      "type": "music_recording",
+      "grounds_to": "musicbrainz",
+      "id_namespace": "MBID (recording)",
+      "wikidata_anchor": null,
+      "notes": "built. Use AcoustID/Chromaprint audio fingerprint when the song is the audio — never gold-label from a title string"
+    },
+    {
+      "type": "place",
+      "grounds_to": "google_places",
+      "id_namespace": "Place ID",
+      "wikidata_anchor": null,
+      "notes": "absorbs 'restaurant' as a facet/subtype — the place/restaurant split is exactly what broke the retracted matcher"
+    },
+    {
+      "type": "screen_work",
+      "grounds_to": "wikidata",
+      "id_namespace": "QID",
+      "wikidata_anchor": "P31: film/TV/series",
+      "notes": "carries TMDB/IMDb/Letterboxd as link-outs (no TMDB API)"
+    },
+    {
+      "type": "book",
+      "grounds_to": "wikidata / openlibrary",
+      "id_namespace": "QID / ISBN",
+      "wikidata_anchor": null,
+      "notes": ""
+    },
+    {
+      "type": "person",
+      "grounds_to": "wikidata",
+      "id_namespace": "QID",
+      "wikidata_anchor": null,
+      "notes": "public figures / named creators only"
+    },
+    {
+      "type": "product",
+      "grounds_to": "wikidata",
+      "id_namespace": "QID",
+      "wikidata_anchor": null,
+      "notes": "notable products only; high legitimate-NIL rate — that's fine, NIL is a valid gold answer"
+    },
+    {
+      "type": "brand_org",
+      "grounds_to": "wikidata",
+      "id_namespace": "QID",
+      "wikidata_anchor": null,
+      "notes": ""
+    },
+    {
+      "type": "software_app",
+      "grounds_to": "wikidata",
+      "id_namespace": "QID",
+      "wikidata_anchor": null,
+      "notes": "else NIL"
+    },
+    {
+      "type": "game",
+      "grounds_to": "wikidata",
+      "id_namespace": "QID",
+      "wikidata_anchor": null,
+      "notes": ""
+    }
+  ]
+}

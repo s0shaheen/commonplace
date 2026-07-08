@@ -1,0 +1,14 @@
+{
+  "identity": { "status": "inferred", "contentHash": "ni:///sha-256;badmode" },
+  "saves": [{ "sources": [{ "kind": "manual", "at": "2026-07-08T00:00:00Z" }] }],
+  "extractions": [
+    {
+      "kind": "named_entity",
+      "surface": "Kill Bill",
+      "type": "music_recording",
+      "evidence": [
+        { "channel": "VERBAL_AUDIO", "assertion_mode": "ASSUMED", "confidence": 0.9 }
+      ]
+    }
+  ]
+}
