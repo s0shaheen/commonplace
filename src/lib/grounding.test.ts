@@ -1,13 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   groundMention,
-  parseMusicBrainzRecordings,
-  createMusicBrainzResolver,
   type KbResolver,
   type Candidate,
   type Mention,
   type GroundingDeps,
 } from "./grounding.js";
+import { parseMusicBrainzRecordings, createMusicBrainzResolver } from "./resolvers/musicbrainz.js";
 
 function fakeResolver(
   source: Candidate["source"],
@@ -27,11 +26,11 @@ const song: Candidate = {
 describe("groundMention (orchestrator)", () => {
   it("resolves a mention to the selected candidate's durable ID, source and provenance", async () => {
     const deps: GroundingDeps = {
-      resolvers: [fakeResolver("musicbrainz", "media", [song])],
+      resolvers: [fakeResolver("musicbrainz", "music_recording", [song])],
       select: async () => ({ index: 0, confidence: 0.9 }),
     };
     const r = await groundMention(
-      { surface: "jazz is for ordinary people", type: "media", hints: { artist: "berlioz" } },
+      { surface: "jazz is for ordinary people", type: "music_recording", hints: { artist: "berlioz" } },
       deps,
     );
     expect(r.resolved).toBe(true);
@@ -45,10 +44,10 @@ describe("groundMention (orchestrator)", () => {
 
   it("abstains (NIL) when no resolver handles the mention type", async () => {
     const deps: GroundingDeps = {
-      resolvers: [fakeResolver("musicbrainz", "media", [song])],
+      resolvers: [fakeResolver("musicbrainz", "music_recording", [song])],
       select: async () => ({ index: 0, confidence: 1 }),
     };
-    const r = await groundMention({ surface: "Kasama", type: "restaurant" }, deps);
+    const r = await groundMention({ surface: "Kasama", type: "place" }, deps);
     expect(r.resolved).toBe(false);
     expect(r.id).toBeNull();
     expect(r.provenance.source).toBeNull();
@@ -56,33 +55,33 @@ describe("groundMention (orchestrator)", () => {
 
   it("abstains (NIL) when the resolver returns zero candidates, without calling the selector", async () => {
     const deps: GroundingDeps = {
-      resolvers: [fakeResolver("musicbrainz", "media", [])],
+      resolvers: [fakeResolver("musicbrainz", "music_recording", [])],
       select: async () => {
         throw new Error("selector must not run when there are no candidates");
       },
     };
-    const r = await groundMention({ surface: "nothing here", type: "media" }, deps);
+    const r = await groundMention({ surface: "nothing here", type: "music_recording" }, deps);
     expect(r.resolved).toBe(false);
     expect(r.provenance.candidateCount).toBe(0);
   });
 
   it("abstains (NIL) when the selector declines to pick (returns null)", async () => {
     const deps: GroundingDeps = {
-      resolvers: [fakeResolver("musicbrainz", "media", [song])],
+      resolvers: [fakeResolver("musicbrainz", "music_recording", [song])],
       select: async () => null,
     };
-    const r = await groundMention({ surface: "too ambiguous", type: "media" }, deps);
+    const r = await groundMention({ surface: "too ambiguous", type: "music_recording" }, deps);
     expect(r.resolved).toBe(false);
     expect(r.id).toBeNull();
   });
 
   it("abstains (NIL) below the confidence gate, but still records the confidence for calibration", async () => {
     const deps: GroundingDeps = {
-      resolvers: [fakeResolver("musicbrainz", "media", [song])],
+      resolvers: [fakeResolver("musicbrainz", "music_recording", [song])],
       select: async () => ({ index: 0, confidence: 0.3 }),
       minConfidence: 0.5,
     };
-    const r = await groundMention({ surface: "weak match", type: "media" }, deps);
+    const r = await groundMention({ surface: "weak match", type: "music_recording" }, deps);
     expect(r.resolved).toBe(false);
     expect(r.id).toBeNull();
     expect(r.confidence).toBe(0.3);
@@ -123,10 +122,10 @@ describe("MusicBrainz resolver", () => {
       },
     });
     expect(resolver.source).toBe("musicbrainz");
-    expect(resolver.handles("media")).toBe(true);
-    expect(resolver.handles("restaurant")).toBe(false);
+    expect(resolver.handles("music_recording")).toBe(true);
+    expect(resolver.handles("place")).toBe(false);
 
-    const cands = await resolver.search({ surface: "Song", type: "media", hints: { artist: "Artist" } });
+    const cands = await resolver.search({ surface: "Song", type: "music_recording", hints: { artist: "Artist" } });
     expect(cands[0]!.id).toBe("mbid-x");
     expect(calledUrl).toContain("/recording");
     expect(calledUrl.toLowerCase()).toContain("song");

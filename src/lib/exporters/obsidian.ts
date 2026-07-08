@@ -1,5 +1,5 @@
-import type { EnrichedItem } from "../types.js";
-import { buildEntityIndex } from "../entities.js";
+import type { AnalyzedItem } from "../types.js";
+import { buildMentionIndex } from "../entities.js";
 
 export interface VaultFile {
   path: string;
@@ -16,20 +16,20 @@ function yamlStr(value: string): string {
   return JSON.stringify(value);
 }
 
-function itemNote(item: EnrichedItem): VaultFile {
-  const e = item.enrichment;
+function itemNote(item: AnalyzedItem): VaultFile {
+  const out = item.analysis.output;
   const fm = [
     "---",
     `id: ${yamlStr(item.id)}`,
     `creator: ${yamlStr(item.author ?? "")}`,
     `url: ${yamlStr(item.url ?? "")}`,
-    `tier: ${e.tier}`,
+    `lane: ${item.analysis.lane}`,
     "---",
   ].join("\n");
   const heading = (item.desc || item.id).replace(/\s*\n+\s*/g, " ").trim();
   const tags = item.hashtags.map((t) => `#${t}`).join(" ");
-  const entityLinks = e.entities.map((ent) => `- [[${sanitize(ent.name)}]] (${ent.type})`).join("\n");
-  const takeaways = e.takeaways.map((t) => `- ${t}`).join("\n");
+  const mentionLinks = out.mentions.map((m) => `- [[${sanitize(m.surface)}]] (${m.type})`).join("\n");
+  const takeaways = out.claims.map((c) => `- ${c.statement}`).join("\n");
   const body = [
     fm,
     "",
@@ -39,18 +39,15 @@ function itemNote(item: EnrichedItem): VaultFile {
     "## Takeaways",
     takeaways || "_none_",
     "",
-    "## Entities",
-    entityLinks || "_none_",
-    "",
-    "## Transcript",
-    e.transcript ?? "_none_",
+    "## Mentions",
+    mentionLinks || "_none_",
     "",
     item.url ? `[Open on TikTok](${item.url})` : "",
   ].join("\n");
   return { path: `items/${sanitize(item.id)}.md`, content: body };
 }
 
-export function toObsidianVault(items: EnrichedItem[]): VaultFile[] {
+export function toObsidianVault(items: AnalyzedItem[]): VaultFile[] {
   // Guard against two distinct names sanitizing to the same filename (e.g. "Joe/s" vs "Joe:s"):
   // disambiguate the path so no note is silently overwritten. Wikilinks for such rare
   // sanitize-collisions remain ambiguous in Obsidian — a known v1 limitation.
@@ -74,11 +71,11 @@ export function toObsidianVault(items: EnrichedItem[]): VaultFile[] {
     const note = itemNote(item);
     return { path: uniquePath(note.path), content: note.content };
   });
-  for (const entry of buildEntityIndex(items)) {
+  for (const entry of buildMentionIndex(items)) {
     const backlinks = entry.itemIds.map((id) => `- [[${id}]]`).join("\n");
     files.push({
-      path: uniquePath(`entities/${sanitize(entry.type)}/${sanitize(entry.name)}.md`),
-      content: ["---", `type: ${entry.type}`, "---", "", `# ${entry.name}`, "", "## Saved in", backlinks].join("\n"),
+      path: uniquePath(`entities/${sanitize(entry.type)}/${sanitize(entry.surface)}.md`),
+      content: ["---", `type: ${entry.type}`, "---", "", `# ${entry.surface}`, "", "## Saved in", backlinks].join("\n"),
     });
   }
   return files;

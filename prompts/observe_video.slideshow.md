@@ -1,3 +1,5 @@
+> SUPERSEDED by extract_v1.md (Phase 3)
+
 You analyze a saved image slideshow (carousel). You are given the slide images and the caption.
 
 Return STRICT JSON with the same schema as the video analyzer:

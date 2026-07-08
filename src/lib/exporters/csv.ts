@@ -1,5 +1,5 @@
-import type { EnrichedItem } from "../types.js";
-import { buildEntityIndex } from "../entities.js";
+import type { AnalyzedItem } from "../types.js";
+import { buildMentionIndex } from "../entities.js";
 
 function cell(value: unknown): string {
   const s = value == null ? "" : String(value);
@@ -16,15 +16,16 @@ const ITEM_HEADER = [
   "author",
   "caption",
   "hashtags",
-  "tier",
-  "entities",
-  "takeaways",
+  "lane",
+  "mentions",
+  "claims",
   "plays",
 ];
 
-export function toItemsCsv(items: EnrichedItem[]): string {
+export function toItemsCsv(items: AnalyzedItem[]): string {
   const lines = [ITEM_HEADER.join(",")];
   for (const it of items) {
+    const out = it.analysis.output;
     lines.push(
       row([
         it.id,
@@ -32,9 +33,9 @@ export function toItemsCsv(items: EnrichedItem[]): string {
         it.author ?? "",
         it.desc,
         it.hashtags.join("|"),
-        it.enrichment.tier,
-        it.enrichment.entities.map((e) => `${e.type}:${e.name}`).join("|"),
-        it.enrichment.takeaways.join("|"),
+        it.analysis.lane,
+        out.mentions.map((m) => `${m.type}:${m.surface}`).join("|"),
+        out.claims.map((c) => c.statement).join("|"),
         it.stats.plays ?? "",
       ]),
     );
@@ -42,10 +43,10 @@ export function toItemsCsv(items: EnrichedItem[]): string {
   return lines.join("\n") + "\n";
 }
 
-export function toEntitiesCsv(items: EnrichedItem[]): string {
-  const lines = ["key,type,name,item_ids"];
-  for (const e of buildEntityIndex(items)) {
-    lines.push(row([e.key, e.type, e.name, e.itemIds.join("|")]));
+export function toMentionsCsv(items: AnalyzedItem[]): string {
+  const lines = ["key,type,surface,item_ids"];
+  for (const e of buildMentionIndex(items)) {
+    lines.push(row([e.key, e.type, e.surface, e.itemIds.join("|")]));
   }
   return lines.join("\n") + "\n";
 }

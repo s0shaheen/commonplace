@@ -1,6 +1,8 @@
 import { describe, test, expect } from "vitest";
-import { normalizeName, entityKey, dedupeEntities, buildEntityIndex } from "./entities.js";
-import type { EnrichedItem, Entity } from "./types.js";
+import { normalizeName, mentionKey, dedupeMentions, buildMentionIndex } from "./entities.js";
+import type { AnalyzedItem, MentionOut, EvidenceOut } from "./types.js";
+
+const ev: EvidenceOut[] = [{ channel: "VISUAL_TEXT", assertion_mode: "SHOWN", confidence: 0.9 }];
 
 describe("normalizeName", () => {
   test("casefolds, trims, collapses whitespace", () => {
@@ -16,62 +18,62 @@ describe("normalizeName", () => {
   });
 });
 
-describe("entityKey", () => {
-  test("combines type and normalized name", () => {
-    expect(entityKey({ type: "restaurant", name: "Lilia", raw: "Lilia" })).toBe("restaurant:lilia");
+describe("mentionKey", () => {
+  test("combines type and normalized surface", () => {
+    expect(mentionKey({ type: "place", surface: "Lilia" })).toBe("place:lilia");
   });
-  test("same name, different type → different keys", () => {
-    const a = entityKey({ type: "place", name: "Rome", raw: "Rome" });
-    const b = entityKey({ type: "media", name: "Rome", raw: "Rome" });
+  test("same surface, different type → different keys", () => {
+    const a = mentionKey({ type: "place", surface: "Rome" });
+    const b = mentionKey({ type: "screen_work", surface: "Rome" });
     expect(a).not.toBe(b);
   });
 });
 
-describe("dedupeEntities", () => {
-  test("collapses same-key entities within one item, keeping first raw + merging specs", () => {
-    const ents: Entity[] = [
-      { type: "restaurant", name: "Lilia", raw: "Lilia", specs: { neighborhood: "Williamsburg" } },
-      { type: "restaurant", name: "lilia ", raw: "Lilia in Brooklyn", specs: { city: "Brooklyn" } },
+describe("dedupeMentions", () => {
+  test("collapses same-key mentions within one item, keeping first surface + merging aliases", () => {
+    const mentions: MentionOut[] = [
+      { type: "place", surface: "Lilia", aliases: ["Lilia NYC"], evidence: ev },
+      { type: "place", surface: "lilia ", aliases: ["Lilia Brooklyn"], evidence: ev },
     ];
-    const out = dedupeEntities(ents);
+    const out = dedupeMentions(mentions);
     expect(out).toHaveLength(1);
-    expect(out[0]!.raw).toBe("Lilia");
-    expect(out[0]!.specs).toEqual({ neighborhood: "Williamsburg", city: "Brooklyn" });
+    expect(out[0]!.surface).toBe("Lilia");
+    expect(out[0]!.aliases).toEqual(expect.arrayContaining(["Lilia NYC", "Lilia Brooklyn", "lilia "]));
   });
 });
 
-describe("buildEntityIndex", () => {
-  const mk = (id: string, ents: Entity[]): EnrichedItem =>
+describe("buildMentionIndex", () => {
+  const mk = (id: string, mentions: MentionOut[]): AnalyzedItem =>
     ({
       id,
-      enrichment: { tier: "text", entities: ents, takeaways: [] },
-    }) as unknown as EnrichedItem;
+      analysis: { output: { mentions, concepts: [], facets: [], claims: [], structured: [] } },
+    }) as unknown as AnalyzedItem;
 
-  test("same entity across items → one entry with all item ids in first-seen order", () => {
+  test("same mention across items → one entry with all item ids in first-seen order", () => {
     const items = [
-      mk("7001", [{ type: "restaurant", name: "Lilia", raw: "Lilia" }]),
-      mk("7005", [{ type: "restaurant", name: "lilia", raw: "Lilia in Williamsburg" }]),
+      mk("7001", [{ type: "place", surface: "Lilia", evidence: ev }]),
+      mk("7005", [{ type: "place", surface: "lilia", evidence: ev }]),
     ];
-    const index = buildEntityIndex(items);
-    const lilia = index.find((e) => e.key === "restaurant:lilia");
+    const index = buildMentionIndex(items);
+    const lilia = index.find((e) => e.key === "place:lilia");
     expect(lilia).toBeTruthy();
     expect(lilia!.itemIds).toEqual(["7001", "7005"]);
-    expect(lilia!.name).toBe("Lilia");
+    expect(lilia!.surface).toBe("Lilia");
   });
 
-  test("does not duplicate an item id when an entity appears twice in the same item", () => {
+  test("does not duplicate an item id when a mention appears twice in the same item", () => {
     const items = [
       mk("7001", [
-        { type: "book", name: "Dune", raw: "Dune" },
-        { type: "book", name: "dune", raw: "Dune (1965)" },
+        { type: "book", surface: "Dune", evidence: ev },
+        { type: "book", surface: "dune", evidence: ev },
       ]),
     ];
-    const index = buildEntityIndex(items);
+    const index = buildMentionIndex(items);
     expect(index.find((e) => e.key === "book:dune")!.itemIds).toEqual(["7001"]);
   });
 
-  test("tolerates an item with no entities", () => {
+  test("tolerates an item with no mentions", () => {
     const items = [mk("7009", [])];
-    expect(buildEntityIndex(items)).toEqual([]);
+    expect(buildMentionIndex(items)).toEqual([]);
   });
 });

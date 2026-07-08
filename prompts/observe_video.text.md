@@ -1,3 +1,5 @@
+> SUPERSEDED by extract_v1.md (Phase 3)
+
 You analyze a saved short-form video using ONLY its text metadata (caption, hashtags) and its
 subtitle transcript. You CANNOT see the video. Do not invent on-screen visuals.
 

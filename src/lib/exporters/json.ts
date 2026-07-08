@@ -1,9 +1,15 @@
-import type { EnrichedItem } from "../types.js";
-import { buildEntityIndex } from "../entities.js";
+import type { AnalyzedItem } from "../types.js";
+import { buildMentionIndex } from "../entities.js";
 
-export function toJsonBundle(items: EnrichedItem[]): string {
+export function toJsonBundle(items: AnalyzedItem[]): string {
   return JSON.stringify(
-    { version: 1, exported_at: new Date().toISOString(), items, entities: buildEntityIndex(items) },
+    {
+      version: 2,
+      schema: "commonplace/1.0.0-rc.5",
+      exported_at: new Date().toISOString(),
+      items,
+      mentions: buildMentionIndex(items),
+    },
     null,
     2,
   );

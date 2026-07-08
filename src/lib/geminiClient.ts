@@ -1,50 +1,64 @@
-import type { GeminiResult, Entity } from "./types.js";
-import { isEntityType } from "./ontology.js";
+import type { ExtractorResult, ExtractorOutput } from "./types.js";
+import { isNamedEntityType, isChannel, isAssertionMode } from "./ontology.js";
+import rawSchema from "../../schema/json/extractor-output.schema.json";
 
 export interface MediaPart {
   mimeType: string;
   data: string; // base64
 }
 
-export interface GeminiBody {
-  contents: { parts: Array<{ text: string } | { inlineData: MediaPart }> }[];
-  generationConfig: { temperature: number; responseMimeType: string; maxOutputTokens: number };
+export interface GeminiGenerationConfig {
+  temperature: 0;
+  responseMimeType: "application/json";
+  responseSchema: object;
 }
 
-const GEN_CONFIG = { temperature: 0.2, responseMimeType: "application/json", maxOutputTokens: 16384 };
+export interface GeminiBody {
+  contents: { parts: Array<{ text: string } | { inlineData: MediaPart }> }[];
+  generationConfig: GeminiGenerationConfig;
+}
+
+// ── Generation config (constrained decoding is best-effort; the parser is the gate) ──
+
+// Keywords Gemini's OpenAPI-subset `response_schema` rejects. Everything else
+// (type/enum/items/properties/required/minItems/minimum/maximum/…) is preserved.
+const GEMINI_UNSUPPORTED_KEYS = new Set(["additionalProperties", "$schema", "$id"]);
+
+function stripGeminiUnsupported(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(stripGeminiUnsupported);
+  if (node && typeof node === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+      if (GEMINI_UNSUPPORTED_KEYS.has(k)) continue;
+      out[k] = stripGeminiUnsupported(v);
+    }
+    return out;
+  }
+  return node;
+}
+
+// A documented transform of the FROZEN extractor-output.schema.json into a
+// Gemini-safe response schema: strips the OpenAPI-subset-rejected keywords, keeps
+// the constraint keywords (enums, required, minItems, min/max) intact.
+export function toGeminiResponseSchema(): object {
+  return stripGeminiUnsupported(rawSchema) as object;
+}
+
+export function buildGenerationConfig(): GeminiGenerationConfig {
+  return {
+    temperature: 0,
+    responseMimeType: "application/json",
+    responseSchema: toGeminiResponseSchema(),
+  };
+}
 
 export function buildTextBody(prompt: string): GeminiBody {
-  return { contents: [{ parts: [{ text: prompt }] }], generationConfig: { ...GEN_CONFIG } };
+  return { contents: [{ parts: [{ text: prompt }] }], generationConfig: buildGenerationConfig() };
 }
 
 export function buildMediaBody(prompt: string, media: MediaPart[]): GeminiBody {
   const parts = [...media.map((m) => ({ inlineData: m })), { text: prompt }];
-  return { contents: [{ parts }], generationConfig: { ...GEN_CONFIG } };
-}
-
-function coerceEntities(raw: unknown): Entity[] {
-  if (!Array.isArray(raw)) return [];
-  const out: Entity[] = [];
-  for (const e of raw) {
-    if (!e || typeof e !== "object") continue;
-    const obj = e as Record<string, unknown>;
-    if (typeof obj.type !== "string" || !isEntityType(obj.type)) continue;
-    if (typeof obj.name !== "string" || obj.name.trim() === "") continue;
-    out.push({
-      type: obj.type,
-      name: obj.name,
-      raw: typeof obj.raw === "string" ? obj.raw : obj.name,
-      specs:
-        obj.specs && typeof obj.specs === "object" && !Array.isArray(obj.specs)
-          ? (obj.specs as Record<string, string>)
-          : undefined,
-    });
-  }
-  return out;
-}
-
-function coerceStringArray(raw: unknown): string[] {
-  return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : [];
+  return { contents: [{ parts }], generationConfig: buildGenerationConfig() };
 }
 
 function stripFences(text: string): string {
@@ -55,33 +69,71 @@ function stripFences(text: string): string {
     .trim();
 }
 
-export function parseGeminiResponse(json: unknown): GeminiResult {
+// ── Hard gate: invalid extractor output is rejected, never silently repaired ───────
+
+function isEvidenceArray(ev: unknown): boolean {
+  if (!Array.isArray(ev) || ev.length < 1) return false;
+  for (const e of ev) {
+    if (!e || typeof e !== "object") return false;
+    const o = e as Record<string, unknown>;
+    if (typeof o.channel !== "string" || !isChannel(o.channel)) return false;
+    if (typeof o.assertion_mode !== "string" || !isAssertionMode(o.assertion_mode)) return false;
+    if (typeof o.confidence !== "number" || o.confidence < 0 || o.confidence > 1) return false;
+  }
+  return true;
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
+
+// Shape-checks all five top-level arrays, every mention type via isNamedEntityType,
+// and every evidence array (non-empty, valid channel/assertion_mode, 0<=confidence<=1).
+function validateExtractorOutput(v: unknown): v is ExtractorOutput {
+  if (!isRecord(v)) return false;
+  const { mentions, concepts, facets, claims, structured } = v;
+  if (![mentions, concepts, facets, claims, structured].every(Array.isArray)) return false;
+
+  for (const m of mentions as unknown[]) {
+    if (!isRecord(m)) return false;
+    if (typeof m.surface !== "string") return false;
+    if (typeof m.type !== "string" || !isNamedEntityType(m.type)) return false;
+    if (!isEvidenceArray(m.evidence)) return false;
+  }
+  for (const c of concepts as unknown[]) {
+    if (!isRecord(c)) return false;
+    if (typeof c.surface !== "string") return false;
+    if (!isEvidenceArray(c.evidence)) return false;
+  }
+  for (const f of facets as unknown[]) {
+    if (!isRecord(f)) return false;
+    if (typeof f.facet !== "string") return false;
+    if (typeof f.value !== "string") return false;
+    if (!isEvidenceArray(f.evidence)) return false;
+  }
+  for (const cl of claims as unknown[]) {
+    if (!isRecord(cl)) return false;
+    if (typeof cl.statement !== "string") return false;
+    if (!isEvidenceArray(cl.evidence)) return false;
+  }
+  for (const s of structured as unknown[]) {
+    if (!isRecord(s)) return false;
+    if (typeof s.schemaOrgType !== "string") return false;
+    if (!isEvidenceArray(s.evidence)) return false;
+  }
+  return true;
+}
+
+export function parseExtractorResponse(json: unknown): ExtractorResult {
   const text = (json as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
     ?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) return { ok: false, error: "empty_response" };
-  let parsed: Record<string, unknown>;
+  let parsed: unknown;
   try {
     parsed = JSON.parse(stripFences(text));
   } catch {
     return { ok: false, error: "parse_fail" };
   }
-  return {
-    ok: true,
-    enrichment: {
-      transcript: typeof parsed.transcript === "string" ? parsed.transcript : undefined,
-      on_screen_text: Array.isArray(parsed.on_screen_text)
-        ? coerceStringArray(parsed.on_screen_text)
-        : undefined,
-      entities: coerceEntities(parsed.entities),
-      takeaways: coerceStringArray(parsed.takeaways),
-      structured_content:
-        parsed.structured_content && typeof parsed.structured_content === "object"
-          ? (parsed.structured_content as Record<string, unknown>)
-          : undefined,
-      facets:
-        parsed.facets && typeof parsed.facets === "object"
-          ? (parsed.facets as { topic?: string; genre?: string; affect?: string })
-          : undefined,
-    },
-  };
+  if (!validateExtractorOutput(parsed)) return { ok: false, error: "schema_invalid" };
+  return { ok: true, output: parsed };
 }

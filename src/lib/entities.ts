@@ -1,4 +1,4 @@
-import type { Entity, EnrichedItem, EntityIndexEntry } from "./types.js";
+import type { MentionOut, AnalyzedItem, MentionIndexEntry } from "./types.js";
 
 export function normalizeName(name: string): string {
   return name
@@ -10,33 +10,39 @@ export function normalizeName(name: string): string {
     .replace(/^the\s+/, "");
 }
 
-export function entityKey(entity: Entity): string {
-  return `${entity.type}:${normalizeName(entity.name)}`;
+export function mentionKey(m: { type: string; surface: string }): string {
+  return `${m.type}:${normalizeName(m.surface)}`;
 }
 
-export function dedupeEntities(entities: Entity[]): Entity[] {
-  const byKey = new Map<string, Entity>();
-  for (const e of entities) {
-    const key = entityKey(e);
+// Collapse same-key mentions within one item: first occurrence's surface/type/evidence
+// win; alternate surfaces and all `aliases` are unioned into the survivor's aliases.
+export function dedupeMentions(mentions: MentionOut[]): MentionOut[] {
+  const byKey = new Map<string, MentionOut>();
+  for (const m of mentions) {
+    const key = mentionKey(m);
     const existing = byKey.get(key);
     if (!existing) {
-      // First occurrence wins: its `raw` and `name` become the display values.
-      byKey.set(key, { ...e, specs: e.specs ? { ...e.specs } : undefined });
-    } else if (e.specs) {
-      existing.specs = { ...(existing.specs ?? {}), ...e.specs };
+      byKey.set(key, { ...m, aliases: m.aliases ? [...m.aliases] : undefined });
+      continue;
     }
+    const aliases = new Set<string>(existing.aliases ?? []);
+    for (const a of m.aliases ?? []) aliases.add(a);
+    if (m.surface !== existing.surface) aliases.add(m.surface);
+    existing.aliases = aliases.size ? [...aliases] : undefined;
   }
   return [...byKey.values()];
 }
 
-export function buildEntityIndex(items: EnrichedItem[]): EntityIndexEntry[] {
-  const byKey = new Map<string, EntityIndexEntry>();
+// Cross-item index: one entry per mention key, carrying every item id it appears in
+// (first-seen order, deduped).
+export function buildMentionIndex(items: AnalyzedItem[]): MentionIndexEntry[] {
+  const byKey = new Map<string, MentionIndexEntry>();
   for (const item of items) {
-    for (const e of dedupeEntities(item.enrichment?.entities ?? [])) {
-      const key = entityKey(e);
+    for (const m of dedupeMentions(item.analysis?.output?.mentions ?? [])) {
+      const key = mentionKey(m);
       let entry = byKey.get(key);
       if (!entry) {
-        entry = { key, type: e.type, name: e.name, itemIds: [] };
+        entry = { key, type: m.type, surface: m.surface, itemIds: [] };
         byKey.set(key, entry);
       }
       if (!entry.itemIds.includes(item.id)) entry.itemIds.push(item.id);

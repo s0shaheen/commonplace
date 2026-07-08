@@ -1,4 +1,6 @@
-// Shapes shared across the enrichment engine. CapturedItem matches the spike's normalizeItem output.
+// Shapes shared across the analysis engine. These mirror the FROZEN contract in
+// `schema/json/extractor-output.schema.json` (v1.0.0-rc.6) EXACTLY — field names are
+// the schema's, not new inventions. CapturedItem matches the spike's normalizeItem output.
 
 export interface CapturedItem {
   id: string;
@@ -25,50 +27,117 @@ export interface CapturedItem {
   };
 }
 
-export type EntityType =
+// ── The frozen extractor contract (rc.6) ─────────────────────────────────────────
+// The model emits typed MENTIONS, never external IDs (SPEC §13 iron rule). The five
+// top-level arrays each carry per-element evidence with >=1 item.
+
+export type NamedEntityType =
+  | "music_recording"
   | "place"
-  | "restaurant"
-  | "product"
+  | "screen_work"
   | "book"
-  | "media"
-  | "recipe"
   | "person"
-  | "brand"
-  | "link"
-  | "other";
+  | "product"
+  | "brand_org"
+  | "software_app"
+  | "game";
 
-export interface Entity {
-  type: EntityType;
-  name: string;
-  raw: string;
-  specs?: Record<string, string>;
+export type Channel =
+  | "VERBAL_AUDIO"
+  | "VERBAL_TEXT"
+  | "VISUAL_SCENE"
+  | "VISUAL_TEXT"
+  | "NONVERBAL_AUDIO"
+  | "STRUCTURED_METADATA";
+
+export type AssertionMode = "STATED" | "SHOWN" | "REPORTED" | "INFERRED";
+
+export interface EvidenceOut {
+  channel: Channel;
+  assertion_mode: AssertionMode;
+  confidence: number;
+  source_role?: string;
+  quote?: string;
+  t_start?: number;
+  t_end?: number;
 }
 
-export type EnrichmentTier = "raw" | "text" | "visual";
-
-export interface Enrichment {
-  tier: EnrichmentTier;
-  transcript?: string;
-  on_screen_text?: string[];
-  entities: Entity[];
-  takeaways: string[];
-  structured_content?: Record<string, unknown>;
-  facets?: { topic?: string; genre?: string; affect?: string };
-  error?: string;
+export interface MentionOut {
+  surface: string;
+  type: NamedEntityType;
+  aliases?: string[];
+  evidence: EvidenceOut[];
 }
 
-export interface EnrichedItem extends CapturedItem {
-  enrichment: Enrichment;
+export interface ConceptOut {
+  surface: string;
+  evidence: EvidenceOut[];
 }
 
-export interface EntityIndexEntry {
-  key: string; // `${type}:${normalizedName}`
-  type: EntityType;
-  name: string; // chosen display name
+export interface ClaimOut {
+  statement: string;
+  evidence: EvidenceOut[];
+}
+
+export interface StructuredOut {
+  schemaOrgType: string;
+  slots?: { name: string; value: string }[];
+  steps?: { order: number; text: string }[];
+  evidence: EvidenceOut[];
+}
+
+export type FacetName =
+  | "affect"
+  | "topic"
+  | "genre"
+  | "intent"
+  | "creator_role"
+  | "viewer_orientation"
+  | "presentation"
+  | "content_provenance"
+  | "actionability";
+
+// rc.6: facets are evidence-carrying assignments, not a flat object — facet labels
+// carry REAL model-emitted provenance, never synthetic.
+export interface FacetAssignmentOut {
+  facet: FacetName;
+  value: string;
+  evidence: EvidenceOut[];
+}
+
+export interface ExtractorOutput {
+  mentions: MentionOut[];
+  concepts: ConceptOut[];
+  facets: FacetAssignmentOut[];
+  claims: ClaimOut[];
+  structured: StructuredOut[];
+}
+
+// ── Engine-side wrappers (not model-facing) ──────────────────────────────────────
+
+export interface Analysis {
+  output: ExtractorOutput;
+  lane: "managed" | "local";
+  ingestion: "keyframes_vtt" | "native";
+  model: string;
+  promptVersion: string;
+  analyzedAt: string;
+}
+
+export interface AnalyzedItem extends CapturedItem {
+  analysis: Analysis;
+}
+
+// Result-object convention (matches the parent codebase) — engine functions never
+// throw for expected failures. Invalid extractor output is `{ok:false, error:"schema_invalid"}`.
+export type ExtractorResult =
+  | { ok: true; output: ExtractorOutput }
+  | { ok: false; error: string };
+
+// Cross-item mention index entry (replaces the old EntityIndexEntry).
+export interface MentionIndexEntry {
+  key: string; // `${type}:${normalizedSurface}`
+  type: NamedEntityType;
+  surface: string; // chosen display surface
   itemIds: string[]; // first-seen order, deduped
 }
-
-// Result-object convention (matches the parent codebase) — engine functions never throw for expected failures.
-export type GeminiResult =
-  | { ok: true; enrichment: Omit<Enrichment, "tier"> }
-  | { ok: false; error: string };

@@ -1,8 +1,10 @@
 import { describe, test, expect } from "vitest";
-import { toItemsCsv, toEntitiesCsv } from "./csv.js";
-import type { EnrichedItem } from "../types.js";
+import { toItemsCsv, toMentionsCsv } from "./csv.js";
+import type { AnalyzedItem, EvidenceOut } from "../types.js";
 
-const items: EnrichedItem[] = [
+const ev: EvidenceOut[] = [{ channel: "VISUAL_TEXT", assertion_mode: "SHOWN", confidence: 0.9 }];
+
+const items: AnalyzedItem[] = [
   {
     id: "7001",
     desc: 'pasta, "the best"',
@@ -20,7 +22,20 @@ const items: EnrichedItem[] = [
     music: null,
     hashtags: ["pasta", "brooklyn"],
     stats: { plays: 10, likes: null, comments: null, shares: null, collects: null },
-    enrichment: { tier: "text", entities: [{ type: "restaurant", name: "Lilia", raw: "Lilia" }], takeaways: ["go"] },
+    analysis: {
+      lane: "local",
+      ingestion: "keyframes_vtt",
+      model: "gemini-2.5-flash-lite",
+      promptVersion: "extract@v1",
+      analyzedAt: "2026-07-08T00:00:00.000Z",
+      output: {
+        mentions: [{ type: "place", surface: "Lilia", evidence: ev }],
+        concepts: [],
+        facets: [],
+        claims: [{ statement: "go", evidence: ev }],
+        structured: [],
+      },
+    },
   },
 ];
 
@@ -29,37 +44,39 @@ describe("toItemsCsv", () => {
     const csv = toItemsCsv(items);
     const lines = csv.trim().split("\n");
     expect(lines[0]).toContain("id,url,author,caption");
+    expect(lines[0]).toContain("lane,mentions,claims,plays");
     expect(lines[1]).toContain('"pasta, ""the best"""'); // RFC-4180 escaping
     expect(lines[1]).toContain("pasta|brooklyn"); // hashtags joined
+    expect(lines[1]).toContain("place:Lilia"); // mention as type:surface
   });
 });
 
-describe("toEntitiesCsv", () => {
-  test("one row per entity with joined item ids", () => {
-    const csv = toEntitiesCsv(items);
-    expect(csv.trim().split("\n")[0]).toBe("key,type,name,item_ids");
-    expect(csv).toContain("restaurant:lilia,restaurant,Lilia,7001");
+describe("toMentionsCsv", () => {
+  test("one row per mention with joined item ids", () => {
+    const csv = toMentionsCsv(items);
+    expect(csv.trim().split("\n")[0]).toBe("key,type,surface,item_ids");
+    expect(csv).toContain("place:lilia,place,Lilia,7001");
   });
 
-  test("toEntitiesCsv aggregates item ids across items sharing an entity", () => {
-    const two: EnrichedItem[] = [
+  test("toMentionsCsv aggregates item ids across items sharing a mention", () => {
+    const two: AnalyzedItem[] = [
       { ...items[0]!, id: "7001" },
       { ...items[0]!, id: "7002" },
     ];
-    const csv = toEntitiesCsv(two);
-    expect(csv).toContain("restaurant:lilia,restaurant,Lilia,7001|7002");
+    const csv = toMentionsCsv(two);
+    expect(csv).toContain("place:lilia,place,Lilia,7001|7002");
   });
 });
 
 describe("toItemsCsv escaping", () => {
   test("toItemsCsv quotes a caption containing a newline", () => {
-    const withNl: EnrichedItem[] = [{ ...items[0]!, id: "7003", desc: "line1\nline2" }];
+    const withNl: AnalyzedItem[] = [{ ...items[0]!, id: "7003", desc: "line1\nline2" }];
     const csv = toItemsCsv(withNl);
     expect(csv).toContain('"line1\nline2"');
   });
 
   test("toItemsCsv on empty input emits header only", () => {
     const csv = toItemsCsv([]);
-    expect(csv.trim()).toBe("id,url,author,caption,hashtags,tier,entities,takeaways,plays");
+    expect(csv.trim()).toBe("id,url,author,caption,hashtags,lane,mentions,claims,plays");
   });
 });

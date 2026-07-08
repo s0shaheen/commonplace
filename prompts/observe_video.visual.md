@@ -1,3 +1,5 @@
+> SUPERSEDED by extract_v1.md (Phase 3)
+
 You analyze a saved short-form video. You can see the video frames and hear its audio.
 Extract what a person would need to find this video again later.
 

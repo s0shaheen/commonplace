@@ -7,12 +7,8 @@
 // confidence + NIL abstention + provenance — the moat, working on the founder's own data.
 
 import fs from "node:fs";
-import {
-  createMusicBrainzResolver,
-  groundMention,
-  type Mention,
-  type Selector,
-} from "../src/lib/grounding.js";
+import { groundMention, type Mention, type Selector } from "../src/lib/grounding.js";
+import { createMusicBrainzResolver } from "../src/lib/resolvers/musicbrainz.js";
 
 const CORPUS = "/Users/s0shaheen/Dev/attic-extension/attic-favorites.json";
 
@@ -55,7 +51,7 @@ let nil = 0;
 for (const it of withMusic) {
   const mention: Mention = {
     surface: it.music!.name!,
-    type: "media",
+    type: "music_recording",
     hints: { artist: it.music!.author! },
   };
   try {
