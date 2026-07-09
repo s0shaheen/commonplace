@@ -22,7 +22,13 @@ What SPEC v5 settles (evidence: `2026-07-06-refounding-research.md`, 7 Fable res
 
 ## Next move: BUILD — Block 0 (in motion since 2026-07-06 evening)
 
-## CURRENT (2026-07-08): Roadmap execution in motion — Phase 1 COMPLETE
+## CURRENT (2026-07-09): Phase 3 in motion — RESUME AT TASK 7
+
+**Exact resume point:** Phase 3 (plan: `docs/plans/2026-07-08-phase3-mv3-wiring.md`) — **Tasks 1–6 merged and review-approved** (contract migration · esbuild toolchain/manifest · IndexedDB store · engine lanes · resolvers/grounding · resumable offscreen queue; 128 vitest + 198 pytest green, HEAD pushed). **Next = Task 7** (open-schema export — its implementer died on a spend limit with zero partial work; re-dispatch clean), then Task 8 (promptfoo + CI), Task 9 (CWS package), final whole-branch review. Execution detail + per-task minors live in `.superpowers/sdd/progress.md` (the ledger — trust it over memory). Process: superpowers SDD loop, retained per DEC-027; plans save to `docs/plans/`; decisions append to `docs/decisions/decision-log.md`.
+
+**2026-07-09 also:** repo renamed `attic`→`commonplace` (GitHub + package.json; local folder still `~/Dev/attic-extension`); docs restructured to the `docs/README.md` IA (kebab-case convention enforced); founder briefing artifact published. Pending founder: 15-min live Chrome smoke (steps in task-6 report), Places key, CWS account, G2.
+
+## (superseded) 2026-07-08: Phase 1 COMPLETE
 Phase 1 (schema freeze + eval harness) is done and final-reviewed: `schema/` (JSON Schema 1.0.0-rc.5, SHACL base+TikTok, JSON-LD context, facet vocab, fixtures) + `eval/` (`commonplace_eval`, 194 tests green: matcher, per-layer metric matrix, Φ_c, bootstrap CIs, calibration, scorecard CLI) + `eval/construct.md` + `eval/guidelines.md`. Status log + carry-forwards live in `roadmap.md`. Next unchecked phases: **Phase 3** (wire engine into MV3 shell — AUTO; Places resolver waits on the API key) and **Phase 2 prep** (pilot gold set auto-label → founder spot-check gate).
 
 ## (superseded 2026-07-08 — kept for lineage) Block 0.5 — Eval Foundation (the engine's real first work)
