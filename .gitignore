@@ -1,6 +1,7 @@
 node_modules/
 dist/
-src/lib/generated/
+src/lib/generated/*
+!src/lib/generated/validators.d.ts
 src/secrets.js
 .env
 .env.master

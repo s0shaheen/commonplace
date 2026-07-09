@@ -33,6 +33,8 @@ import { createWikidataResolver } from "./lib/resolvers/wikidata.js";
 import { createPlacesResolver } from "./lib/resolvers/places.js";
 import { reviveJobs, enqueueMissing, runQueue, type QueueDeps } from "./lib/queue.js";
 import { PROMPT_VERSION } from "./lib/prompts.js";
+import { toOpenSchemaItem, OPEN_SCHEMA_VERSION, type ExportDeps } from "./lib/exporters/openSchema.js";
+import { validateItem } from "./lib/generated/validators.js";
 import type { CapturedItem, Analysis } from "./lib/types.js";
 import type { MediaPart } from "./lib/geminiClient.js";
 import type { GroundedEntity, KbResolver } from "./lib/grounding.js";
@@ -271,9 +273,47 @@ async function runEngine(): Promise<void> {
   }
 }
 
+// ── Open-schema export (runs HERE, not the SW) ───────────────────────────────────────
+// The offscreen document has URL.createObjectURL + Blob; the service worker does not, and a
+// multi-MB library chokes a base64 data: URL. So the export path is: allRecords() → map each to a
+// frozen-contract item → validate with the PRECOMPILED validator (MV3 CSP bans Ajv runtime codegen)
+// → object-URL blob → chrome.downloads. Validation is REPORT-ONLY: an invalid record is still
+// written and logged — it is the user's data either way, never withheld.
+async function runOpenSchemaExport(): Promise<void> {
+  const cfg = await loadConfig(chrome.storage.local);
+  const store = await openStore();
+  const recs = await store.allRecords();
+
+  const deps: ExportDeps = {
+    nowIso: new Date().toISOString(),
+    extractorRef: {
+      model: cfg.engineLane === "managed" ? cfg.managedModel : cfg.localModel,
+      version: PROMPT_VERSION,
+      prompt: "extract_v1",
+      run: `export:${new Date().toISOString()}`,
+    },
+  };
+
+  const items = recs.map((r) => toOpenSchemaItem(r, deps));
+  let valid = 0;
+  for (const it of items) if (validateItem(it)) valid++;
+  const invalid = items.length - valid;
+  console.log(`[commonplace] open-schema export: ${valid} valid / ${invalid} invalid of ${items.length} records`);
+
+  const json = JSON.stringify({ schemaVersion: OPEN_SCHEMA_VERSION, exportedAt: deps.nowIso, items }, null, 2);
+  const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+  chrome.downloads.download({ url, filename: "commonplace-export.json", saveAs: false }, () => {
+    if (chrome.runtime.lastError) console.log("[commonplace] export download failed:", chrome.runtime.lastError.message);
+    // Free the blob once the download has been handed to the browser's network stack.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  });
+}
+
 chrome.runtime.onMessage.addListener((msg: { kind?: string } | undefined) => {
   if (msg?.kind === "queue_run") {
     runEngine().catch((e) => console.log("[commonplace] engine run failed:", (e as Error).message));
+  } else if (msg?.kind === "export_open_schema_run") {
+    runOpenSchemaExport().catch((e) => console.log("[commonplace] open-schema export failed:", (e as Error).message));
   }
   return false; // results are broadcast as queue_progress/queue_blocked, not returned on this channel
 });

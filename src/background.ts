@@ -44,6 +44,7 @@ interface QueueStartMsg { kind: "queue_start" }
 interface QueueStatusMsg { kind: "queue_status" }
 interface QueueProgressMsg { kind: "queue_progress"; done: number; total: number }
 interface QueueBlockedMsg { kind: "queue_blocked"; reason: string }
+interface ExportOpenSchemaMsg { kind: "export_open_schema" }
 type Msg =
   | ItemListMsg
   | ScrollDoneMsg
@@ -52,7 +53,8 @@ type Msg =
   | QueueStartMsg
   | QueueStatusMsg
   | QueueProgressMsg
-  | QueueBlockedMsg;
+  | QueueBlockedMsg
+  | ExportOpenSchemaMsg;
 
 chrome.runtime.onMessage.addListener((msg: Msg, _sender, _sendResponse) => {
   if (msg.kind === "item_list") {
@@ -66,6 +68,10 @@ chrome.runtime.onMessage.addListener((msg: Msg, _sender, _sendResponse) => {
   } else if (msg.kind === "queue_start") {
     // The SW-side wake path: make sure the offscreen engine document exists, then tell it to drain.
     void startQueue();
+  } else if (msg.kind === "export_open_schema") {
+    // Same wake path as the engine: only the SW can create the offscreen doc, and the export needs
+    // its Blob/URL.createObjectURL context — so ensure it exists, then tell it to build the file.
+    void startOpenSchemaExport();
   } else if (msg.kind === "queue_status") {
     void logQueueStatus();
   } else if (msg.kind === "queue_progress") {
@@ -99,6 +105,12 @@ async function startQueue(): Promise<void> {
   await ensureOffscreen();
   // Swallow a transient no-receiver rejection (the doc may still be registering its listener).
   void chrome.runtime.sendMessage({ kind: "queue_run" }).catch(() => {});
+}
+
+async function startOpenSchemaExport(): Promise<void> {
+  await ensureOffscreen();
+  // Swallow a transient no-receiver rejection (the doc may still be registering its listener).
+  void chrome.runtime.sendMessage({ kind: "export_open_schema_run" }).catch(() => {});
 }
 
 async function logQueueStatus(): Promise<void> {

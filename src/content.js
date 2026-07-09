@@ -1,5 +1,5 @@
 // ISOLATED-world content script. Relays MAIN-world captures to the service worker,
-// drives auto-scroll (Alt+Shift+A), manual export (Alt+Shift+S), starts the extraction queue
+// drives auto-scroll (Alt+Shift+A), open-schema export (Alt+Shift+S), starts the extraction queue
 // (Alt+Shift+E), and logs queue status to the SW console (Alt+Shift+Q).
 
 window.addEventListener("message", (e) => {
@@ -163,8 +163,8 @@ window.addEventListener("keydown", (e) => {
   if (!e.altKey || !e.shiftKey) return;
   if (e.code === "KeyA") autoScroll();
   if (e.code === "KeyS") {
-    chrome.runtime.sendMessage({ kind: "scroll_done" });
-    console.log("[attic-spike] manual export triggered → attic-favorites.json");
+    chrome.runtime.sendMessage({ kind: "export_open_schema" });
+    console.log("[commonplace] open-schema export triggered → commonplace-export.json");
   }
   if (e.code === "KeyE") {
     chrome.runtime.sendMessage({ kind: "queue_start" });
@@ -186,5 +186,5 @@ window.addEventListener("keydown", (e) => {
 });
 
 console.log(
-  "[commonplace] ready — A:auto-scroll · S:export · E:queue-start · Q:queue-status · K:kill-pruning · D:download(chrome.downloads) · F:download(fetch)"
+  "[commonplace] ready — A:auto-scroll · S:open-schema-export · E:queue-start · Q:queue-status · K:kill-pruning · D:download(chrome.downloads) · F:download(fetch)"
 );
