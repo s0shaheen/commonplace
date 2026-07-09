@@ -1,0 +1,54 @@
+# Commonplace CI — three INDEPENDENT jobs, each gating its own layer and failing on its own.
+# There is deliberately NO combined status gate / blended score: `node`, `python-eval`, and
+# `promptfoo-replay` run in parallel and each surfaces its own pass/fail (evaluation-methodology:
+# per-layer results only). The promptfoo slice is keyless and deterministic ($0), so it needs no
+# secrets and runs on every commit.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Layer 1 — the TypeScript engine + MV3 shell: types, unit tests, spike test, bundle.
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: node --test src/capture.test.js
+      - run: npm run build
+      # Task 9 adds scripts/audit-dist.mjs; guard so CI is green now and picks it up automatically.
+      - name: Audit dist (Task 9)
+        run: |
+          if [ -f scripts/audit-dist.mjs ]; then
+            node scripts/audit-dist.mjs
+          else
+            echo "scripts/audit-dist.mjs not present yet (Task 9) — skipping dist audit."
+          fi
+
+  # Layer 2 — the Phase-1 Python harness keeps gating the schemas/SHACL (untouched by Task 8).
+  python-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Run pytest schema/SHACL suite
+        run: cd eval && uv sync && uv run pytest -q
+
+  # Layer 3 — SPEC §15 zero-cost frozen replay slice (keyless: the provider IS the replay).
+  promptfoo-replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run eval:promptfoo

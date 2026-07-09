@@ -1,0 +1,30 @@
+# Commonplace — SPEC §15 zero-cost frozen replay slice.
+#
+# Two INDEPENDENT per-layer assertions run on each of 3 synthetic clips (SPEC §23): schema-validity
+# and grounding-ID exact match / NIL accuracy. Each assert returns its own pass/fail with reasons —
+# there is NO blended score. The provider is a keyless deterministic replay ($0, no live model call),
+# so this runs on every commit with no secrets. `gemini-2.5-flash-lite` is a display label only.
+description: Commonplace frozen replay slice (schema + grounding gates, keyless $0)
+
+providers:
+  - id: file://replay-provider.mjs
+    label: gemini-2.5-flash-lite (frozen replay — keyless, $0)
+
+# The replay provider ignores the prompt entirely; a prompt is required by promptfoo's schema.
+prompts:
+  - 'Extract entities from clip {{clipId}} (ignored — the provider replays frozen output).'
+
+defaultTest:
+  assert:
+    - type: javascript
+      value: file://asserts/schema-valid.mjs
+    - type: javascript
+      value: file://asserts/grounding-exact.mjs
+
+tests:
+  - vars:
+      clipId: clip-song
+  - vars:
+      clipId: clip-place-nil
+  - vars:
+      clipId: clip-slideshow

@@ -1,0 +1,33 @@
+{
+  "clipId": "clip-place-nil",
+  "note": "SYNTHETIC (SPEC §23): invented place surface. The places resolver is PRESENT but returns ZERO frozen candidates, so grounding must produce an honest NIL (resolved:false, externalId:null) — not a reground-pending defer. Asserts the grounding invariant nil=true ⇒ externalId null.",
+  "extractorOutput": {
+    "mentions": [
+      {
+        "surface": "Blue Harbor Cafe",
+        "type": "place",
+        "evidence": [
+          { "channel": "VISUAL_TEXT", "assertion_mode": "SHOWN", "confidence": 0.6 }
+        ]
+      }
+    ],
+    "concepts": [],
+    "facets": [
+      {
+        "facet": "topic",
+        "value": "food",
+        "evidence": [
+          { "channel": "VISUAL_SCENE", "assertion_mode": "INFERRED", "confidence": 0.55 }
+        ]
+      }
+    ],
+    "claims": [],
+    "structured": []
+  },
+  "candidates": {
+    "place:Blue Harbor Cafe": []
+  },
+  "expectedGrounding": [
+    { "surface": "Blue Harbor Cafe", "type": "place", "externalId": null, "nil": true }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "clipId": "clip-song",
+  "note": "SYNTHETIC (SPEC §23): invented surface + MBID; never a real MusicBrainz recording. One music_recording mention that resolves to an exact frozen MBID. externalId == candidate[0].id (the deterministic top-candidate selector picks index 0).",
+  "extractorOutput": {
+    "mentions": [
+      {
+        "surface": "Midnight Reverie",
+        "type": "music_recording",
+        "evidence": [
+          { "channel": "VERBAL_AUDIO", "assertion_mode": "SHOWN", "confidence": 0.95 }
+        ]
+      }
+    ],
+    "concepts": [],
+    "facets": [
+      {
+        "facet": "genre",
+        "value": "performance",
+        "evidence": [
+          { "channel": "VISUAL_SCENE", "assertion_mode": "INFERRED", "confidence": 0.7 }
+        ]
+      }
+    ],
+    "claims": [],
+    "structured": []
+  },
+  "candidates": {
+    "music_recording:Midnight Reverie": [
+      { "id": "9d4e2f10-3a7b-4c8e-b1a2-000000000001", "source": "musicbrainz", "name": "Midnight Reverie", "score": 100 }
+    ]
+  },
+  "expectedGrounding": [
+    { "surface": "Midnight Reverie", "type": "music_recording", "externalId": "9d4e2f10-3a7b-4c8e-b1a2-000000000001", "nil": false }
+  ]
+}

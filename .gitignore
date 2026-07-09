@@ -32,3 +32,6 @@ spikes/pipeline/results.jsonl
 eval/.venv/
 __pycache__/
 .pytest_cache/
+
+# promptfoo replay slice — esbuild prebundle of the TS grounding engine (build artifact)
+eval-promptfoo/.bundle/

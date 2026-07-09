@@ -1,0 +1,42 @@
+{
+  "clipId": "clip-slideshow",
+  "note": "SYNTHETIC (SPEC §23): a photo/slideshow item — concepts + facets only, NO named-entity mentions. Grounding asserts vacuously (0 mentions ⇒ 0 groundings); the schema assert does the real work. Facet values are drawn from schema/vocab/facets.json so they read honestly (the JSON schema enforces facet NAME enums; the Python schema_gate enforces value membership).",
+  "extractorOutput": {
+    "mentions": [],
+    "concepts": [
+      {
+        "surface": "minimalist interior styling",
+        "evidence": [
+          { "channel": "VISUAL_SCENE", "assertion_mode": "SHOWN", "confidence": 0.82 }
+        ]
+      }
+    ],
+    "facets": [
+      {
+        "facet": "genre",
+        "value": "slideshow",
+        "evidence": [
+          { "channel": "STRUCTURED_METADATA", "assertion_mode": "SHOWN", "confidence": 0.9 }
+        ]
+      },
+      {
+        "facet": "topic",
+        "value": "home",
+        "evidence": [
+          { "channel": "VISUAL_SCENE", "assertion_mode": "INFERRED", "confidence": 0.75 }
+        ]
+      },
+      {
+        "facet": "presentation",
+        "value": "room_tour",
+        "evidence": [
+          { "channel": "VISUAL_SCENE", "assertion_mode": "SHOWN", "confidence": 0.8 }
+        ]
+      }
+    ],
+    "claims": [],
+    "structured": []
+  },
+  "candidates": {},
+  "expectedGrounding": []
+}
