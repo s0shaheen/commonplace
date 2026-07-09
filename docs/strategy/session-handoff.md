@@ -22,11 +22,15 @@ What SPEC v5 settles (evidence: `2026-07-06-refounding-research.md`, 7 Fable res
 
 ## Next move: BUILD — Block 0 (in motion since 2026-07-06 evening)
 
-## CURRENT (2026-07-09): Phase 3 in motion — RESUME AT TASK 7
+## CURRENT (2026-07-09 eve): PHASE 3 COMPLETE — next = Phase 2 pilot prep, Phase 4 in parallel
 
-**Exact resume point:** Phase 3 (plan: `docs/plans/2026-07-08-phase3-mv3-wiring.md`) — **Tasks 1–6 merged and review-approved** (contract migration · esbuild toolchain/manifest · IndexedDB store · engine lanes · resolvers/grounding · resumable offscreen queue; 128 vitest + 198 pytest green, HEAD pushed). **Next = Task 7** (open-schema export — its implementer died on a spend limit with zero partial work; re-dispatch clean), then Task 8 (promptfoo + CI), Task 9 (CWS package), final whole-branch review. Execution detail + per-task minors live in `.superpowers/sdd/progress.md` (the ledger — trust it over memory). Process: superpowers SDD loop, retained per DEC-027; plans save to `docs/plans/`; decisions append to `docs/decisions/decision-log.md`.
+**Phase 3 CLOSED (final whole-branch review: Ready to merge YES).** All 9 tasks + rc.6 + one final fix wave (e9a527f) on main: capture→analyze→ground→library-data→export end-to-end, kill-surviving offscreen queue, open-schema export Ajv-valid against rc.6 with per-record `extractor_ref` provenance, promptfoo replay + 3-job CI, submit-ready (NOT submitted) CWS package + key-exposure audit. 145 vitest + 8 capture + 198 pytest green. Ledger (`.superpowers/sdd/progress.md`) holds the Phase-4/5 backlog of accepted minors — trust it over memory.
 
-**2026-07-09 also:** repo renamed `attic`→`commonplace` (GitHub + package.json; local folder still `~/Dev/attic-extension`); docs restructured to the `docs/README.md` IA (kebab-case convention enforced); founder briefing artifact published. Pending founder: 15-min live Chrome smoke (steps in task-6 report), Places key, CWS account, G2.
+**FOUNDER QUEUE (nothing blocks silently):** ① ratify the per-record `extractor_ref` ruling (final review found the plan's uniform export stamp mislabels mixed-lane libraries; fixed to derive from `rec.analysis` — provenance-first-class governs); ② confirm contact email `hello@commonplacehq.com`; ③ listing name keeps "Search" (SPEC §18 keyword trade) while the dry-run build has no search UI — deliberate, roadmap-labeled; ④ dev-manifest name must change before any PUBLIC listing; ⑤ live Chrome smokes (steps in task-6 + task-7 reports); ⑥ Places key; ⑦ CWS $5 account; ⑧ G2 design pick (gates Phase 5).
+
+**Next build move:** Phase 2 pilot prep (auto-label ~150-video stratified pilot → founder spot-check gate) and/or Phase 4 (prompt tuning + native-vs-VTT ablation — needs the eval instrument, which exists). Process: superpowers SDD loop per DEC-027; plans → `docs/plans/`; decisions → `docs/decisions/decision-log.md`.
+
+**2026-07-09 also:** repo renamed `attic`→`commonplace` (GitHub + package.json; local folder still `~/Dev/attic-extension`); docs restructured to the `docs/README.md` IA (kebab-case convention enforced); founder briefing artifact published.
 
 ## (superseded) 2026-07-08: Phase 1 COMPLETE
 Phase 1 (schema freeze + eval harness) is done and final-reviewed: `schema/` (JSON Schema 1.0.0-rc.5, SHACL base+TikTok, JSON-LD context, facet vocab, fixtures) + `eval/` (`commonplace_eval`, 194 tests green: matcher, per-layer metric matrix, Φ_c, bootstrap CIs, calibration, scorecard CLI) + `eval/construct.md` + `eval/guidelines.md`. Status log + carry-forwards live in `roadmap.md`. Next unchecked phases: **Phase 3** (wire engine into MV3 shell — AUTO; Places resolver waits on the API key) and **Phase 2 prep** (pilot gold set auto-label → founder spot-check gate).
