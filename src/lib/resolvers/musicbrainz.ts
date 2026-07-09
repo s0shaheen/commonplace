@@ -45,7 +45,8 @@ export function createMusicBrainzResolver(deps: MusicBrainzDeps): KbResolver {
       const query = encodeURIComponent(parts.join(" "));
       const url = `https://musicbrainz.org/ws/2/recording?query=${query}&fmt=json&limit=5`;
       const json = await deps.fetchJson(url, {
-        "User-Agent": "AtticEngine/0.1 (grounding-spike)",
+        // SPEC §14 etiquette UA — the Commonplace identifier every KB call must send (wikidata.ts matches).
+        "User-Agent": "Commonplace/0.1 (https://commonplacehq.com)",
       });
       return parseMusicBrainzRecordings(json);
     },

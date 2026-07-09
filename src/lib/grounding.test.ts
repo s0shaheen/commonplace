@@ -111,9 +111,11 @@ describe("MusicBrainz resolver", () => {
 
   it("routes only music/media mentions and queries by surface + artist hint", async () => {
     let calledUrl = "";
+    let calledHeaders: Record<string, string> | undefined;
     const resolver = createMusicBrainzResolver({
-      fetchJson: async (url: string) => {
+      fetchJson: async (url: string, headers?: Record<string, string>) => {
         calledUrl = url;
+        calledHeaders = headers;
         return {
           recordings: [
             { id: "mbid-x", title: "Song", score: 88, "artist-credit": [{ name: "Artist" }] },
@@ -130,5 +132,7 @@ describe("MusicBrainz resolver", () => {
     expect(calledUrl).toContain("/recording");
     expect(calledUrl.toLowerCase()).toContain("song");
     expect(calledUrl.toLowerCase()).toContain("artist");
+    // SPEC §14 etiquette UA — the Commonplace identifier, not the legacy spike name (Global-Constraint).
+    expect(calledHeaders?.["User-Agent"]).toBe("Commonplace/0.1 (https://commonplacehq.com)");
   });
 });

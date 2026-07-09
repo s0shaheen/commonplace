@@ -148,6 +148,163 @@ describe("toOpenSchemaItem — maps a LibraryRecord onto the frozen item.schema.
   });
 });
 
+// ── F4/F5 coverage: a NIL grounding, the concept/claim/structured builders, per-record
+//    extractor_ref provenance, and a raw (unanalyzed) record. ────────────────────────────────
+const nilGrounding: GroundedEntity = {
+  mention: { surface: "Unknown Song", type: "music_recording" },
+  resolved: false,
+  id: null,
+  source: null,
+  name: null,
+  confidence: 0.42,
+  provenance: { source: "musicbrainz", query: "Unknown Song", candidateCount: 2, selectedIndex: null },
+};
+
+// This record was analyzed on a DIFFERENT model than the export-time deps carry (F5): managed
+// gemini-2.5-flash, while `deps.extractorRef.model` is gemini-2.5-flash-lite.
+const recVariants: LibraryRecord = {
+  id: "9000000000000000001",
+  status: "grounded",
+  updatedAt: "2026-07-08T00:00:00.000Z",
+  item: {
+    id: "9000000000000000001",
+    sources: ["likes"],
+    desc: "",
+    createTime: null,
+    author: "creator",
+    authorName: null,
+    url: null,
+    playUrl: null,
+    downloadUrl: null,
+    cover: null,
+    durationSec: 30,
+    hasSubtitles: false,
+    subtitleUrl: null,
+    isSlideshow: false,
+    music: null,
+    hashtags: [],
+    stats: { plays: null, likes: null, comments: null, shares: null, collects: null },
+  },
+  analysis: {
+    lane: "managed",
+    ingestion: "keyframes_vtt",
+    model: "gemini-2.5-flash", // ← differs from deps.extractorRef.model
+    promptVersion: "extract@v2",
+    analyzedAt: "2026-07-08T00:00:00.000Z",
+    output: {
+      mentions: [
+        {
+          surface: "Unknown Song",
+          type: "music_recording",
+          evidence: [{ channel: "VERBAL_AUDIO", assertion_mode: "SHOWN", confidence: 0.6 }],
+        },
+      ],
+      concepts: [
+        { surface: "resilience", evidence: [{ channel: "VERBAL_TEXT", assertion_mode: "STATED", confidence: 0.7 }] },
+      ],
+      claims: [
+        {
+          statement: "The bridge opened in 1937.",
+          evidence: [{ channel: "VERBAL_TEXT", assertion_mode: "REPORTED", confidence: 0.8 }],
+        },
+      ],
+      structured: [
+        {
+          schemaOrgType: "Recipe",
+          evidence: [{ channel: "VISUAL_TEXT", assertion_mode: "SHOWN", confidence: 0.75 }],
+          slots: [{ name: "prepTime", value: "PT10M" }],
+          steps: [{ order: 1, text: "Mix the batter." }],
+        },
+      ],
+      facets: [],
+    },
+  },
+  groundings: [nilGrounding],
+  regroundPending: [],
+};
+
+// A raw capture with no analysis at all → extractions must be empty, still Ajv-valid.
+const recRaw: LibraryRecord = {
+  id: "9000000000000000002",
+  status: "raw",
+  updatedAt: "2026-07-08T00:00:00.000Z",
+  item: {
+    id: "9000000000000000002",
+    sources: ["posts"],
+    desc: "just a caption",
+    createTime: null,
+    author: null,
+    authorName: null,
+    url: null,
+    playUrl: null,
+    downloadUrl: null,
+    cover: null,
+    durationSec: 10,
+    hasSubtitles: false,
+    subtitleUrl: null,
+    isSlideshow: false,
+    music: null,
+    hashtags: [],
+    stats: { plays: null, likes: null, comments: null, shares: null, collects: null },
+  },
+};
+
+describe("toOpenSchemaItem — NIL grounding + remaining builders + per-record provenance (F4/F5)", () => {
+  const out = toOpenSchemaItem(recVariants, deps) as any;
+
+  test("the emitted object validates against the REAL frozen schema", () => {
+    const ok = validateItem(out);
+    if (!ok) console.error(validateItem.errors);
+    expect(ok).toBe(true);
+  });
+
+  test("a NIL grounding emits {externalId:null, nil:true} with the calibration confidence", () => {
+    const music = findExt(out, (e: any) => e.kind === "named_entity" && e.surface === "Unknown Song");
+    expect(music.grounding.externalId).toBeNull();
+    expect(music.grounding.nil).toBe(true);
+    expect(music.grounding.grounding_confidence).toBe(0.42);
+  });
+
+  test("the concept builder emits a valid concept extraction", () => {
+    const c = findExt(out, (e: any) => e.kind === "concept");
+    expect(c.surface).toBe("resilience");
+    expect(c.evidence[0].channel).toBe("VERBAL_TEXT");
+  });
+
+  test("the claim builder emits a valid claim extraction", () => {
+    const c = findExt(out, (e: any) => e.kind === "claim");
+    expect(c.statement).toBe("The bridge opened in 1937.");
+  });
+
+  test("the structured builder emits slots (as observations) and steps", () => {
+    const s = findExt(out, (e: any) => e.kind === "structured_content");
+    expect(s.schemaOrgType).toBe("Recipe");
+    expect(s.slots[0]).toEqual({ name: "prepTime", value: { value: "PT10M", observedAt: "2026-07-08T12:00:00Z" } });
+    expect(s.steps[0]).toEqual({ order: 1, text: "Mix the batter." });
+  });
+
+  test("F5: evidence is stamped with the RECORD's model, not the export-time deps model", () => {
+    expect(deps.extractorRef.model).toBe("gemini-2.5-flash-lite"); // guard: the two genuinely differ
+    for (const e of out.extractions) {
+      expect(e.evidence[0].extractor_ref.model).toBe("gemini-2.5-flash"); // recVariants.analysis.model
+      expect(e.evidence[0].extractor_ref.version).toBe("extract@v2"); // from analysis.promptVersion
+      expect(e.evidence[0].extractor_ref.prompt).toBe("extract@v2");
+      expect(e.evidence[0].extractor_ref.run).toBe("run-1"); // run stamp still from deps
+    }
+  });
+});
+
+describe("toOpenSchemaItem — a raw record with no analysis (F4)", () => {
+  const out = toOpenSchemaItem(recRaw, deps) as any;
+
+  test("emits an empty extractions array and validates against the frozen schema", () => {
+    expect(out.extractions).toEqual([]);
+    const ok = validateItem(out);
+    if (!ok) console.error(validateItem.errors);
+    expect(ok).toBe(true);
+  });
+});
+
 describe("toOpenSchemaExport — the bundle wrapper", () => {
   test("stamps the frozen schemaVersion and carries every record's item", () => {
     const bundle = JSON.parse(toOpenSchemaExport([rec], deps));

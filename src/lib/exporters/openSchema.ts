@@ -156,6 +156,22 @@ const facetExtraction = (f: FacetAssignmentOut, deps: ExportDeps) => ({
   evidence: mapEvidenceList(f.evidence, deps), // REAL model-emitted evidence (rc.6) — never stamped
 });
 
+// Every evidence span must be stamped with the extractor that ACTUALLY produced this record — the
+// model/prompt recorded at analysis time — not the config in force at export time. A library
+// analyzed on managed but exported while set to local would otherwise mislabel every span. The
+// export-time `deps.extractorRef` supplies only the `run` stamp (an export-run identity) plus the
+// whole fallback for records that carry no analysis of their own.
+function recordExtractorRef(rec: LibraryRecord, deps: ExportDeps): ExtractorRef {
+  const a = rec.analysis;
+  if (!a) return deps.extractorRef;
+  return {
+    model: a.model,
+    version: a.promptVersion,
+    prompt: a.promptVersion,
+    run: deps.extractorRef.run,
+  };
+}
+
 function buildExtractions(rec: LibraryRecord, deps: ExportDeps): Record<string, unknown>[] {
   const out = rec.analysis?.output;
   if (!out) return [];
@@ -163,12 +179,16 @@ function buildExtractions(rec: LibraryRecord, deps: ExportDeps): Record<string, 
   for (const g of rec.groundings ?? []) byKey.set(mentionKey(g.mention), g);
   const pending = new Set<string>(rec.regroundPending ?? []);
 
+  // Derive the per-record extractor_ref once, then thread it through every builder via a deps
+  // clone (nowIso is unchanged — it is an export-time value, correctly).
+  const recDeps: ExportDeps = { nowIso: deps.nowIso, extractorRef: recordExtractorRef(rec, deps) };
+
   return [
-    ...out.mentions.map((m) => namedEntityExtraction(m, deps, byKey, pending)),
-    ...out.concepts.map((c) => conceptExtraction(c, deps)),
-    ...out.claims.map((c) => claimExtraction(c, deps)),
-    ...out.structured.map((s) => structuredExtraction(s, deps)),
-    ...out.facets.map((f) => facetExtraction(f, deps)),
+    ...out.mentions.map((m) => namedEntityExtraction(m, recDeps, byKey, pending)),
+    ...out.concepts.map((c) => conceptExtraction(c, recDeps)),
+    ...out.claims.map((c) => claimExtraction(c, recDeps)),
+    ...out.structured.map((s) => structuredExtraction(s, recDeps)),
+    ...out.facets.map((f) => facetExtraction(f, recDeps)),
   ];
 }
 

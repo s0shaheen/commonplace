@@ -35,9 +35,12 @@ const PERMISSION_ALLOWLIST = [
 ];
 
 // Secret-shaped patterns. `[A-Za-z0-9_\-]` covers the base64url charset real Google keys use.
+// Two Google formats are covered: the classic `AIza…` and the newer `AQ.…` key format.
+// The OpenAI pattern is hyphen-tolerant so it also catches `sk-proj-…` scoped keys.
 const SECRET_PATTERNS = [
   { name: "Google API key (AIza…)", re: /AIza[0-9A-Za-z_\-]{30,}/ },
-  { name: "OpenAI key (sk-…)", re: /sk-[A-Za-z0-9]{20,}/ },
+  { name: "Google API key (AQ.…)", re: /\bAQ\.[A-Za-z0-9_\-]{30,}/ },
+  { name: "OpenAI key (sk-…)", re: /sk-[A-Za-z0-9\-]{20,}/ },
   { name: "literal secrets.js reference", re: /secrets\.js/ },
 ];
 
@@ -81,7 +84,12 @@ if (manifest) {
       "dist/manifest.json declares `web_accessible_resources` — the key-exposure vector SPEC §25 forbids.",
     );
   }
-  const requested = manifest.permissions ?? [];
+  // Both `permissions` and `optional_permissions` are scope the CWS reviewer sees; neither may
+  // request anything outside the shipped allowlist.
+  const requested = [
+    ...(manifest.permissions ?? []),
+    ...(manifest.optional_permissions ?? []),
+  ];
   for (const perm of requested) {
     if (!PERMISSION_ALLOWLIST.includes(perm)) {
       fail(

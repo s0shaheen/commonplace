@@ -55,3 +55,11 @@ for the Phase-5 UI:
 
 Keep the listing Unlisted until the public launch decision; flipping to Public is a later,
 deliberate step, not part of this dry run.
+
+---
+
+## Banned-word self-check (SPEC §21)
+
+Before pasting the listing fields, confirm `listing.md` contains neither **"downloader"** nor
+**"AI-powered"** (SPEC §21 — "AI" stated plainly is fine): `grep -in "downloader\|AI-powered"
+store/cws/listing.md` must return nothing. This is the self-check `listing.md` points at.
