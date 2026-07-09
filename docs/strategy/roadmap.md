@@ -25,7 +25,10 @@ Legend: **[AUTO]** = I run it end-to-end, no touchpoint. **[GATE]** = needs you 
 **Phase 1 — Freeze the schema + build the eval harness** · [AUTO]
 Generate the JSON Schema + SHACL validation shapes from ontology v3; build the open-source matcher + per-layer metric harness; write the annotation guidelines. Output: the frozen contract everything else builds on.
 
-**Phase 2 — The pilot gold set** · [GATE: your spot-check]
+**Phase 2A — Capture hardening + autopilot** · [AUTO] · *inserted 2026-07-09; gates Phase 2*
+Rebuild the capture driver: honest `hasMore:false` completion (kills false-finish), human-cadence throttle-aware scroll, DOM-eviction + off-thread handoff (kills the 1k-slowdown / 3k-crash), decoupled media pass, and a resumable **Sync supervisor** with two self-driving modes (semi-auto default + autonomous opt-in) across all four sources. Plan: `docs/plans/2026-07-09-capture-hardening-and-autopilot.md`. Output: the founder's full TikTok library captures in one unattended run, no crash — **which produces the Phase-2 pilot corpus** (founder chose to wait for this tool rather than a hand-driven capture).
+
+**Phase 2 — The pilot gold set** · [GATE: your spot-check] · *needs the corpus from Phase 2A*
 Auto-label a ~150-video stratified pilot (using a *different* model family, per the method) into a fast review format; **you spot-check/adjudicate** (async, bounded — a few sittings). This is the one unavoidable data-judgment gate, and it produces the first real accuracy numbers *and* sets which entity/concept/structured types v1 populates (data decides, not a guess).
 
 **Phase 3 — Wire the engine into the extension** · [AUTO · needs Google Places key] · *runs parallel to 1–2*
