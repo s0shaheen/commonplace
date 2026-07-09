@@ -7,6 +7,8 @@
   "scripts": {
     "build": "node scripts/build-validators.mjs && node scripts/build.mjs",
     "dev": "npm run build -- --watch",
+    "package": "npm run build && node scripts/package-cws.mjs",
+    "audit": "node scripts/audit-dist.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:spike": "node --test",

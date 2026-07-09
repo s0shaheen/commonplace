@@ -24,14 +24,9 @@ jobs:
       - run: npm test
       - run: node --test src/capture.test.js
       - run: npm run build
-      # Task 9 adds scripts/audit-dist.mjs; guard so CI is green now and picks it up automatically.
-      - name: Audit dist (Task 9)
-        run: |
-          if [ -f scripts/audit-dist.mjs ]; then
-            node scripts/audit-dist.mjs
-          else
-            echo "scripts/audit-dist.mjs not present yet (Task 9) — skipping dist audit."
-          fi
+      # Key-exposure regression test (SPEC §25) — runs against the built dist/ on every commit.
+      - name: Audit dist
+        run: npm run audit
 
   # Layer 2 — the Phase-1 Python harness keeps gating the schemas/SHACL (untouched by Task 8).
   python-eval:

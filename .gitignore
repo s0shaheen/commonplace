@@ -1,5 +1,8 @@
 node_modules/
 dist/
+
+# CWS submission zip — build artifact, never committed (regenerate with `npm run package`)
+commonplace-cws-v*.zip
 src/lib/generated/*
 !src/lib/generated/validators.d.ts
 src/secrets.js
