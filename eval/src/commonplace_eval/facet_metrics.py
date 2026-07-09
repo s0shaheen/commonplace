@@ -1,6 +1,6 @@
 """Facet-layer metrics (Task 8): per-facet macro-F1 + Cohen's κ.
 
-Governed by ``docs/product/_EVAL-METHOD.md`` §4 Facets row: the facets are a
+Governed by ``docs/specs/evaluation-methodology.md`` §4 Facets row: the facets are a
 fixed set of *classification* axes, so each is scored on its own — **per-facet
 macro-F1 + Cohen's κ** — and never blended into one number (each axis has its
 own value set, chance baseline, and denominator).

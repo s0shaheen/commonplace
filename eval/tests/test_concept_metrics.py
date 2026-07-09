@@ -1,6 +1,6 @@
 """Tests for Concept-layer metrics (Task 8): hierarchical F1@k + R-precision.
 
-Per ``docs/product/_EVAL-METHOD.md`` §4 Concept row ("open multi-label subject
+Per ``docs/specs/evaluation-methodology.md`` §4 Concept row ("open multi-label subject
 indexing → hierarchical F1@k (micro+macro), True-Path partial credit,
 R-precision@k — **not** 1:1 linking"). Every expected value below is
 hand-computed in a comment from ``fixtures/hierarchy_sample.json``:

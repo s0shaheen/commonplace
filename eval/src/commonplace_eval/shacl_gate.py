@@ -7,7 +7,7 @@ plus a platform application-profile shape when ``profile`` is given
 (``schema/shacl/profile-<profile>.shape.ttl``). It returns ``(conforms, report)``.
 
 This is the machine-checkable form of the KOE-STANDARD conformance layer
-(``docs/product/_KOE-STANDARD.md``): the base shape is the cross-platform
+(``docs/specs/knowledge-organization-standard.md``): the base shape is the cross-platform
 analyzability gate — it must conform on 100% of valid fixtures regardless of
 platform — and each profile is an Application Profile that tightens the base for
 one platform without touching base validation of any other.

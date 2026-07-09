@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://commonplace.app/schema/item.schema.json",
   "title": "Commonplace base container item",
-  "description": "The cross-platform base object (ontology v3 §2). Admission rule (write-time): the ONLY required fields are identity (>=1 handle) + >=1 save with a source `at`. Everything else is optional / profile-level. Encodes _ONTOLOGY.md v3 §2; `captureStatus` is encoded as an open string pending ontology refinement.",
+  "description": "The cross-platform base object (ontology v3 §2). Admission rule (write-time): the ONLY required fields are identity (>=1 handle) + >=1 save with a source `at`. Everything else is optional / profile-level. Encodes knowledge-ontology.md v3 §2; `captureStatus` is encoded as an open string pending ontology refinement.",
   "type": "object",
   "required": ["identity", "saves"],
   "additionalProperties": false,

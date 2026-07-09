@@ -1,5 +1,5 @@
 // Grounding module — resolve extracted entity MENTIONS to durable external IDs.
-// Design (docs/product/_ENGINE-groundup-2026-07-02.md): the model emits typed mentions;
+// Design (docs/research/2026-07-02-engine-groundup-analysis.md): the model emits typed mentions;
 // this module does candidate-generation (KB search endpoints ARE the candidate generator,
 // no local index) -> disambiguation (injected selector; an LLM "select" in production) ->
 // confidence gate + NIL abstention + provenance. Model-agnostic. This is the moat.

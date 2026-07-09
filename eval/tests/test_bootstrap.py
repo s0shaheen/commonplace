@@ -1,6 +1,6 @@
 """Tests for cluster & paired bootstrap CIs (Task 7).
 
-Per ``docs/product/_EVAL-METHOD.md`` §3 (per-video cluster bootstrap, Miller
+Per ``docs/specs/evaluation-methodology.md`` §3 (per-video cluster bootstrap, Miller
 "Adding Error Bars to Evals", arXiv:2411.00640) and §6 (paired bootstrap for
 ablation ΔF1, B=10,000/95% CI/p<0.05). Bootstrap B is kept small (500–2000)
 for test speed; production defaults to 10_000.

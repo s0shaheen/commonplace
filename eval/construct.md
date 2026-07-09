@@ -2,8 +2,8 @@
 
 > The single decision the whole benchmark rests on. Every mention an annotator
 > sees is judged against this one definition before anything else. Governs
-> `guidelines.md`; conforms to `docs/product/_EVAL-METHOD.md` §2 and
-> `docs/product/_ONTOLOGY.md` §7. One page by design.
+> `guidelines.md`; conforms to `docs/specs/evaluation-methodology.md` §2 and
+> `docs/specs/knowledge-ontology.md` §7. One page by design.
 
 ## Definition
 

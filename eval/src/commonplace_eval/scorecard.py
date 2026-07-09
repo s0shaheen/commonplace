@@ -1,6 +1,6 @@
 """The per-layer scorecard — a MATRIX, never a scalar.
 
-Governed by ``docs/product/_EVAL-METHOD.md`` §4: "The scorecard is a per-layer
+Governed by ``docs/specs/evaluation-methodology.md`` §4: "The scorecard is a per-layer
 MATRIX, not a scalar ... each is scored by its own metric and **must not be
 averaged into one number** (different denominators, chance baselines, meanings of
 'correct' — a blended 'accuracy %' is statistically incoherent *and* dishonest).

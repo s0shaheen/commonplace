@@ -1,6 +1,6 @@
 {
   "version": "1.0.0-rc.6",
-  "description": "The 9 groundable NamedEntity types + their KB anchors, copied verbatim from _EVAL-METHOD.md §2's ontology table. Each type is pinned to a KB target and (where the table spells one out) a Wikidata P31/P279 anchor so 'is this a place-entity?' is decidable, not vibes (the ad-freiburg type-whitelist approach). This is a reference table, not a validated schema; authority tokens are normalized to the `grounding.authority` casing used elsewhere (musicbrainz, google_places, wikidata, openlibrary). `wikidata_anchor` is null where the source table gives no explicit anchor. `restaurant` is NOT a type — it is absorbed into `place` as a facet/subtype (the place/restaurant split is exactly what broke the retracted matcher).",
+  "description": "The 9 groundable NamedEntity types + their KB anchors, copied verbatim from evaluation-methodology.md §2's ontology table. Each type is pinned to a KB target and (where the table spells one out) a Wikidata P31/P279 anchor so 'is this a place-entity?' is decidable, not vibes (the ad-freiburg type-whitelist approach). This is a reference table, not a validated schema; authority tokens are normalized to the `grounding.authority` casing used elsewhere (musicbrainz, google_places, wikidata, openlibrary). `wikidata_anchor` is null where the source table gives no explicit anchor. `restaurant` is NOT a type — it is absorbed into `place` as a facet/subtype (the place/restaurant split is exactly what broke the retracted matcher).",
   "types": [
     {
       "type": "music_recording",

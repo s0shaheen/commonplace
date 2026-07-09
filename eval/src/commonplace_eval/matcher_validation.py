@@ -1,6 +1,6 @@
 """Validate the matcher itself against human judgment.
 
-Governed by ``docs/product/_EVAL-METHOD.md`` §4: "Validate the matcher itself:
+Governed by ``docs/specs/evaluation-methodology.md`` §4: "Validate the matcher itself:
 run it on ~100 human-judged match/non-match pairs and report *its* precision and
 recall (Hamel Husain's rule — raw agreement misleads under class imbalance). The
 matcher is part of the instrument." The matcher is a component of the measurement

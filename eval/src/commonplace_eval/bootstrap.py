@@ -1,6 +1,6 @@
 """Cluster & paired bootstrap confidence intervals.
 
-Governed by ``docs/product/_EVAL-METHOD.md`` §3 — mentions cluster within
+Governed by ``docs/specs/evaluation-methodology.md`` §3 — mentions cluster within
 videos, so CIs are computed with a **per-video cluster bootstrap** (Miller,
 "Adding Error Bars to Evals", arXiv:2411.00640) — and §6, where ablations use
 a **paired bootstrap** (B=10,000, 95% CI on ΔF1, p<0.05; Berg-Kirkpatrick 2012,
@@ -25,7 +25,7 @@ import numpy as np
 # metric_fn(sampled_cluster_ids) -> scalar metric on that (multiset) sample.
 MetricFn = Callable[[list[str]], float]
 
-# Paired-bootstrap CI level is fixed at 95% per _EVAL-METHOD.md §6.
+# Paired-bootstrap CI level is fixed at 95% per evaluation-methodology.md §6.
 _PAIRED_ALPHA = 0.05
 
 

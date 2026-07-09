@@ -2,7 +2,7 @@
 
 ``normalize_mention(s)`` is the deterministic canonicalizer the matcher's EXACT
 tier compares on. Exact-string matching is BANNED as the sole tier (see
-``docs/product/_EVAL-METHOD.md`` §4 "Extraction (mention-level), exact-string
+``docs/specs/evaluation-methodology.md`` §4 "Extraction (mention-level), exact-string
 BANNED") precisely because it scores benign variation ("SZA — Kill Bill" vs
 "Kill Bill by SZA") as total error; this normalizer absorbs case, Unicode
 form, leading articles, and punctuation so those variants collapse.
@@ -34,7 +34,7 @@ normalize spec says map intra-word apostrophes/hyphens *to space* ("Joe's" ->
 required matcher test ``test_place_vs_restaurant`` requires "Joe's Pizza" to be
 an EXACT (COR) match for "Joes Pizza" — which is impossible under
 apostrophe->space (yields "joe s pizza" != "joes pizza"). The two brief tests
-are formally unsatisfiable together. ``_EVAL-METHOD.md`` §4 governs on conflict
+are formally unsatisfiable together. ``evaluation-methodology.md`` §4 governs on conflict
 (benign variation must not score as error) and entity-linking canonicalization
 prior art removes intra-word apostrophes rather than splitting them. So
 apostrophes are REMOVED intra-word; hyphens and all other punctuation still map

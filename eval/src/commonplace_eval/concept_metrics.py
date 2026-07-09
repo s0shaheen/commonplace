@@ -1,6 +1,6 @@
 """Concept-layer metrics (Task 8): hierarchical F1@k + R-precision.
 
-Governed by ``docs/product/_EVAL-METHOD.md`` §4 Concept row: *open multi-label
+Governed by ``docs/specs/evaluation-methodology.md`` §4 Concept row: *open multi-label
 subject indexing* is scored by **hierarchical F1@k (micro+macro)** with
 **True-Path partial credit** and **R-precision@k** — explicitly **not** 1:1
 linking (a video's subject tags form a hierarchy; predicting a parent of the

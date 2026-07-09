@@ -78,7 +78,7 @@ validates unchanged.
 ## [1.0.0-rc.4] — 2026-07-08
 
 The RDF/standards **conformance layer** — the machine-checkable form of the
-KOE-STANDARD validation checklist (`_KOE-STANDARD.md`). Purely additive: no JSON
+KOE-STANDARD validation checklist (`knowledge-organization-standard.md`). Purely additive: no JSON
 Schema, `$def`, or fixture changes; every rc.3 item still validates unchanged.
 This turns the "Cross-platform" and "Provenance & evidence" checklist items into
 CI-enforceable SHACL.
@@ -123,7 +123,7 @@ CI-enforceable SHACL.
 
 Additive extraction layer: the schemas the engine emits, the model-facing
 extractor schema, the gold/pred record shapes the metric harness consumes, and
-the frozen facet vocabulary (ontology v3 §3–4, `_EVAL-METHOD.md` §2). Purely
+the frozen facet vocabulary (ontology v3 §3–4, `evaluation-methodology.md` §2). Purely
 additive — every rc.2 fixture and `$def` still validates unchanged. This
 replaces the permissive stub that `item.schema.json`'s `extractions[]` resolved
 to; base-container fixtures without `extractions` are unaffected.
@@ -149,7 +149,7 @@ to; base-container fixtures without `extractions` are unaffected.
   (`oneOf`) and `nil="NIL_NO_ID"` ⇒ non-empty `failed_queries` (`if/then`); two
   distinct NIL labels `NIL_NO_ID` / `NON_ENTITY`. `GoldMention` also carries an
   optional structured `verification` object (`{name?, address?, lat?, lng?,
-  url?}`, `additionalProperties: false`) — the `_EVAL-METHOD.md` §3 staleness
+  url?}`, `additionalProperties: false`) — the `evaluation-methodology.md` §3 staleness
   guard: store a Place's name + address + lat/lng (Google Place IDs go stale, so
   the human-readable anchor is what keeps the label reproducible). Additive and
   optional; every prior fixture still validates.
@@ -159,7 +159,7 @@ to; base-container fixtures without `extractions` are unaffected.
   JSON Schemas so it evolves additively; enforced at runtime by `schema_gate`.
   `topic`/`presentation` ported, the rest `v1.0-proposal`.
 - `vocab/named-entity-anchors.json` — the 9 groundable types + KB anchors,
-  copied from `_EVAL-METHOD.md` §2. `restaurant` is absorbed into `place`.
+  copied from `evaluation-methodology.md` §2. `restaurant` is absorbed into `place`.
 - Fixtures: `fixtures/valid/extraction-grounded.json` (a TikTok item with a
   grounded `music_recording` + FragmentSelector evidence and a facet assignment);
   `fixtures/invalid/{zero-evidence-extraction,bad-assertion-mode,bad-entity-type}.json`.
@@ -216,8 +216,8 @@ and `$def` still validates unchanged; no field removed or narrowed.
 
 ## [1.0.0-rc.1] — 2026-07-08
 
-Initial freeze from `_ONTOLOGY.md` v3; formal 1.0.0 at eval-sequence step 6
-(freeze) per `_EVAL-METHOD.md` §1.
+Initial freeze from `knowledge-ontology.md` v3; formal 1.0.0 at eval-sequence step 6
+(freeze) per `evaluation-methodology.md` §1.
 
 ### Added
 - `item.schema.json` — the cross-platform base container (ontology v3 §2). Draft

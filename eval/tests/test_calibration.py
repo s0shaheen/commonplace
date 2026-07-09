@@ -1,6 +1,6 @@
 """Tests for calibration metrics (Task 7).
 
-Per ``docs/product/_EVAL-METHOD.md`` §4 ("Calibration (we publish confidence):
+Per ``docs/specs/evaluation-methodology.md`` §4 ("Calibration (we publish confidence):
 smECE + reliability diagram (relplot; Błasiok & Nakkiran ICLR 2024) + Brier
 score."). smECE is delegated to ``relplot.smECE``; the two smECE tests use
 fixed seeds / deterministic inputs so their thresholds are stable. Every

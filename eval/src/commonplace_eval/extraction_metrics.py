@@ -1,6 +1,6 @@
 """Extraction (mention-level) P/R/F1 — the MUC-5 / SemEval-2013 Task 9.1 stack.
 
-Governed by ``docs/product/_EVAL-METHOD.md`` §4 ("Extraction (mention-level),
+Governed by ``docs/specs/evaluation-methodology.md`` §4 ("Extraction (mention-level),
 exact-string BANNED"). Consumes the Task-5 matcher (``matcher.align`` +
 ``MatchResult.categorize``): the matcher decides *which* gold pairs with which
 prediction and under which MUC category (COR/INC/PAR/MIS/SPU) per scheme; this

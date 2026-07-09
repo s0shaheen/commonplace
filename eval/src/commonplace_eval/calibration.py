@@ -1,6 +1,6 @@
 """Calibration metrics — Brier, smECE, reliability bins.
 
-Governed by ``docs/product/_EVAL-METHOD.md`` §4: "Calibration (we publish
+Governed by ``docs/specs/evaluation-methodology.md`` §4: "Calibration (we publish
 confidence): smECE + reliability diagram (``relplot``; Błasiok & Nakkiran ICLR
 2024 — plain binned ECE is bin-sensitive and gameable) + Brier score." Because
 the product ships a confidence number, calibration is itself a *published*

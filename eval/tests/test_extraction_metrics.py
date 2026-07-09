@@ -1,6 +1,6 @@
 """Tests for extraction P/R/F1 (Task 6), the MUC-5 / SemEval-2013 9.1 stack.
 
-Per ``docs/product/_EVAL-METHOD.md`` §4 ("Extraction (mention-level),
+Per ``docs/specs/evaluation-methodology.md`` §4 ("Extraction (mention-level),
 exact-string BANNED"): partial credit ``P=(COR+0.5·PAR)/ACT``, four schemes,
 micro AND macro AND per-type. Every expected value below is hand-computed in a
 comment beside the assertion; no value is imported from the implementation.

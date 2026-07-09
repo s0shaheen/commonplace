@@ -1,7 +1,7 @@
 """Gold<->prediction mention matcher (Task 5).
 
 Implements the MUC-5 / SemEval-2013 Task 9.1 extraction-matching family for the
-span-free video setting, per ``docs/product/_EVAL-METHOD.md`` §4 ("Extraction
+span-free video setting, per ``docs/specs/evaluation-methodology.md`` §4 ("Extraction
 (mention-level), exact-string BANNED"). Exact-string matching is BANNED as the
 sole tier: the retracted pilot mechanically scored benign variation as total
 error. The fix is two match tiers plus optimal 1:1 alignment:

@@ -1,6 +1,6 @@
 """Tests for decomposed grounding metrics (Task 6).
 
-Per ``docs/product/_EVAL-METHOD.md`` §4 ("Grounding (ID-level), decomposed
+Per ``docs/specs/evaluation-methodology.md`` §4 ("Grounding (ID-level), decomposed
 GERBIL/ELEVANT-style") — extraction noise and grounding noise are scored
 separately. Covers: disambiguation accuracy, InKB micro/macro F1, NIL-F1, the
 asymmetric Effective-Reliability headline Φ_c (default c=10), and the

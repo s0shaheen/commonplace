@@ -1,6 +1,6 @@
 """Grounding (ID-level) metrics, decomposed GERBIL/ELEVANT-style.
 
-Governed by ``docs/product/_EVAL-METHOD.md`` §4 ("Grounding (ID-level),
+Governed by ``docs/specs/evaluation-methodology.md`` §4 ("Grounding (ID-level),
 decomposed ..."). Extraction noise and grounding noise must never be
 confounded, so this module scores the *resolver* on top of the Task-5 matcher's
 **strict-scheme alignment**, decomposed into five views:

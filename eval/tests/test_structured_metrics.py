@@ -1,6 +1,6 @@
 """Tests for StructuredContent-layer metrics (Task 8).
 
-Per ``docs/product/_EVAL-METHOD.md`` §4 StructuredContent row ("slot-filling ->
+Per ``docs/specs/evaluation-methodology.md`` §4 StructuredContent row ("slot-filling ->
 Field Accuracy + Document Accuracy + step recall/order"). Value-correctness uses
 the SAME normalize + fuzzy>=90 convention as the Task-5 matcher.
 

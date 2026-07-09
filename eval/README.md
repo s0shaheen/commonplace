@@ -4,8 +4,8 @@ This is the open-source evaluation harness behind Commonplace's **published
 accuracy page**. Commonplace's moat is *measured, published grounding accuracy*,
 so the instrument that produces those numbers is a first-class product asset, not
 a QA afterthought — it is versioned, tested, and open. The governing design is
-[`docs/product/_EVAL-METHOD.md`](../docs/product/_EVAL-METHOD.md); the data
-contract it scores is [`schema/`](../schema/) (`_ONTOLOGY.md` v3).
+[`docs/specs/evaluation-methodology.md`](../docs/specs/evaluation-methodology.md); the data
+contract it scores is [`schema/`](../schema/) (`knowledge-ontology.md` v3).
 
 ## The scorecard is a per-layer MATRIX — never one blended number
 

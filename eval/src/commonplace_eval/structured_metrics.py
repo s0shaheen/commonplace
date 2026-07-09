@@ -1,6 +1,6 @@
 """StructuredContent-layer metrics (Task 8): slot-filling + step recall/order.
 
-Governed by ``docs/product/_EVAL-METHOD.md`` §4 StructuredContent row:
+Governed by ``docs/specs/evaluation-methodology.md`` §4 StructuredContent row:
 *slot-filling* is scored by **Field Accuracy + Document Accuracy + step
 recall/order**. StructuredContent is the schema.org-typed structured payload of
 a video (a ``Recipe`` with ingredient slots and ordered steps, a ``HowTo``,

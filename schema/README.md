@@ -3,8 +3,8 @@
 The frozen measurement contract for Commonplace: the JSON Schemas (and, from
 Task 3, the SHACL shapes + JSON-LD context) that every captured item and every
 extraction is validated against. Derived from the governing ontology,
-`docs/product/_ONTOLOGY.md` v3, and its teaching companion
-`docs/product/_SCHEMA-DERIVATION.html`.
+`docs/specs/knowledge-ontology.md` v3, and its teaching companion
+`docs/specs/schema-derivation-walkthrough.html`.
 
 ## Layout
 
@@ -16,7 +16,7 @@ extraction is validated against. Derived from the governing ontology,
 | `json/gold.schema.json` | The human-verified **gold record** (one per item, JSONL) the metric harness scores against. Mentions enforce `gold_id` XOR `nil` and `nil="NIL_NO_ID"` ⇒ non-empty `failed_queries`. |
 | `json/pred.schema.json` | The system **prediction record** scored against gold; mentions carry grounding. |
 | `vocab/facets.json` | The frozen v1.0 **facet vocabulary** — the closed enum source kept out of the JSON Schemas so it evolves additively. Enforced at runtime by `schema_gate`. |
-| `vocab/named-entity-anchors.json` | The 9 groundable NamedEntity **types + KB anchors** (from `_EVAL-METHOD.md` §2). Reference table, not a validated schema. |
+| `vocab/named-entity-anchors.json` | The 9 groundable NamedEntity **types + KB anchors** (from `evaluation-methodology.md` §2). Reference table, not a validated schema. |
 | `context/commonplace.context.jsonld` | The **JSON-LD context** that lifts item JSON into RDF (`@vocab` = `cpl:`, with schema.org / W3C Web Annotation / PROV-O overrides). The bridge from the JSON layer to the SHACL layer; every field a SHACL shape keys off is mapped here. |
 | `shacl/base.shape.ttl` | The **base SHACL shape** (`sh:targetClass cpl:Item` / `cpl:Extraction`): the KOE cross-analyzability gate. Enforces the admission rule (≥1 identity handle, ≥1 dated save), the evidence-provenance gate (every extraction ≥1 evidence), and the assertion_mode/channel/mediaKind enums. **Must conform on 100% of `fixtures/valid/` regardless of platform.** |
 | `shacl/profile-tiktok.shape.ttl` | The **TikTok application profile** (DCTAP → SHACL). Targets `origin.platform == "tiktok"` via a SPARQL-based target and tightens base optional fields (canonicalId required, identity.status = platform_verified, mediaKind ∈ {video, photo}) — touching zero base fields for any other platform. |
@@ -47,7 +47,7 @@ and a pooled benchmark possible.
 
 - **Semver**, one line for all contract files together. Current: `1.0.0-rc.6`
   (release-candidate freeze from ontology v3). Formal `1.0.0` is cut at
-  eval-sequence step 6 per `_EVAL-METHOD.md` §1.
+  eval-sequence step 6 per `evaluation-methodology.md` §1.
 - **Additive and durable.** Fields are **never deleted, only deprecated.** A
   field that leaves active use is marked deprecated in the CHANGELOG and kept in
   the schema so historical data stays valid. Breaking removals would force a new

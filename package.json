@@ -1,9 +1,9 @@
 {
-  "name": "attic-extension-spike",
+  "name": "commonplace",
   "private": true,
   "type": "module",
-  "version": "0.0.1",
-  "description": "Throwaway Phase 0 kill-gate spike for the Attic pivot.",
+  "version": "0.1.0",
+  "description": "Commonplace — a commonplace book for the video age. Local-first library for your saved videos, with evidence-backed analysis and grounded entities.",
   "scripts": {
     "build": "node scripts/build-validators.mjs && node scripts/build.mjs",
     "dev": "npm run build -- --watch",

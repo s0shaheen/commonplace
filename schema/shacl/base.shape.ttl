@@ -1,7 +1,7 @@
 # Commonplace base SHACL shape — the cross-platform analyzability gate.
 #
 # This is the machine-checkable form of the KOE-STANDARD "Cross-platform" and
-# "Provenance & evidence" checklist items (_KOE-STANDARD.md §validation checklist):
+# "Provenance & evidence" checklist items (knowledge-organization-standard.md §validation checklist):
 #   - "One base object ... each platform is an Application Profile ... touching
 #      zero base fields", and
 #   - "The base SHACL shape passes on 100% of items regardless of platform

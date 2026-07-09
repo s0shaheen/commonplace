@@ -1,6 +1,6 @@
 # Commonplace TikTok application profile — SHACL form of tiktok.dctap.csv.
 #
-# Zero-base-fields rule (_KOE-STANDARD.md, founder directive 2): a platform
+# Zero-base-fields rule (knowledge-organization-standard.md, founder directive 2): a platform
 # profile is an Application Profile (DCTAP -> SHACL) that touches ZERO base
 # fields — i.e. it never introduces a NEW base constraint that would change how
 # the base shape validates a non-TikTok item. The two allowed moves are:

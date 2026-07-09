@@ -1,22 +1,36 @@
-# Attic Phase 0 Spike (throwaway)
+# Commonplace
 
-Validates: (1) complete in-browser capture of TikTok Favorites, (2) AI-enriched export value.
+**A commonplace book for the video age.** A local-first browser extension that turns your saved TikToks (Instagram/X to follow) into a structured library you own: every save is captured before its links rot, analyzed by an AI that writes down what it's about *with evidence receipts*, and grounded to durable public identifiers (MusicBrainz, Wikidata, Google Places) — or given an honest "not found."
 
-## Setup
+The differentiator is measurement: the evaluation harness is open-source and the grounding accuracy numbers will be published, per-layer, with confidence intervals, before launch.
 
-1. `cp src/secrets.example.js src/secrets.js` and paste your Gemini key.
-2. Chrome → `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select this folder.
+## Repository layout
 
-## Run
+| Path | What it is |
+|---|---|
+| `src/` | The MV3 extension: capture shell + the TypeScript engine (`src/lib`) — lanes, resolvers, grounding, store, queue, exporters |
+| `schema/` | **The frozen data contract** (JSON Schema + SHACL + vocabularies + fixtures + CHANGELOG). Public-bound |
+| `eval/` | **The open-source evaluation instrument** (Python/uv): matcher, per-layer metrics, calibration, bootstrap CIs, scorecard CLI + the annotation codebook. Public-bound |
+| `docs/` | Documentation — start at `docs/README.md` (the map); `docs/specs/` governs |
+| `prompts/` | Extractor prompts (`extract_v1.md` is current) |
+| `scripts/` | Build (esbuild), schema-validator precompile, CWS packaging, key-exposure audit |
+| `spikes/` | Historical feasibility spikes with results (evidence, not gospel) |
 
-- **Capture (gate 0.2):** Log into TikTok, open your **Favorites** tab (bookmark icon) on your profile. Press **Alt+Shift+A** to auto-scroll + capture. When it finishes it downloads `attic-favorites.json`. Watch the service-worker console (`chrome://extensions` → "service worker") for live counts.
-- **Enrich (gate 0.3):** On the same tab, after capture, press **Alt+Shift+E** to enrich the first 20 items → downloads `attic-enriched.json`. Watch the page console for per-item `ok`/`ERROR`.
+## Development
 
-## Tests
+```bash
+npm install && npm run build     # bundles the extension into dist/
+npm test                         # engine tests (vitest)
+npm run typecheck
+cd eval && uv sync && uv run pytest -q   # evaluation harness tests
+```
 
-`npm test`
+Load `dist/` unpacked at `chrome://extensions` (Developer mode). Set your Gemini key in the extension's options page — keys live only in `chrome.storage.local`, never in source.
 
-## Gates
+- Capture: open your TikTok Favorites, **Alt+Shift+A** to scroll+capture
+- Analyze/ground: **Alt+Shift+E** starts the resumable queue (survives service-worker kills)
+- Export: **Alt+Shift+S** emits the library in the open schema format
 
-See `recon/0.1-findings.md`, `results/0.4-value-test.md`, `results/0.8-spike-decision.md`.
-Endpoint: `GET /api/user/collect/item_list/` · item array `itemList` · `id` is a string.
+## Where things stand
+
+See `docs/strategy/roadmap.md` (status log at the bottom) and `docs/decisions/decision-log.md` for how we got here.

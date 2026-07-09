@@ -1,6 +1,6 @@
 """Tests for Facet-layer metrics (Task 8): per-facet macro-F1 + Cohen's κ.
 
-Per ``docs/product/_EVAL-METHOD.md`` §4 Facets row ("classification → per-facet
+Per ``docs/specs/evaluation-methodology.md`` §4 Facets row ("classification → per-facet
 macro-F1 + Cohen's κ"). Each κ below is hand-computed from the confusion of the
 paired label sequences; div-by-zero and degenerate-marginal conventions are
 asserted explicitly.

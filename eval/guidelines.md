@@ -3,8 +3,8 @@
 > **The instrument that makes the measurement valid.** Commonplace's moat is a
 > *published, measured grounding-accuracy page*; these guidelines are what let a
 > stranger reproduce our gold labels and therefore trust that page. They
-> operationalize `docs/product/_EVAL-METHOD.md` (§2 the 9 types + NIL, §3 the
-> gold-set rules, §5 the solo-annotator protocol) and `docs/product/_ONTOLOGY.md`
+> operationalize `docs/specs/evaluation-methodology.md` (§2 the 9 types + NIL, §3 the
+> gold-set rules, §5 the solo-annotator protocol) and `docs/specs/knowledge-ontology.md`
 > v3 (§3 the four Referent kinds, §4 evidence/channels/selectors, §7 the
 > decidable typing rule). Labels are captured in the format frozen by
 > `schema/json/gold.schema.json`; the type enum is
@@ -62,7 +62,7 @@ Label **every** in-scope mention in each item, top to bottom, in every channel
 (spoken audio, on-screen text, caption, the song on the track). **Never build
 gold from the union of engine outputs** — pooling from system predictions
 inflates recall because you only ever confirm what the system already found and
-never add what it missed (`_EVAL-METHOD.md` §3). The gold set is the independent
+never add what it missed (`evaluation-methodology.md` §3). The gold set is the independent
 truth the system is measured *against*; it cannot be derived from the thing
 being measured.
 
@@ -70,14 +70,14 @@ being measured.
 
 1. **Pre-annotate with Claude** — deliberately a *different model family* than
    the extraction pipeline (Gemini/Qwen), to avoid correlated errors and
-   self-preference (`_EVAL-METHOD.md` §5.1). Import the pre-labels as
+   self-preference (`evaluation-methodology.md` §5.1). Import the pre-labels as
    **suggestions** into the annotation tool (**Argilla** primary, or **Label
    Studio** for its native video player).
 2. **Human pass:** for every suggestion — *verify* it, *correct* the type or
    surface if wrong, and if it is **not** a rigid in-scope individual *mark it
    `NON_ENTITY`* — **never delete a suggestion.** A suggestion is something that
    *proposed* this surface as an entity; the `NON_ENTITY` record is the scored
-   gold label that says "proposed and rejected" (§4, `_EVAL-METHOD.md` §2).
+   gold label that says "proposed and rejected" (§4, `evaluation-methodology.md` §2).
    Deleting it would silently drop a label the metric needs. Then **add** every
    in-scope mention the pre-annotation missed. Confirm every id by opening the
    actual record (§5). The suggestions are a labor aid, never the answer.
@@ -210,7 +210,7 @@ confirm it by opening the record (§5), not by trusting the surface string.
   establishment/landmark. **Store the resolved `name`, formatted `address`, and
   `lat/lng` in the structured `verification` field** (`{name, address, lat, lng,
   url?}`) — Place IDs go stale, so the human-readable anchor is what keeps the
-  label reproducible (`_EVAL-METHOD.md` §3).
+  label reproducible (`evaluation-methodology.md` §3).
 - **Include:** a specific, physically locatable establishment or landmark
   (restaurant, café, gym, shop, park, monument).
 - **Exclude:** a category ("a good taco spot"), a generic ("the gym", "home"), a
@@ -379,7 +379,7 @@ confirm it by opening the record (§5), not by trusting the surface string.
 ## 4. NIL protocol — `NIL_NO_ID` vs `NON_ENTITY`
 
 Every mention that is not linked to an id carries exactly one NIL label. They are
-**two different meanings** and the distinction is scored (`_EVAL-METHOD.md` §2,
+**two different meanings** and the distinction is scored (`evaluation-methodology.md` §2,
 "Learn to Not Link"):
 
 - **`NIL_NO_ID`** — a **real, in-scope rigid individual that the KB genuinely
@@ -424,7 +424,7 @@ it for genuine over-extractions.
 category surface ("a good pizza place", "this hidden gym") creates a gold record
 **only when something proposed it as an entity** — a pre-annotation suggestion,
 or a system output being adjudicated. Then you **mark that record `NON_ENTITY`**
-and **never delete it** — `NON_ENTITY` is a *scored gold label* (`_EVAL-METHOD.md`
+and **never delete it** — `NON_ENTITY` is a *scored gold label* (`evaluation-methodology.md`
 §2, "Learn to Not Link"), the thing the metric uses to reward the system for
 declining to link. A category surface **no one proposed gets no record at all**
 (it is simply not a mention). So the NIL decision tree above runs only on
@@ -444,7 +444,7 @@ Remember the schema invariant: `gold_id` **xor** `nil`. A mention never has both
 
 **Every gold ID is verified against the live authority at label time by opening
 the actual record. Never accept an id by name similarity** — a name-matched
-wrong id is the worst outcome the metric punishes (`_EVAL-METHOD.md` §4, the
+wrong id is the worst outcome the metric punishes (`evaluation-methodology.md` §4, the
 Φ_c penalty). The steps:
 
 1. **Open the record in a browser** and confirm the entity *is* the referent:
@@ -481,7 +481,7 @@ wrong id is the worst outcome the metric punishes (`_EVAL-METHOD.md` §4, the
 > **Schema note:** `gold.schema.json`'s `GoldMention` carries a dedicated,
 > structured `verification` object (`{name?, address?, lat?, lng?, url?}`,
 > `additionalProperties: false`) — the Place's name/address/lat/lng go **there**,
-> not in `notes` (added in schema `1.0.0-rc.3`; `_EVAL-METHOD.md` §3 staleness
+> not in `notes` (added in schema `1.0.0-rc.3`; `evaluation-methodology.md` §3 staleness
 > guard). `notes` is reserved for free-text evidence/where-seen (§6) and
 > disambiguation prose.
 
@@ -526,7 +526,7 @@ notes: "channel=VERBAL_AUDIO; quote=\"best slice is Joe's on Bleecker\"; t=8,13"
 `surface`/`aliases` decision (a song named in `STRUCTURED_METADATA` vs *heard* in
 `VERBAL_AUDIO` are different evidence for the same recording), and they let the
 final scorecard break accuracy out per channel / assertion mode
-(`_ONTOLOGY.md` §8 — STATED should beat INFERRED).
+(`knowledge-ontology.md` §8 — STATED should beat INFERRED).
 
 ---
 
@@ -599,7 +599,7 @@ that has no authority page does not.
 ### 8.2 Claims — `claims[]`
 
 A **proposition** the item asserts. **Faithfulness, not truth** — record what the
-video *says*, never whether it is objectively correct (`_EVAL-METHOD.md` §4).
+video *says*, never whether it is objectively correct (`evaluation-methodology.md` §4).
 Anchor it to its **evidence span** (the quote/timestamp, §6). Gold block
 `GoldClaim`: `{ claim_id, statement }`. v1 captures the **one primary Takeaway
 claim** per item.
@@ -622,7 +622,7 @@ LocalBusiness, NewsArticle, Menu, SoftwareSourceCode, Trip also seeded).
 
 ## 9. Hard-case gallery (the seeded hard slice)
 
-Per `_EVAL-METHOD.md` §3, the gold set **deliberately over-samples** ambiguous
+Per `evaluation-methodology.md` §3, the gold set **deliberately over-samples** ambiguous
 cases so the benchmark is stress-tested, not flattered. Mark each with
 `hard_case: true`. The seeded categories and their rulings:
 
@@ -668,7 +668,7 @@ cases so the benchmark is stress-tested, not flattered. Mark each with
 Agreement is measured with **chance-corrected coefficients only. Never report
 raw percent agreement** — it is documented to inflate 33–41.2 pp over
 chance-corrected coefficients and is uninterpretable under class imbalance
-(`_EVAL-METHOD.md` §5).
+(`evaluation-methodology.md` §5).
 
 | What is compared | Metric | Why |
 |---|---|---|
@@ -678,7 +678,7 @@ chance-corrected coefficients and is uninterpretable under class imbalance
 **Targets:** α **≥ 0.8** (good); **0.667 floor** (below this the label scheme is
 too noisy to publish — fix the guideline, don't average through it).
 
-**How the numbers are produced (solo-annotator protocol, §1.4 + `_EVAL-METHOD.md`
+**How the numbers are produced (solo-annotator protocol, §1.4 + `evaluation-methodology.md`
 §5):**
 
 - **Intra-annotator (test–retest):** re-label 10–15% ≥2 weeks later, prior
