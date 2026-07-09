@@ -2,7 +2,7 @@
 
 _Last updated: 2026-07-09_
 
-Commonplace is a local-first browser extension for building a private, searchable archive of the
+Commonplace is a local-first browser extension for building a private, structured archive of the
 short-form videos you save. This policy explains what the extension does and does not do with your
 data. It is written to be read, not to be survived.
 

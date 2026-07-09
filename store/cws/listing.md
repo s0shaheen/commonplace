@@ -20,11 +20,11 @@ tail carries the search terms a person actually types.
 ## Summary (132 characters max)
 
 ```
-Export your TikTok favorites to a free, local-first archive you own — searchable, structured, receipts on every claim.
+Export your TikTok favorites, free — into a local-first archive you own, with receipts on every claim and a schema you keep.
 ```
 
 Contains the ranking terms **export**, **favorites**, and **free** (SPEC §18), within the 132-char
-CWS limit.
+CWS limit, and claims nothing the uploaded build doesn't do.
 
 ## Category
 
@@ -36,7 +36,7 @@ Productivity
 
 ```
 Your TikTok favorites are a reading list you can't read. Commonplace turns them into a
-searchable, structured archive that lives on your machine and belongs to you.
+structured, evidence-backed archive that lives on your machine and belongs to you.
 
 FREE FOREVER TO EXPORT. Your library exports to an open, documented schema — plain files you
 can open in any tool, take to any app, or keep forever. No lock-in, no paywall on your own data,
@@ -51,10 +51,15 @@ it isn't sure, it shows an honest "unknown" instead of a confident guess. You ca
 a claim was made, and check it.
 
 WHAT YOU GET
-• One-click capture of the videos you save on TikTok, into a private local library.
-• Structured understanding: what each video is about, the entities in it, and where that came from.
-• Full-text and structured search across everything you've saved.
+• One-click capture of the videos you save on TikTok, into a private archive on your own device.
+• Structured, evidence-backed analysis: the entities in each video, resolved to durable public
+  IDs with their receipts — or an honest "unknown."
+• Analysis that resumes where it left off, even when the browser interrupts it.
 • Export to an open schema — yours to keep, yours to leave with.
+
+ON THE ROADMAP (not in this version yet): a visual library of everything you've saved, and
+full-text + structured search across it. Today, Commonplace focuses on doing capture, analysis,
+and export right — the search and library views ship in an upcoming release.
 
 BRING YOUR OWN KEY (OPTIONAL). Deeper analysis runs through an AI model you choose. You can run
 a fully local model so nothing leaves your machine, or supply your own provider key — the key is
