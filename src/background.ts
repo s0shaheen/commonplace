@@ -9,7 +9,8 @@
 // pass kicked the instant a source finishes enumerating (scroll_done) and resumed on the revival
 // alarm — never inline with the live scroll (that contention was a §2.3 renderer-crash vector).
 
-import { openStore, type CpStore } from "./lib/store.js";
+import { openStore, StorageUnrecoverableError, type CpStore } from "./lib/store.js";
+import { isQuotaExceeded, shouldCreateAlarm } from "./lib/capture/storageHealth.js";
 import { createRateLimiter } from "./lib/rateLimiter.js";
 import { runPosterPass, selectPosterWork, type PosterFailures } from "./lib/capture/posterPass.js";
 import {
@@ -45,24 +46,95 @@ const POSTER_FAILURES_KEY = "posterPassFailures";
 // Single lazily-opened store handle, reused across messages within this SW lifetime.
 let storePromise: Promise<CpStore> | null = null;
 function store(): Promise<CpStore> {
-  return (storePromise ??= openStore());
+  if (storePromise) return storePromise;
+  // NEVER memoize a REJECTED open (S-SW-1). openStore may throw transiently, or throw a
+  // StorageUnrecoverableError the caller must be able to re-surface — a stuck rejected promise would
+  // brick every later call for this SW lifetime. Null the memo on failure so the next call retries;
+  // the returned promise still rejects to THIS caller (the side-channel .catch never swallows it).
+  const p = openStore();
+  storePromise = p;
+  p.catch(() => {
+    if (storePromise === p) storePromise = null;
+  });
+  return p;
+}
+
+// Capture halt (S-SW-1 / invariant 4): a storage-full write or an unrecoverable DB must STOP capture
+// and surface a reason — never let a swallowed write present as done. Set by haltCapture; read by the
+// popup via syncStatus. SW-lifetime state; the underlying condition (full disk / broken DB) re-halts
+// on the next write attempt after a restart.
+type CaptureHalt = { reason: "storage_full" | "storage_unrecoverable"; at: string; detail?: string };
+let captureHalt: CaptureHalt | null = null;
+
+// Classify a caught storage error and, when it's a halt-class failure, latch `captureHalt` LOUDLY. A
+// QuotaExceeded is DISTINCT — a "storage full" halt, never counted toward any failure ceiling and
+// never presented as done. An unrecoverable-DB throw is the STORE-01 last rung. Anything else is
+// logged but not latched (a transient write error shouldn't wedge the whole subsystem).
+function haltCapture(e: unknown): void {
+  if (isQuotaExceeded(e)) {
+    captureHalt = { reason: "storage_full", at: new Date().toISOString() };
+    console.error("[commonplace] STORAGE FULL — capture HALTED; last write NOT counted. Free space or export, then retry.", e);
+  } else if (e instanceof StorageUnrecoverableError) {
+    captureHalt = { reason: "storage_unrecoverable", at: new Date().toISOString(), detail: e.message };
+    console.error("[commonplace] STORAGE UNRECOVERABLE — capture HALTED; DB could not self-heal.", e);
+  } else {
+    console.error("[commonplace] storage write failed:", (e as Error).message);
+  }
 }
 
 // One-shot migration: fold any legacy `items` array into the store, then drop the key so this is
 // idempotent across the frequent MV3 service-worker restarts.
+//
+// CRASH-SAFE (S-SW-8): the old version cleared `items` only AFTER a successful upsert, so ANY throw
+// (QuotaExceeded, a store heal in flight) left the source in place and re-ran the failing import on
+// every SW cold start — forever. Now a `migratedLegacy` flag gates re-entry and the source is cleared
+// + the flag stamped in a `finally`, so a mid-migration throw can run the import AT MOST once.
+const MIGRATED_FLAG = "migratedLegacy";
 async function migrateLegacyItems(): Promise<void> {
-  const { items } = await chrome.storage.local.get("items");
-  if (items === undefined) return; // already migrated (or never existed)
-  if (Array.isArray(items) && items.length) {
-    const s = await store();
-    const { added, merged } = await s.upsertItems(items as CapturedItem[], new Date().toISOString());
-    const count = await s.count();
-    await chrome.storage.local.set({ count });
-    console.log(`[commonplace] migrated legacy items → store: +${added} (merged ${merged}), total ${count}`);
+  const stored = await chrome.storage.local.get(["items", MIGRATED_FLAG]);
+  const items = stored["items"];
+  const alreadyMigrated = stored[MIGRATED_FLAG] === true;
+  if (alreadyMigrated || items === undefined) {
+    // Already handled once (success OR a terminal attempt), or nothing legacy was ever present. Stamp
+    // the flag so we never probe again, and drop any residual source key.
+    if (!alreadyMigrated) await chrome.storage.local.set({ [MIGRATED_FLAG]: true });
+    if (items !== undefined) await chrome.storage.local.remove("items");
+    return;
   }
-  await chrome.storage.local.remove("items");
+  try {
+    if (Array.isArray(items) && items.length) {
+      const s = await store();
+      const { added, merged } = await s.upsertItems(items as CapturedItem[], new Date().toISOString());
+      const count = await s.count();
+      await chrome.storage.local.set({ count });
+      console.log(`[commonplace] migrated legacy items → store: +${added} (merged ${merged}), total ${count}`);
+    }
+  } finally {
+    // Stamp + clear REGARDLESS of outcome: a throw here still propagates (so a QuotaExceeded halts
+    // capture), but the failing import will never re-run on the next SW start.
+    await chrome.storage.local.set({ [MIGRATED_FLAG]: true });
+    await chrome.storage.local.remove("items");
+  }
 }
-migrateLegacyItems().catch((e) => console.log("[commonplace] legacy migration failed:", (e as Error).message));
+
+// S-SW-1 / invariants 3+4: IndexedDB is the source of truth for the library count; the mirrored
+// chrome.storage.local.count can drift (a crash between the IDB write and the mirror write, or an
+// origin eviction). Re-derive it from IDB truth on the FIRST store open each SW lifetime so the
+// content script's scroll-idle contract and the popup read a real number, never a phantom.
+async function reconcileCountFromTruth(): Promise<void> {
+  const s = await store();
+  const count = await s.count();
+  await chrome.storage.local.set({ count });
+}
+
+// Storage startup: migrate legacy items (crash-safe), then reconcile the count mirror against IDB.
+// A StorageUnrecoverableError or QuotaExceeded surfacing from the first open halts capture LOUDLY
+// rather than silently proceeding as if storage were healthy.
+async function storageStartup(): Promise<void> {
+  await migrateLegacyItems();
+  await reconcileCountFromTruth();
+}
+storageStartup().catch((e) => haltCapture(e));
 
 // Task 3: the message now carries ALREADY-normalized, source-tagged items (the main world parsed
 // them via parseItemListEnvelope) — the heavy raw `json` envelope no longer crosses the wire. The
@@ -172,9 +244,20 @@ async function logQueueStatus(): Promise<void> {
   console.log(`[commonplace] queue status: ${jobs.length} jobs`, by);
 }
 
-chrome.alarms.create("cp_queue_revive", { periodInMinutes: 1 });
+// IDEMPOTENT registration (S-SW-4): the OLD unconditional top-level `chrome.alarms.create` reset the
+// periodic timer on EVERY sub-minute SW cold start, so under steady capture traffic the one
+// resumability spine could effectively never fire. Fix: never create at top level — register only from
+// onInstalled/onStartup, and even there guard with `chrome.alarms.get` (create iff absent) so a
+// persisted alarm's schedule is left untouched. The onAlarm listener stays at top level (correct).
+const REVIVE_ALARM = "cp_queue_revive";
+async function ensureReviveAlarm(): Promise<void> {
+  const existing = await chrome.alarms.get(REVIVE_ALARM);
+  if (shouldCreateAlarm(existing)) chrome.alarms.create(REVIVE_ALARM, { periodInMinutes: 1 });
+}
+chrome.runtime.onInstalled.addListener(() => void ensureReviveAlarm());
+chrome.runtime.onStartup.addListener(() => void ensureReviveAlarm());
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "cp_queue_revive") void onReviveAlarm();
+  if (alarm.name === REVIVE_ALARM) void onReviveAlarm();
 });
 
 async function onReviveAlarm(): Promise<void> {
@@ -237,16 +320,23 @@ async function handleItemList(msg: ItemListMsg): Promise<void> {
   // SHAPE GATE (review fix): the old SW-side extractItems implicitly guaranteed a non-empty string
   // id (its `.filter((x) => x.id)`); now that items cross the wire pre-built, re-assert it here —
   // an id-less item would throw inside upsertItems. Drop malformed entries, loudly.
+  if (captureHalt) return; // storage halted (full / unrecoverable) — do NOT accept writes as captured
   const raw = msg.items ?? [];
   const incoming = raw.filter((i) => i && typeof i.id === "string" && i.id.length > 0);
   if (incoming.length < raw.length) {
     console.warn(`[commonplace] dropped ${raw.length - incoming.length} malformed item(s) from ${msg.source || "?"}`);
   }
-  const s = await store();
-  const { added, merged } = await s.upsertItems(incoming, new Date().toISOString());
-  const count = await s.count();
-  await chrome.storage.local.set({ count }); // content.js scroll-idle contract
-  console.log(`[commonplace] +${added} from ${msg.source || "?"} (merged ${merged}), total ${count}`);
+  try {
+    const s = await store();
+    const { added, merged } = await s.upsertItems(incoming, new Date().toISOString());
+    const count = await s.count();
+    await chrome.storage.local.set({ count }); // content.js scroll-idle contract
+    console.log(`[commonplace] +${added} from ${msg.source || "?"} (merged ${merged}), total ${count}`);
+  } catch (e) {
+    // A swallowed write must halt, not present as done (invariant 4). QuotaExceeded → "storage full";
+    // an unrecoverable-DB open → its own halt; both are latched + surfaced, never counted as captured.
+    haltCapture(e);
+  }
 }
 
 // ── Decoupled poster pass ────────────────────────────────────────────────────────────
@@ -514,10 +604,14 @@ async function syncStatus(): Promise<{
   running: boolean;
   posterRunning: boolean;
   count: number;
+  halt: CaptureHalt | null;
 }> {
   const s = await store();
   const [progress, count] = await Promise.all([loadSupervisorProgress(s), s.count()]);
-  return { progress, running: supervisorRunning, posterRunning: posterPassRunning, count };
+  // `halt` surfaces a storage-full / unrecoverable-DB stop to the popup (invariant 4: honest, never a
+  // false success). A halt during the open itself would reject this call — the popup treats a failed
+  // poll as "not healthy" too.
+  return { progress, running: supervisorRunning, posterRunning: posterPassRunning, count, halt: captureHalt };
 }
 
 async function handleScrollDone(msg: ScrollDoneMsg): Promise<void> {

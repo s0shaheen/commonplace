@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto";
 import { describe, it, expect } from "vitest";
-import { openStore } from "./store.js";
+import { openDB } from "idb";
+import { openStore, recoverStore, StorageUnrecoverableError, type StoreOpener } from "./store.js";
 import type { CapturedItem, Analysis } from "./types.js";
 import type { GroundedEntity } from "./grounding.js";
 
@@ -151,5 +152,118 @@ describe("CpStore", () => {
     await s.upsertItems([mkItem("a"), mkItem("b")], "2026-07-08T00:00:00Z");
     const all = await s.allRecords();
     expect(all.map((r) => r.id).sort()).toEqual(["a", "b"]);
+  });
+});
+
+// STORE-01 / S-DB-2 — treat the on-disk DB as adversarial: openStore must self-heal a store-less /
+// partial DB (the class that actually bricked the dev DB) or halt loudly, never silently proceed.
+describe("openStore self-healing", () => {
+  const has = (db: Awaited<ReturnType<typeof openDB>>, n: string) => db.objectStoreNames.contains(n);
+
+  it("self-heals a store-less v1 DB → all four stores end present and usable", async () => {
+    // Plant the exact failure mode: a v1 `commonplace` DB that exists WITHOUT its stores (a bare
+    // open at version 1 with no upgrade callback creates none). The version-gated upgrade can never
+    // fix this on its own — openStore must detect the gap and reopen at version+1 to create them.
+    const planted = await openDB("heal-storeless", 1, {});
+    expect(has(planted, "items")).toBe(false); // genuinely store-less
+    planted.close();
+
+    const s = await openStore("heal-storeless");
+    // Every store works → all four were created during the self-heal reopen.
+    await s.upsertItems([mkItem("a")], "2026-07-08T00:00:00Z");
+    expect(await s.count()).toBe(1);
+    await s.putJobs([{ id: "j", itemId: "a", status: "pending", attempts: 0, nextAttemptAt: 0 }]);
+    expect((await s.getJobs()).length).toBe(1);
+    await s.setMeta("k", { v: 1 });
+    expect(await s.getMeta("k")).toEqual({ v: 1 });
+    await s.putPoster("a", new Blob(["x"], { type: "image/jpeg" }));
+    expect((await s.getPoster("a"))!.type).toBe("image/jpeg");
+
+    const raw = await openDB("heal-storeless");
+    expect(["items", "posters", "jobs", "meta"].every((n) => has(raw, n))).toBe(true);
+    raw.close();
+  });
+
+  it("a healthy existing DB opens WITHOUT a version bump", async () => {
+    await openStore("heal-healthy"); // fresh → creates all four at v1
+    const r1 = await openDB("heal-healthy");
+    const v1 = r1.version;
+    r1.close();
+
+    await openStore("heal-healthy"); // healthy → assessStores→ok, no reopen_upgrade
+    const r2 = await openDB("heal-healthy");
+    const v2 = r2.version;
+    r2.close();
+
+    expect(v1).toBe(1);
+    expect(v2).toBe(1); // no phantom version bump on an already-healthy DB
+  });
+
+  it("a guarded version+ upgrade from a POPULATED store preserves existing rows (no data loss)", async () => {
+    // v1 WITH all four stores + a populated item.
+    const v1db = await openDB("heal-populated", 1, {
+      upgrade(db) {
+        db.createObjectStore("items", { keyPath: "id" });
+        db.createObjectStore("posters", { keyPath: "id" });
+        db.createObjectStore("jobs", { keyPath: "id" });
+        db.createObjectStore("meta", { keyPath: "key" });
+      },
+    });
+    await v1db.put("items", {
+      id: "keep-me",
+      item: mkItem("keep-me", { desc: "precious" }),
+      status: "raw",
+      updatedAt: "2026-07-08T00:00:00Z",
+    });
+    v1db.close();
+
+    // Simulate partial corruption: drop ONE store at v2 while items stays populated.
+    const v2db = await openDB("heal-populated", 2, {
+      upgrade(db) {
+        db.deleteObjectStore("jobs");
+      },
+    });
+    expect(has(v2db, "jobs")).toBe(false);
+    v2db.close();
+
+    // openStore must reopen at v3 with the contains()-guarded upgrade: recreate ONLY `jobs`, leaving
+    // the populated `items` store — and its rows — untouched.
+    const s = await openStore("heal-populated");
+    const kept = await s.getRecord("keep-me");
+    expect(kept).toBeDefined();
+    expect(kept!.item.desc).toBe("precious"); // row survived the reopen
+    expect(await s.count()).toBe(1);
+    // the recreated store is usable again
+    await s.putJobs([{ id: "j1", itemId: "keep-me", status: "pending", attempts: 0, nextAttemptAt: 0 }]);
+    expect((await s.getJobs()).length).toBe(1);
+  });
+
+  it("throws StorageUnrecoverableError when neither upgrade nor rebuild restores the stores", async () => {
+    // A real fake-indexeddb never reaches the terminal rung (its guarded upgrade always succeeds), so
+    // drive recoverStore with an injected opener that ALWAYS returns a store-less handle: rung 1
+    // (reopen_upgrade) and rung 2 (rebuild) both fail to produce stores → the loop must give up and
+    // throw the typed error the caller uses to HALT capture (never present a swallowed write as done).
+    const storelessDb = (version: number) =>
+      ({
+        objectStoreNames: { contains: () => false },
+        version,
+        close() {},
+      }) as unknown as Awaited<ReturnType<StoreOpener["open"]>>;
+
+    let opens = 0;
+    let deletes = 0;
+    const opener: StoreOpener = {
+      open: async (version?: number) => {
+        opens++;
+        return storelessDb(version ?? 1);
+      },
+      deleteDatabase: async () => {
+        deletes++;
+      },
+    };
+
+    await expect(recoverStore(opener)).rejects.toBeInstanceOf(StorageUnrecoverableError);
+    expect(deletes).toBe(1); // the rebuild rung was attempted exactly once before giving up
+    expect(opens).toBe(3); //   first open + version+1 reopen + post-rebuild reopen
   });
 });
