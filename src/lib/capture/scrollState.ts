@@ -24,10 +24,22 @@ export interface ScrollState {
   reason: string | null;
   /** now() at the last transition; observability only (HUD), never a decision input. */
   updatedAt: number;
+  /**
+   * True once any count growth has been observed this run. Fix round 1(a): growth proves the resume
+   * re-scroll has passed the already-captured prefix, so the resume grace DROPS — from there a
+   * zero-new arrival is a stall again and the normal giveup bound applies. Never read outside resume.
+   */
+  grew: boolean;
+  /**
+   * The cursor of the last ARRIVED page (null until one carries a cursor). Fix round 1(b): a repeated
+   * identical non-null cursor is non-progress even under the resume grace — a throttle serving the
+   * same stale page repeats its cursor, while real forward pagination advances it.
+   */
+  lastPageCursor: string | null;
 }
 
 export type ScrollEvent =
-  | { kind: "page_captured"; newCount: number; hasMore: boolean }
+  | { kind: "page_captured"; newCount: number; hasMore: boolean; cursor?: string | null }
   | { kind: "tick" };
 
 export type ScrollAction =
@@ -46,8 +58,16 @@ export interface ScrollDeps {
    * grows). Under the normal reducer each zero-new arrival is a stall, so we'd hit `giveup` ~
    * GIVEUP_STALL_CYCLES pages in — before the uncaptured tail. When `resuming` is true, a zero-new
    * page that ARRIVED is treated as PROGRESS (stall reset, scroll): TikTok answered, so it is
-   * paginating FORWARD, not throttling. Only genuine SILENCE (a `tick`, no arrival) still accrues
-   * stall → the giveup safety net survives even during resume. Default false (normal forward scroll).
+   * paginating FORWARD, not throttling.
+   *
+   * The grace is BOUNDED (fix round 1 — an unattended autonomous run must never scroll forever):
+   *   (a) it drops on the first count growth (`state.grew` — the prefix is provably behind us);
+   *   (b) a repeated identical non-null cursor is non-progress (`state.lastPageCursor`);
+   *   (c) genuine SILENCE (a `tick`, no arrival) always accrues stall.
+   * So even a resumed run always terminates: done, or a reported giveup. Default false.
+   *
+   * NOTE: a resume run must start from the persisted baseline — `initialScrollState(initialCount)` —
+   * or the first prefix page would read as growth from 0 and instantly burn the grace.
    */
   resuming?: boolean;
 }
@@ -67,8 +87,22 @@ function placeholderBackoffMs(stall: number): number {
   return Math.min(BASE_BACKOFF_MS * 2 ** (stall - 1), MAX_BACKOFF_MS);
 }
 
-export function initialScrollState(): ScrollState {
-  return { lastCount: 0, hasMore: true, stall: 0, status: "scrolling", reason: null, updatedAt: 0 };
+/**
+ * @param initialCount the count baseline this run starts from. A fresh manual run passes 0 (default);
+ * a RESUME run passes the persisted total, so re-scrolled prefix pages read as zero-new (grace-
+ * eligible) instead of as a bogus first-page "growth" that would instantly burn the resume grace.
+ */
+export function initialScrollState(initialCount = 0): ScrollState {
+  return {
+    lastCount: initialCount,
+    hasMore: true,
+    stall: 0,
+    status: "scrolling",
+    reason: null,
+    updatedAt: 0,
+    grew: false,
+    lastPageCursor: null,
+  };
 }
 
 function stall(state: ScrollState, hasMore: boolean, now: number, backoff: (n: number) => number): { state: ScrollState; action: ScrollAction } {
@@ -101,6 +135,7 @@ export function step(state: ScrollState, event: ScrollEvent, deps: ScrollDeps): 
   if (state.status === "giveup") return { state, action: { kind: "giveup", reason: state.reason ?? "incomplete" } };
 
   if (event.kind === "page_captured") {
+    const cursor = event.cursor ?? null;
     // Completion — the ONLY `done`. hasMore:false wins even if this final page also brought items.
     if (event.hasMore === false) {
       const lastCount = Math.max(state.lastCount, event.newCount);
@@ -109,25 +144,49 @@ export function step(state: ScrollState, event: ScrollEvent, deps: ScrollDeps): 
         action: { kind: "done" },
       };
     }
-    // New items → progress. Reset the stall counter and keep scrolling.
+    // New items → progress. Reset the stall counter and keep scrolling. `grew` flips permanently:
+    // any growth proves a resume's re-scroll has passed its captured prefix (fix round 1a).
     if (event.newCount > state.lastCount) {
       return {
-        state: { ...state, lastCount: event.newCount, hasMore: true, stall: 0, status: "scrolling", reason: null, updatedAt: now },
+        state: {
+          ...state,
+          lastCount: event.newCount,
+          hasMore: true,
+          stall: 0,
+          status: "scrolling",
+          reason: null,
+          updatedAt: now,
+          grew: true,
+          lastPageCursor: cursor ?? state.lastPageCursor,
+        },
         action: { kind: "scroll" },
       };
     }
     // A captured page with no growth. In a RESUME run (carry-forward 1) this is the expected shape
-    // over the captured prefix — TikTok answered (an arrival), so it is paginating forward toward the
-    // uncaptured tail; count that as PROGRESS (reset stall, keep scrolling) so a long prefix can't
-    // prematurely `giveup`. In a normal forward scroll a zero-new arrival is indistinguishable from a
-    // throttle serving a stale page → treat it as a stall so the giveup bound still applies.
-    if (deps.resuming) {
+    // over the captured prefix — TikTok answered (an arrival), so it is paginating forward toward
+    // the uncaptured tail; count that as PROGRESS (reset stall, keep scrolling) so a long prefix
+    // can't prematurely `giveup`. The grace is BOUNDED (fix round 1): it holds only while
+    //   (a) no growth has been seen yet (`!state.grew` — growth proves the prefix is behind us), and
+    //   (b) the cursor is advancing (a repeated identical non-null cursor is a throttle serving the
+    //       same stale page, not forward pagination — never progress).
+    // Outside the grace, a zero-new arrival is indistinguishable from a throttle stall → the normal
+    // stall/giveup bound applies, so even an unattended resumed run always terminates.
+    const cursorRepeated = cursor != null && cursor === state.lastPageCursor;
+    if (deps.resuming && !state.grew && !cursorRepeated) {
       return {
-        state: { ...state, hasMore: true, stall: 0, status: "scrolling", reason: null, updatedAt: now },
+        state: {
+          ...state,
+          hasMore: true,
+          stall: 0,
+          status: "scrolling",
+          reason: null,
+          updatedAt: now,
+          lastPageCursor: cursor ?? state.lastPageCursor,
+        },
         action: { kind: "scroll" },
       };
     }
-    return stall(state, true, now, backoff);
+    return stall({ ...state, lastPageCursor: cursor ?? state.lastPageCursor }, true, now, backoff);
   }
 
   // tick: no page arrived this cycle → a stall. (state.hasMore is always true here: false is only

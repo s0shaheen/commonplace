@@ -92,9 +92,24 @@ describe("supervisor.nextAction — idempotence, skip-completed, all_done", () =
     expect(r.action).toEqual({ kind: "capture_source", source: "likes", resuming: false }); // first UNDONE in order
   });
 
-  it("start when all four are done ⇒ all_done (a redundant Sync click is a no-op)", () => {
-    const allDone: SupervisorProgress = { current: null, done: [...SOURCES], counts: {} };
-    expect(nextAction(allDone, { kind: "start" }).action).toEqual({ kind: "all_done" });
+  it("start when all four are terminal RESETS to a fresh sweep — never a permanent no-op", () => {
+    // Fix round 1 (CRITICAL): a terminal sweep must not brick Sync. New saves accrue after a sweep;
+    // the next Sync click starts over (idempotent dedup makes the re-sweep cheap and safe).
+    const allDone: SupervisorProgress = {
+      current: null,
+      done: [...SOURCES],
+      counts: {
+        favorites: { captured: 10, status: "done" },
+        likes: { captured: 20, status: "done" },
+        posts: { captured: 5, status: "done" },
+        reposts: { captured: 2, status: "done" },
+      },
+    };
+    const r = nextAction(allDone, { kind: "start" });
+    expect(r.action).toEqual({ kind: "capture_source", source: "favorites", resuming: false });
+    expect(r.progress.done).toEqual([]); // fresh sweep
+    expect(r.progress.counts).toEqual({}); // fresh per-source records
+    expect(r.progress.current).toBe("favorites");
   });
 
   it("start while a run is genuinely in flight ⇒ idle (never double-drives the live tab)", () => {
@@ -109,6 +124,69 @@ describe("supervisor.nextAction — idempotence, skip-completed, all_done", () =
     p = finish(p, "favorites").progress;
     p = finish(p, "favorites").progress; // a late/duplicate scroll_done
     expect(p.done.filter((s) => s === "favorites")).toHaveLength(1);
+  });
+});
+
+// ── Fix round 1 (CRITICAL): a giveup is NOT terminal-forever ────────────────────────────────────
+// Sequencing PAST a giveup within one sweep is correct (never loop on a throttled source). The
+// defect was permanence: `done[]` never reset, so a partial source's uncaptured tail was skipped on
+// every future Sync, and once all four were terminal Sync was a permanent no-op. Fix: `start` with
+// every source terminal RESETS progress into a fresh sweep — previously-partial ("giveup") sources
+// first, and driven with resuming:true so the re-scroll can get past their captured prefix to the
+// uncaptured tail (carry-forward 1). Previously-done sources re-sweep fresh (resuming:false).
+describe("supervisor.nextAction — fresh sweep after a terminal sweep (giveup re-sync)", () => {
+  const sweptWithPartials: SupervisorProgress = {
+    current: null,
+    done: [...SOURCES],
+    counts: {
+      favorites: { captured: 1200, status: "done" },
+      likes: { captured: 3400, status: "giveup" }, // throttled — uncaptured tail remains
+      posts: { captured: 80, status: "done" },
+      reposts: { captured: 15, status: "giveup" }, // throttled too
+    },
+  };
+
+  it("start after a partial sweep resets and re-attempts the GIVEUP sources FIRST, resuming:true", () => {
+    const r = nextAction(sweptWithPartials, { kind: "start" });
+    // likes is the first previously-partial source in SOURCES order → it leads the new sweep, and
+    // it resumes (its prefix is captured; the tail is the target).
+    expect(r.action).toEqual({ kind: "capture_source", source: "likes", resuming: true });
+    expect(r.progress.current).toBe("likes");
+    expect(r.progress.done).toEqual([]);
+    expect(r.progress.counts).toEqual({});
+  });
+
+  it("the fresh sweep walks partials first (resuming), then the rest (fresh), then all_done", () => {
+    let p = nextAction(sweptWithPartials, { kind: "start" }).progress; // current: likes
+    let r = nextAction(p, { kind: "source_finished", source: "likes", captured: 3900, status: "done" });
+    expect(r.action).toEqual({ kind: "capture_source", source: "reposts", resuming: true }); // 2nd partial
+    p = r.progress;
+    r = nextAction(p, { kind: "source_finished", source: "reposts", captured: 20, status: "done" });
+    expect(r.action).toEqual({ kind: "capture_source", source: "favorites", resuming: false }); // rest, fresh
+    p = r.progress;
+    r = nextAction(p, { kind: "source_finished", source: "favorites", captured: 1210, status: "done" });
+    expect(r.action).toEqual({ kind: "capture_source", source: "posts", resuming: false });
+    p = r.progress;
+    r = nextAction(p, { kind: "source_finished", source: "posts", captured: 82, status: "done" });
+    expect(r.action).toEqual({ kind: "all_done" });
+  });
+
+  it("a mid-fresh-sweep crash still resumes the in-flight source (retry ordering survives persistence)", () => {
+    const p = nextAction(sweptWithPartials, { kind: "start" }).progress; // current: likes (a retry)
+    const r = nextAction(p, { kind: "restarted" });
+    expect(r.action).toEqual({ kind: "capture_source", source: "likes", resuming: true });
+  });
+
+  it("a sweep is NOT reset while un-attempted sources remain (reset only fires when ALL are terminal)", () => {
+    const partway: SupervisorProgress = {
+      current: null,
+      done: ["favorites", "likes"],
+      counts: { favorites: { captured: 1, status: "done" }, likes: { captured: 2, status: "giveup" } },
+    };
+    // likes gave up, but posts/reposts haven't run yet — start continues the sweep (posts), it does
+    // NOT restart likes; the giveup retry belongs to the NEXT sweep.
+    const r = nextAction(partway, { kind: "start" });
+    expect(r.action).toEqual({ kind: "capture_source", source: "posts", resuming: false });
   });
 });
 

@@ -203,20 +203,6 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   cachedScroller = null;
   activeRunSource = source; // arm the carry-forward-2 filter BEFORE any arrival can land
 
-  // The termination decision is NOT here — it lives in the pure, tested `scrollState` reducer.
-  // This loop is dumb glue: observe (did a page ARRIVE? what's the latest hasMore? did `count`
-  // grow?), feed the reducer an event, and act on the action it returns. Completion is hasMore:false
-  // ONLY; a stall becomes backoff+wait; an unanswered run becomes a REPORTED giveup — never a
-  // silent "done".
-  let st = initialScrollState();
-  // Task 2: the real human-cadence backoff replaces scrollState's placeholder. Math.random and
-  // Date.now live ONLY here (glue) — pacing.ts/scrollState.ts stay pure. Giveup semantics are
-  // untouched: the reducer still bounds the run at GIVEUP_STALL_CYCLES; only the wait LENGTHS change.
-  // `resuming` threads the carry-forward-1 signal into the reducer (see scrollState.ts).
-  const deps = { now: () => Date.now(), backoffMs: (stall) => backoffMs(stall, Math.random), resuming };
-  let lastSampleLogTs = 0; // console.log a CaptureSample roughly every ~5s while scrolling
-  let running = true;
-
   // PER-RUN RESET (review fix, critical). These module-level signals belong to the PREVIOUS run /
   // source — a completed Favorites run leaves lastHasMore=false, and the store's `count` is a
   // cumulative total that persists across runs. Without both resets, re-triggering on a second
@@ -229,6 +215,24 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   // Baseline against the CURRENT persisted total: a pre-existing count is not growth.
   const { count: initialCount = 0 } = await chrome.storage.local.get("count");
   let prevCount = initialCount;
+
+  // The termination decision is NOT here — it lives in the pure, tested `scrollState` reducer.
+  // This loop is dumb glue: observe (did a page ARRIVE? what's the latest hasMore? did `count`
+  // grow?), feed the reducer an event, and act on the action it returns. Completion is hasMore:false
+  // ONLY; a stall becomes backoff+wait; an unanswered run becomes a REPORTED giveup — never a
+  // silent "done".
+  //
+  // The reducer starts from the SAME persisted baseline (fix round 1): during a resume, the prefix's
+  // zero-new pages must read as zero-new (grace-eligible), not as a first-page "growth" from 0 that
+  // would instantly burn the bounded resume grace (scrollState drops the grace on first REAL growth).
+  let st = initialScrollState(initialCount);
+  // Task 2: the real human-cadence backoff replaces scrollState's placeholder. Math.random and
+  // Date.now live ONLY here (glue) — pacing.ts/scrollState.ts stay pure. Giveup semantics are
+  // untouched: the reducer still bounds the run at GIVEUP_STALL_CYCLES; only the wait LENGTHS change.
+  // `resuming` threads the carry-forward-1 signal into the reducer (see scrollState.ts).
+  const deps = { now: () => Date.now(), backoffMs: (stall) => backoffMs(stall, Math.random), resuming };
+  let lastSampleLogTs = 0; // console.log a CaptureSample roughly every ~5s while scrolling
+  let running = true;
   // Per-run eviction reset: start fresh so the HUD's "evicted N" is this run's tally and pruneGrid
   // re-resolves the grid from scratch (a new source/tab is a new grid element).
   evictGrid = null;
@@ -254,9 +258,12 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     // The reducer already handles a no-growth page correctly (hasMore:false ⇒ done; true ⇒ stall).
     const arrived = pageArrivals > arrivalsSeen;
     arrivalsSeen = pageArrivals;
+    // `cursor` rides along (fix round 1): the reducer treats a REPEATED identical cursor as
+    // non-progress even under the resume grace — a throttle serving the same stale page repeats its
+    // cursor, so a stuck cursor can never be mistaken for forward pagination.
     const event =
       arrived || count > prevCount
-        ? { kind: "page_captured", newCount: count, hasMore: lastHasMore ?? true }
+        ? { kind: "page_captured", newCount: count, hasMore: lastHasMore ?? true, cursor: lastCursor }
         : { kind: "tick" };
     prevCount = Math.max(prevCount, count);
     const stepped = scrollStep(st, event, deps);
@@ -406,23 +413,49 @@ async function navigateToSource(source) {
   return true;
 }
 
+// Covers the nav window BEFORE autoScroll flips `scrolling` (navigateToSource awaits ~1.5s): between
+// the guard below and autoScroll starting, a second capture_source must not slip in. Together,
+// `scrolling || captureRunActive` is "a run is live in this tab" — also what capture_ping reports.
+let captureRunActive = false;
+
 async function runCaptureForSource(source, resuming) {
-  activeRunSource = source ?? null; // arm the filter BEFORE nav so the first arrival is already gated
-  await navigateToSource(source);
-  await autoScroll({ source, resuming });
+  // GUARD FIRST (fix round 1, important). The 1-minute revive alarm can re-send capture_source while
+  // this tab is legitimately mid-run (the SW idles out during a long backoff and forgets a run is
+  // live). The old order did nav side-effects (sub-tab re-click → grid churn → a real backoff turned
+  // into a giveup) and re-armed activeRunSource (hijacking a manual Alt+Shift+A run's filter) BEFORE
+  // autoScroll's `scrolling` guard could reject. Now a live run rejects the message before ANY
+  // side-effect — no nav, no filter change.
+  if (scrolling || captureRunActive) {
+    console.log(`[commonplace] capture_source(${source}) ignored — a run is already live in this tab`);
+    return;
+  }
+  captureRunActive = true;
+  try {
+    activeRunSource = source ?? null; // arm the filter BEFORE nav so the first arrival is already gated
+    await navigateToSource(source);
+    await autoScroll({ source, resuming });
+  } finally {
+    captureRunActive = false;
+  }
 }
 
-chrome.runtime.onMessage.addListener((msg) => {
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg && msg.kind === "capture_source") {
     console.log(`[commonplace] supervisor → capture ${msg.source}${msg.resuming ? " (resuming)" : ""}`);
     void runCaptureForSource(msg.source ?? null, !!msg.resuming);
+  } else if (msg && msg.kind === "capture_ping") {
+    // Fix round 1: the SW's revive alarm asks the tab itself whether a run is live before re-driving
+    // (its own `supervisorRunning` flag dies with every SW idle-out; this tab is the ground truth).
+    sendResponse({ scrolling: scrolling || captureRunActive });
   }
-  // Not returning true: this listener is fire-and-forget (no async sendResponse).
+  // Synchronous sendResponse above; no async channel kept open.
 });
 
 window.addEventListener("keydown", (e) => {
   if (!e.altKey || !e.shiftKey) return;
-  if (e.code === "KeyA") autoScroll();
+  // Manual dev run — refuse while a supervisor run is live (incl. its pre-scroll nav window), or the
+  // manual run's source:null would clear the live run's carry-forward-2 filter arm.
+  if (e.code === "KeyA" && !captureRunActive) autoScroll();
   if (e.code === "KeyS") {
     chrome.runtime.sendMessage({ kind: "export_open_schema" });
     console.log("[commonplace] open-schema export triggered → commonplace-export.json");

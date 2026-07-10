@@ -40,12 +40,19 @@ function sourceState(p: SupervisorProgress, src: Source): { label: string; cls: 
 
 function render(st: SyncStatus): void {
   const { progress } = st;
+  // Honest headline (fix round 1, critical): "all sources synced" ONLY when every source ended with
+  // TikTok's own hasMore:false. A sweep containing any giveup ("partial") says so — a throttled-out
+  // source has an uncaptured tail, and the headline must never paper over it. (The next Sync click
+  // starts a fresh sweep that re-attempts the partial sources first.)
+  const partials = SOURCES.filter((s) => progress.counts[s]?.status === "giveup").length;
   const state = st.running
     ? progress.current
       ? `capturing ${SOURCE_LABEL[progress.current]}…`
       : "working…"
     : progress.done.length >= SOURCES.length
-      ? "all sources synced"
+      ? partials > 0
+        ? `synced — ${partials} partial (Sync retries them)`
+        : "all sources synced"
       : "idle";
   $("state").textContent = state;
   $("count").textContent = String(st.count);

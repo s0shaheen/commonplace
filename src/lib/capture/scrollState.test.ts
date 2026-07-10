@@ -128,33 +128,39 @@ describe("scrollState.step — completion is hasMore:false ONLY", () => {
   });
 });
 
-// ── Carry-forward (1): the resume-stall distinction (Task-5, BINDING) ──────────────────────────
+// ── Carry-forward (1): the resume-stall distinction (Task-5, BINDING; bounded in fix round 1) ───
 // A crash-resume re-scroll walks the ALREADY-captured prefix first: every page ARRIVES with
 // hasMore:true but its items all dedupe away (count never grows). Under the normal reducer each such
 // zero-new arrival is a stall, so ~GIVEUP_STALL_CYCLES pages in we'd hit `giveup` — long before the
 // uncaptured tail. The fix: a run-level `resuming` flag. During resume, a zero-new page that ARRIVED
 // (TikTok answered → it is paginating FORWARD) counts as PROGRESS (stall reset), so the re-scroll can
-// reach the tail. Only genuine SILENCE (ticks, no arrival) still accrues stall → the giveup safety net
-// survives even during resume.
+// reach the tail. The grace is BOUNDED (fix round 1 — an unattended autonomous run must never scroll
+// forever): (a) it DROPS on the first count growth (growth proves the prefix is behind us — from
+// there normal stall/giveup bounding applies), and (b) a repeated identical non-null cursor is
+// non-progress even under resume (a throttle serving the same stale page repeats the cursor; real
+// forward pagination advances it). Genuine SILENCE (ticks) always accrues stall.
+//
+// Baseline: the resume run starts from the PERSISTED count (initialScrollState(initialCount)) — so
+// the prefix's zero-new pages read as zero-new, not as a first-page "growth" from 0 that would
+// instantly burn the grace.
 describe("scrollState.step — resume run (carry-forward 1)", () => {
   const resuming: ScrollDeps = { now: () => 1_000, resuming: true };
 
-  it("under resuming, a long run of zero-new arrivals (hasMore:true) NEVER gives up — each is progress", () => {
-    let s = initialScrollState();
-    ({ state: s } = step(s, { kind: "page_captured", newCount: 500, hasMore: true }, resuming)); // captured prefix tip
-    // Re-scroll delivers 3× GIVEUP_STALL_CYCLES all-duplicate pages: count is pinned, hasMore stays true.
+  it("under resuming, a long run of zero-new arrivals (hasMore:true, advancing cursor) NEVER gives up", () => {
+    let s = initialScrollState(500); // resume from the persisted 500-item baseline
+    // Re-scroll delivers 3× GIVEUP_STALL_CYCLES all-duplicate pages: count pinned, cursor ADVANCING.
     for (let i = 0; i < GIVEUP_STALL_CYCLES * 3; i++) {
-      const r = step(s, { kind: "page_captured", newCount: 500, hasMore: true }, resuming);
+      const r = step(s, { kind: "page_captured", newCount: 500, hasMore: true, cursor: `c${i}` }, resuming);
       s = r.state;
       expect(r.action).toEqual({ kind: "scroll" }); // progress, not wait/giveup
-      expect(s.stall).toBe(0); // stall never accrues on an arrival during resume
+      expect(s.stall).toBe(0); // stall never accrues on a forward arrival during resume
       expect(s.status).toBe("scrolling");
     }
   });
 
   it("under resuming, the SAME zero-new sequence WOULD give up without the flag (contrast)", () => {
     // Identical events, default (non-resume) deps: zero-new arrivals ARE stalls → bounded giveup.
-    let last = step(initialScrollState(), { kind: "page_captured", newCount: 500, hasMore: true }, deps);
+    let last = step(initialScrollState(500), { kind: "page_captured", newCount: 500, hasMore: true }, deps);
     for (let i = 0; i < GIVEUP_STALL_CYCLES; i++) {
       last = step(last.state, { kind: "page_captured", newCount: 500, hasMore: true }, deps);
     }
@@ -162,7 +168,7 @@ describe("scrollState.step — resume run (carry-forward 1)", () => {
   });
 
   it("under resuming, SILENCE (ticks with no arrival) still bounds out to giveup — the safety net holds", () => {
-    let last = step(initialScrollState(), { kind: "tick" }, resuming);
+    let last = step(initialScrollState(500), { kind: "tick" }, resuming);
     for (let i = 1; i < GIVEUP_STALL_CYCLES; i++) {
       last = step(last.state, { kind: "tick" }, resuming);
     }
@@ -170,14 +176,63 @@ describe("scrollState.step — resume run (carry-forward 1)", () => {
   });
 
   it("under resuming, hasMore:false after the prefix still completes cleanly (reaches the tail)", () => {
-    let s = initialScrollState();
-    ({ state: s } = step(s, { kind: "page_captured", newCount: 500, hasMore: true }, resuming));
-    for (let i = 0; i < 12; i++) ({ state: s } = step(s, { kind: "page_captured", newCount: 500, hasMore: true }, resuming));
+    let s = initialScrollState(500);
+    for (let i = 0; i < 12; i++) {
+      ({ state: s } = step(s, { kind: "page_captured", newCount: 500, hasMore: true, cursor: `c${i}` }, resuming));
+    }
     // tail: new items, then the honest hasMore:false end.
-    ({ state: s } = step(s, { kind: "page_captured", newCount: 540, hasMore: true }, resuming));
-    const { state, action } = step(s, { kind: "page_captured", newCount: 540, hasMore: false }, resuming);
+    ({ state: s } = step(s, { kind: "page_captured", newCount: 540, hasMore: true, cursor: "t1" }, resuming));
+    const { state, action } = step(s, { kind: "page_captured", newCount: 540, hasMore: false, cursor: "t2" }, resuming);
     expect(action).toEqual({ kind: "done" });
     expect(state.status).toBe("done");
     expect(state.lastCount).toBe(540);
+  });
+
+  it("the resume grace DROPS on the first growth: post-growth zero-new arrivals stall → bounded giveup", () => {
+    // Fix round 1(a): once newCount > lastCount, the prefix is provably behind us — from there a
+    // zero-new arrival is a stall again, so a throttle after the tail can't spin an unattended
+    // resumed run forever. The run must bound out to a REPORTED giveup.
+    let s = initialScrollState(500);
+    for (let i = 0; i < 5; i++) {
+      ({ state: s } = step(s, { kind: "page_captured", newCount: 500, hasMore: true, cursor: `c${i}` }, resuming));
+    }
+    ({ state: s } = step(s, { kind: "page_captured", newCount: 540, hasMore: true, cursor: "t1" }, resuming)); // GROWTH
+    // Now: zero-new arrivals with ADVANCING cursors — the grace is gone, these must accrue stall.
+    let last = step(s, { kind: "page_captured", newCount: 540, hasMore: true, cursor: "t2" }, resuming);
+    expect(last.action.kind).toBe("wait"); // a stall, not grace-scroll
+    expect(last.state.stall).toBe(1);
+    for (let i = 0; last.action.kind !== "giveup" && i < GIVEUP_STALL_CYCLES + 2; i++) {
+      last = step(last.state, { kind: "page_captured", newCount: 540, hasMore: true, cursor: `t${i + 3}` }, resuming);
+    }
+    expect(last.action.kind).toBe("giveup"); // bounded, reported — never an infinite unattended scroll
+  });
+
+  it("a REPEATED identical cursor is non-progress even under resume (stalls accrue → giveup)", () => {
+    // Fix round 1(b): a throttle serving the same stale page repeats the cursor; real pagination
+    // advances it. Repeated-cursor arrivals must NOT reset the stall counter during resume.
+    const s = initialScrollState(500);
+    let last = step(s, { kind: "page_captured", newCount: 500, hasMore: true, cursor: "stuck" }, resuming);
+    expect(last.action).toEqual({ kind: "scroll" }); // first sight of "stuck" is still a forward grace
+    for (let i = 0; last.action.kind !== "giveup" && i < GIVEUP_STALL_CYCLES + 2; i++) {
+      last = step(last.state, { kind: "page_captured", newCount: 500, hasMore: true, cursor: "stuck" }, resuming);
+      if (last.action.kind === "wait") expect(last.state.stall).toBeGreaterThan(0);
+    }
+    expect(last.action.kind).toBe("giveup"); // a stuck cursor can never be mistaken for progress
+  });
+
+  it("a null/absent cursor carries no repeat signal — the grace still applies (defensive default)", () => {
+    // The cursor's on-wire shape is recon-unverified; when it's missing we can't distinguish a stale
+    // repeat, so the grace holds (the growth-drop + silence bounds still protect the run).
+    let s = initialScrollState(500);
+    for (let i = 0; i < GIVEUP_STALL_CYCLES + 2; i++) {
+      const r = step(s, { kind: "page_captured", newCount: 500, hasMore: true }, resuming);
+      s = r.state;
+      expect(r.action).toEqual({ kind: "scroll" });
+    }
+  });
+
+  it("initialScrollState(initialCount) baselines lastCount so a resume's first prefix page is zero-new", () => {
+    expect(initialScrollState(500).lastCount).toBe(500);
+    expect(initialScrollState().lastCount).toBe(0); // manual fresh run unchanged
   });
 });

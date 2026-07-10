@@ -186,14 +186,28 @@ async function onReviveAlarm(): Promise<void> {
 
   // Task 5: resume an interrupted Sync run. If persisted progress shows a source still `current` (a
   // capture was in flight when the worker died) and nothing is running now, feed `restarted` — the
-  // reducer returns that source with resuming:true (carry-forward 1). Only attempt when a tab is
-  // actually reachable, so a semi-auto run with no TikTok tab open doesn't log every minute.
+  // reducer returns that source with resuming:true (carry-forward 1).
+  //
+  // Fix round 1 (important): TWO guards before re-driving, because `supervisorRunning` is
+  // SW-lifetime state — a long backoff idles the SW out and resets it while content.js is still
+  // mid-run, so on the next tick the flag alone would let every alarm re-drive the live tab.
+  //   1. The probe is `findCaptureTab` (query-only): it never CREATES or focus-steals a tab — the
+  //      old resolveCaptureTab probe opened a fresh focused tab every tick in autonomous mode.
+  //   2. `isTabScrolling` asks the tab itself ("are you scrolling?"). A live run ⇒ restore
+  //      supervisorRunning=true and stand down; content.js's own run finishes and reports normally.
   if (!supervisorRunning) {
     const progress = await loadSupervisorProgress(s);
     if (progress.current != null) {
-      const config = await loadConfig(configStorage);
-      const tabId = await resolveCaptureTab(config);
-      if (tabId != null) void runSupervisorEvent({ kind: "restarted" });
+      const tabId = await findCaptureTab();
+      if (tabId != null) {
+        if (await isTabScrolling(tabId)) {
+          supervisorRunning = true; // the run never died — re-arm the belt, don't re-drive
+        } else {
+          void runSupervisorEvent({ kind: "restarted" });
+        }
+      }
+      // No TikTok tab reachable: stand down silently until one exists (or the next Sync click).
+      // In autonomous mode the DRIVE path may create a tab — a mere probe never does.
     }
   }
 }
@@ -317,15 +331,27 @@ function isSource(v: unknown): v is Source {
   return typeof v === "string" && (SOURCES as readonly string[]).includes(v);
 }
 
-// Resolve the tab to drive. Autonomous: focus an existing TikTok tab or open one. Semi-auto: the
-// founder's active TikTok tab (fall back to any open TikTok tab). Returns null when there is nothing
-// to drive (semi-auto with no TikTok tab present) — the caller then stands down until the next Sync.
+// PROBE — find an existing TikTok tab WITHOUT side-effects (fix round 1, minor): no create, no
+// focus-steal. Used by the revival alarm's reachability check, which runs every minute — a probe
+// that opened a focused tab each tick was the bug. Prefers the active tab so semi-auto drives the
+// tab the founder is looking at.
+async function findCaptureTab(): Promise<number | null> {
+  const active = (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0];
+  if (active?.id != null && (active.url ?? "").includes("tiktok.com")) return active.id;
+  const anyTikTok = (await chrome.tabs.query({ url: "*://*.tiktok.com/*" }))[0];
+  return anyTikTok?.id ?? null;
+}
+
+// Resolve the tab to DRIVE (an actual capture is starting — side-effects are intended here, and only
+// here). Autonomous: focus an existing TikTok tab or open one. Semi-auto: the founder's active TikTok
+// tab (fall back to any open TikTok tab). Returns null when there is nothing to drive (semi-auto with
+// no TikTok tab present) — the caller then stands down until the next Sync.
 async function resolveCaptureTab(config: CpConfig): Promise<number | null> {
+  const existing = await findCaptureTab();
   if (config.autonomousCapture) {
-    const existing = (await chrome.tabs.query({ url: "*://*.tiktok.com/*" }))[0];
-    if (existing?.id != null) {
-      await chrome.tabs.update(existing.id, { active: true });
-      return existing.id;
+    if (existing != null) {
+      await chrome.tabs.update(existing, { active: true });
+      return existing;
     }
     // No TikTok tab open — start one. NOTE (Task-6-pending): to drive the founder's OWN saved sources
     // this must land on their profile; we don't capture the handle, so autonomous MULTI-source is not
@@ -333,14 +359,43 @@ async function resolveCaptureTab(config: CpConfig): Promise<number | null> {
     const created = await chrome.tabs.create({ url: "https://www.tiktok.com/", active: true });
     return created.id ?? null;
   }
-  const active = (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0];
-  if (active?.id != null && (active.url ?? "").includes("tiktok.com")) return active.id;
-  const anyTikTok = (await chrome.tabs.query({ url: "*://*.tiktok.com/*" }))[0];
-  return anyTikTok?.id ?? null;
+  return existing;
+}
+
+// Ask the content script whether a capture run is live in that tab RIGHT NOW (fix round 1,
+// important). `supervisorRunning` is SW-lifetime state: during a long backoff the SW idles out and
+// resets it while content.js is still mid-run, so the flag alone can't stop the 1-min alarm from
+// re-driving a live tab. The tab itself is the ground truth. Unreachable/no-reply ⇒ not scrolling
+// (a content script that isn't there can't be mid-run).
+async function isTabScrolling(tabId: number): Promise<boolean> {
+  try {
+    const res = (await chrome.tabs.sendMessage(tabId, { kind: "capture_ping" })) as
+      | { scrolling?: boolean }
+      | undefined;
+    return res?.scrolling === true;
+  } catch {
+    return false;
+  }
+}
+
+// ── Supervisor event serialization (fix round 1, important) ──
+// load→reduce→persist has awaits between; a concurrent scroll_done + alarm `restarted` could
+// interleave so the alarm's persist resurrects an already-finished source as `current` (self-healing
+// but minutes wasted + a double-drive). A promise-chain mutex serializes every event: each runs
+// against the state its predecessor persisted.
+let supervisorChain: Promise<void> = Promise.resolve();
+
+function runSupervisorEvent(event: SupervisorEvent): Promise<void> {
+  const run = supervisorChain.then(() => runSupervisorEventUnlocked(event));
+  // The chain must survive a rejected event (a failed sendMessage etc.) or every later event would
+  // inherit the rejection and the supervisor would wedge until the SW restarts.
+  supervisorChain = run.catch((e) => console.warn("[commonplace] supervisor event failed:", (e as Error).message));
+  return run;
 }
 
 // Feed one event to the pure reducer, persist the new progress, then act on the returned action.
-async function runSupervisorEvent(event: SupervisorEvent): Promise<void> {
+// NEVER call directly — go through runSupervisorEvent (the mutex).
+async function runSupervisorEventUnlocked(event: SupervisorEvent): Promise<void> {
   const s = await store();
   const progress = await loadSupervisorProgress(s);
   const { progress: next, action } = nextAction(progress, event);

@@ -37,10 +37,22 @@ export interface SourceProgress {
 export interface SupervisorProgress {
   /** The source currently being driven (persisted BEFORE driving → the crash-resume anchor). Null = none in flight. */
   current: Source | null;
-  /** Sources that have reached a terminal (done or giveup) — i.e. enumerated; skipped on the next pick. */
+  /** Sources that have reached a terminal (done or giveup) — i.e. enumerated THIS sweep; skipped on the next pick. */
   done: Source[];
   /** Per-source captured count + terminal status, for the HUD/popup and the completeness audit. */
   counts: Partial<Record<Source, SourceProgress>>;
+  /**
+   * THIS sweep's capture order (fix round 1). A fresh sweep started after a terminal sweep puts the
+   * previously-partial ("giveup") sources first — their uncaptured tails are the most urgent work.
+   * Absent (first-ever sweep, or persisted blobs from before this fix) ⇒ SOURCES order.
+   */
+  order?: Source[];
+  /**
+   * Sources this sweep must drive with resuming:true (fix round 1): the previously-partial sources —
+   * their prefix is already captured, so only the resume grace (carry-forward 1) lets the re-scroll
+   * get past the all-duplicate prefix to the uncaptured tail. Absent ⇒ none.
+   */
+  retry?: Source[];
 }
 
 export type SupervisorEvent =
@@ -57,22 +69,43 @@ export function initialProgress(): SupervisorProgress {
   return { current: null, done: [], counts: {} };
 }
 
-/** First source, in SOURCES order, not yet in `done`. Null ⇒ every source enumerated. */
-function firstUndone(done: readonly Source[]): Source | null {
-  for (const s of SOURCES) if (!done.includes(s)) return s;
+/** First source, in the sweep's order (default SOURCES), not yet in `done`. Null ⇒ sweep complete. */
+function firstUndone(progress: SupervisorProgress): Source | null {
+  for (const s of progress.order ?? SOURCES) if (!progress.done.includes(s)) return s;
   return null;
 }
 
 /**
- * Advance to the next undone source (a FRESH, non-resuming capture) — or all_done. Refuses to pick a
- * new source while one is still marked current (returns idle): the glue's `supervisorRunning` guard is
- * the belt, this is the suspenders against ever double-driving a live tab.
+ * Advance to the next undone source — or all_done. `resuming` is true for this sweep's `retry`
+ * sources (previously-partial: captured prefix, uncaptured tail — see SupervisorProgress.retry).
+ * Refuses to pick a new source while one is still marked current (returns idle): the glue's
+ * `supervisorRunning` guard is the belt, this is the suspenders against ever double-driving a live tab.
  */
 function advance(progress: SupervisorProgress): { progress: SupervisorProgress; action: SupervisorAction } {
   if (progress.current != null) return { progress, action: { kind: "idle" } };
-  const next = firstUndone(progress.done);
+  const next = firstUndone(progress);
   if (next == null) return { progress: { ...progress, current: null }, action: { kind: "all_done" } };
-  return { progress: { ...progress, current: next }, action: { kind: "capture_source", source: next, resuming: false } };
+  const resuming = progress.retry?.includes(next) ?? false;
+  return { progress: { ...progress, current: next }, action: { kind: "capture_source", source: next, resuming } };
+}
+
+/** Every source terminal this sweep, nothing in flight ⇒ the sweep is over. */
+function sweepComplete(progress: SupervisorProgress): boolean {
+  return progress.current == null && SOURCES.every((s) => progress.done.includes(s));
+}
+
+/**
+ * Fix round 1 (CRITICAL): a terminal sweep must never brick Sync. Start a FRESH sweep: reset
+ * done/counts, order the previously-partial ("giveup") sources FIRST, and mark them `retry` so they
+ * are driven with resuming:true — the resume grace (carry-forward 1) is what lets the re-scroll get
+ * past their captured prefix to the uncaptured tail a mid-sweep giveup left behind. Previously-done
+ * sources re-sweep fresh (resuming:false): idempotent dedup makes that cheap, and any NEW saves sit
+ * at the top of the list where a fresh scroll captures them immediately.
+ */
+function freshSweep(prev: SupervisorProgress): { progress: SupervisorProgress; action: SupervisorAction } {
+  const partials = SOURCES.filter((s) => prev.counts[s]?.status === "giveup");
+  const order = [...partials, ...SOURCES.filter((s) => !partials.includes(s))];
+  return advance({ current: null, done: [], counts: {}, order, retry: partials });
 }
 
 /**
@@ -86,7 +119,10 @@ export function nextAction(
   switch (event.kind) {
     case "start":
       // A live run must never be stomped by a second Sync click — advance() returns idle if current
-      // is set, else picks the first undone source (or all_done).
+      // is set. A COMPLETE sweep (every source terminal) starts over as a fresh sweep (fix round 1:
+      // giveup is not terminal-forever, and new saves must always be able to sync). Otherwise, pick
+      // the first undone source of the current sweep.
+      if (sweepComplete(progress)) return freshSweep(progress);
       return advance(progress);
 
     case "restarted":
@@ -104,7 +140,8 @@ export function nextAction(
       const counts = { ...progress.counts, [event.source]: { captured: event.captured, status: event.status } };
       const done = progress.done.includes(event.source) ? progress.done : [...progress.done, event.source];
       const current = progress.current === event.source ? null : progress.current;
-      return advance({ current, done, counts });
+      // Spread keeps this sweep's order/retry — the partials-first walk survives every advance.
+      return advance({ ...progress, current, done, counts });
     }
   }
 }
