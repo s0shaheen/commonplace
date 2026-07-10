@@ -31,6 +31,15 @@ export function sampleMemory(input: {
 }
 
 /**
+ * The console-sample interval gate (Task-1 review carry-forward: thresholds live in tested
+ * modules, not glue). True when at least `intervalMs` has elapsed since the last logged sample —
+ * including the first-ever sample (prevTs 0 against a real clock ts).
+ */
+export function shouldLogSample(prevTs: number, ts: number, intervalMs: number): boolean {
+  return ts - prevTs >= intervalMs;
+}
+
+/**
  * A compact single-line HUD render, e.g.:
  *   "⛏ 1240 · likes · more:yes · heap 512MB · dom 8300 · scrolling"
  * Deterministic for a given (sample, extra) pair — no clock formatting, so it's directly testable.

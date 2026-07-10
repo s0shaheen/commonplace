@@ -2,9 +2,10 @@
 // drives auto-scroll (Alt+Shift+A), open-schema export (Alt+Shift+S), starts the extraction queue
 // (Alt+Shift+E), and logs queue status to the SW console (Alt+Shift+Q).
 
-import { sampleMemory, formatHudLine } from "./lib/capture/instrument.js";
+import { sampleMemory, formatHudLine, shouldLogSample } from "./lib/capture/instrument.js";
 import { coerceHasMore } from "./lib/capture/interceptParse.js";
 import { initialScrollState, step as scrollStep, GIVEUP_STALL_CYCLES } from "./lib/capture/scrollState.js";
+import { nextDwellMs, backoffMs } from "./lib/capture/pacing.js";
 
 let lastSource = null;
 let lastHasMore = null; // latest coerced paging signal from the message path (Task 1)
@@ -163,7 +164,10 @@ async function autoScroll() {
   // ONLY; a stall becomes backoff+wait; an unanswered run becomes a REPORTED giveup — never a
   // silent "done".
   let st = initialScrollState();
-  const deps = { now: () => Date.now() }; // backoffMs left to the module's placeholder (Task 2 → pacing.ts)
+  // Task 2: the real human-cadence backoff replaces scrollState's placeholder. Math.random and
+  // Date.now live ONLY here (glue) — pacing.ts/scrollState.ts stay pure. Giveup semantics are
+  // untouched: the reducer still bounds the run at GIVEUP_STALL_CYCLES; only the wait LENGTHS change.
+  const deps = { now: () => Date.now(), backoffMs: (stall) => backoffMs(stall, Math.random) };
   let lastSampleLogTs = 0; // console.log a CaptureSample roughly every ~5s while scrolling
   let running = true;
 
@@ -183,8 +187,9 @@ async function autoScroll() {
   while (running) {
     ensureCV();
     const domCount = nudgeToBottom();
-    // Task 2 (pacing.ts) replaces this fixed dwell with jittered human cadence.
-    await sleep(2000 + Math.random() * 1500);
+    // Human-cadence dwell (pacing.ts, §2.2): jittered 900–2200ms base + an occasional longer
+    // "look" pause — never the metronome that tripped the ~360-item throttle.
+    await sleep(nextDwellMs(Math.random));
     const { count = 0 } = await chrome.storage.local.get("count");
 
     // A cycle is a `page_captured` when an item_list message ARRIVED since the last poll (review
@@ -213,9 +218,16 @@ async function autoScroll() {
       domNodes: document.getElementsByTagName("*").length,
       heap: performance.memory,
     });
-    const hudState = st.stall > 0 ? `${st.status} ${st.stall}/${GIVEUP_STALL_CYCLES}` : st.status;
+    // During backoff the HUD must read as WORKING, not frozen: show the rate-limit wait and its
+    // length in seconds. Normal dwell keeps the plain status label ("scrolling").
+    const hudState =
+      action.kind === "wait"
+        ? `waiting out a rate-limit… ${Math.ceil(action.ms / 1000)}s (${st.stall}/${GIVEUP_STALL_CYCLES})`
+        : st.stall > 0
+          ? `${st.status} ${st.stall}/${GIVEUP_STALL_CYCLES}`
+          : st.status;
     updateHud(formatHudLine(sample, { source: lastSource, hasMore: st.hasMore, state: hudState }));
-    if (sample.ts - lastSampleLogTs >= 5000) {
+    if (shouldLogSample(lastSampleLogTs, sample.ts, 5000)) {
       lastSampleLogTs = sample.ts;
       console.log("[commonplace] capture sample", sample);
     }

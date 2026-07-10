@@ -1,7 +1,25 @@
 // Pure telemetry module — no Date.now/performance/document reads in here (mirrors queue.ts's
 // injected-I/O style). Tests drive sampleMemory/formatHudLine with fixed inputs only.
 import { describe, it, expect } from "vitest";
-import { sampleMemory, formatHudLine, type CaptureSample } from "./instrument.js";
+import { sampleMemory, formatHudLine, shouldLogSample, type CaptureSample } from "./instrument.js";
+
+describe("shouldLogSample — the sample-log interval gate (Task-1 review carry: thresholds live in tested modules)", () => {
+  it("below the interval ⇒ false", () => {
+    expect(shouldLogSample(0, 4_999, 5_000)).toBe(false);
+  });
+
+  it("exactly at the interval ⇒ true", () => {
+    expect(shouldLogSample(0, 5_000, 5_000)).toBe(true);
+  });
+
+  it("past the interval ⇒ true", () => {
+    expect(shouldLogSample(10_000, 15_001, 5_000)).toBe(true);
+  });
+
+  it("first-ever sample (prevTs 0, real clock ts) ⇒ true", () => {
+    expect(shouldLogSample(0, 1_752_000_000_000, 5_000)).toBe(true);
+  });
+});
 
 describe("sampleMemory", () => {
   it("computes heapUsedMB from usedJSHeapSize, rounded, bytes → MB", () => {
