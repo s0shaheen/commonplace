@@ -24,7 +24,32 @@ What SPEC v5 settles (evidence: `2026-07-06-refounding-research.md`, 7 Fable res
 
 ## Next move: BUILD — Block 0 (in motion since 2026-07-06 evening)
 
-## CURRENT (2026-07-09 eve): PHASE 3 COMPLETE — next = Phase 2 pilot prep, Phase 4 in parallel
+## ▶▶ CURRENT (2026-07-10): CAPTURE RESILIENCE — resume at WAVE A
+
+**What just happened.** A live capture test proved the Phase-2A crash fix works (1,437 items, flat heap/DOM, `hasMore` read) but exposed the core defect: the scroll **motion** (`nudgeToBottom` teleport) fails to re-trigger TikTok's IntersectionObserver → misread as a rate-limit → false giveup. Founder correction: it is NOT rate-limiting. A 16-agent audit (`capture-resilience-audit`, 1.5M tokens, 0 errors) then mapped the FULL surface → **28 ranked failures (4 critical) · 17 gaps · 18 missing capabilities**, grounded in GitHub/SO prior art.
+
+**Governing docs (committed + pushed, HEAD `bce52ce`):**
+- `docs/specs/capture-resilience.md` — THE governing spec (register · gaps · 7 invariants · 6 domain solutions incl. the full `scrollMotion.ts` pure-core design · exit criteria). Extends/supersedes §8 of the Phase-2A plan.
+- `docs/plans/2026-07-10-capture-resilience-plan.md` — ordered **Waves A–D**. **RESUME HERE.**
+
+**▶ NEXT = WAVE A** (the gate; run via superpowers SDD, Opus implementers / Fable reviewers per `subagent-model-policy`):
+- **A1 · Scroll-motion engine** (SCROLL-01, rank #1) — new pure `src/lib/capture/scrollMotion.ts` (incremental `wheelBy` down + up-then-down IO re-trigger + `requestIssued` motion-vs-throttle oracle from `main-world.js`; `scrollState`/`pacing` logic UNCHANGED, only inputs cleaned). Full design + 12 acceptance criteria in spec §6.1.
+- **A2 · Storage self-heal** (STORE-01) — assert stores exist on open → contains-guarded `version+1` reopen → deleteDB+rebuild; never memoize a rejected open; unrecoverable DB HALTS + surfaces (no swallowed-write-as-done).
+- **A3 · Idempotent alarm** (S-SW-4) — register `cp_queue_revive` via `alarms.get`-guard/`onInstalled`+`onStartup` only (never unconditional top-level create).
+- **A4 · Honest completion** (COMPL-01/02, INJ-02) — typed transport signal (ok/http_error/challenge/api_error/offline); accept `hasMore:false` only on a healthy 2xx non-challenge page; PIN the real `hasMore`/`cursor` field from a live `item_list` fixture.
+- Then the **Wave-A live proof** (founder session): clean extension remove+reload (resets the dev DB I corrupted), real Likes/Favorites capture → confirms scroll fix + flat memory + honest completion + pinned field names → **produces the Phase-2 pilot corpus.**
+
+**LIVE ENVIRONMENT (as of this handoff — a cleared session should re-verify, may have died):**
+- Repo = **`~/Dev/attic-extension`** (renamed to `commonplace` then back on 2026-07-09/10; see the path banner at top). Remote `github.com/s0shaheen/commonplace`.
+- **Dev browser RUNNING** on CDP `http://localhost:9222` — logged into TikTok (`@bhaihours`) + Instagram; extension loaded (id `holifbdfpkpcjhebaehobkpepfihgefj`). **Its dev IndexedDB is CORRUPTED** (my bare-`indexedDB.open` probes — never do that again; see [[scroll-motion-not-timing]]) → a clean **remove + Load-Unpacked** of `~/Dev/attic-extension/dist` resets it before the Wave-A proof. Profile lives at `~/Dev/commonplace/.dev-profile` (do NOT delete).
+- **`npm run dev` watcher RUNNING** (port 9012 · dev `dist/` with hot-reload). Stable Chrome ignores `--load-extension` → the extension is Load-Unpacked once and hot-reloads after (see `docs/dev-workflow.md`).
+- To drive the browser myself: a CDP helper pattern (Node built-in `WebSocket`, no `ws` dep) — reachable via `http://localhost:9222/json`. Never bare-open the app's IndexedDB; read via the app's own code paths.
+
+**Dev tooling shipped (2026-07-10):** `npm run dev` (hot-reload watcher + `ws://localhost:9012`), `npm run dev:browser` (persistent `.dev-profile`, CDP :9222); reload client is gated out of prod by `__DEV_RELOAD__` + a named audit guard; `docs/dev-workflow.md` covers the two-terminal flow + the auth stance (persistent profile, NOT cookie-copy).
+
+---
+
+## (superseded 2026-07-10) 2026-07-09 eve: PHASE 3 COMPLETE — was next = Phase 2 pilot prep, Phase 4 in parallel
 
 **Phase 3 CLOSED (final whole-branch review: Ready to merge YES).** All 9 tasks + rc.6 + one final fix wave (e9a527f) on main: capture→analyze→ground→library-data→export end-to-end, kill-surviving offscreen queue, open-schema export Ajv-valid against rc.6 with per-record `extractor_ref` provenance, promptfoo replay + 3-job CI, submit-ready (NOT submitted) CWS package + key-exposure audit. 145 vitest + 8 capture + 198 pytest green. Ledger (`.superpowers/sdd/progress.md`) holds the Phase-4/5 backlog of accepted minors — trust it over memory.
 
