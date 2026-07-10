@@ -24,7 +24,22 @@ What SPEC v5 settles (evidence: `2026-07-06-refounding-research.md`, 7 Fable res
 
 ## Next move: BUILD — Block 0 (in motion since 2026-07-06 evening)
 
-## ▶▶ CURRENT (2026-07-10): CAPTURE RESILIENCE — resume at WAVE A
+## ▶▶▶ CURRENT (2026-07-10 late): WAVE A CODE COMPLETE — resume at the LIVE PROOF
+
+**Wave A (the 4 capture criticals + overlay + session recovery) is CODE COMPLETE and committed (36c671a..5a15e71), NOT yet live-proven.** Built via the SDD loop (4 parallel Opus core implementers → Fable review each → Opus integrator → adversarial Fable whole-wave review → Opus fix wave → Fable re-review). 337 vitest green · tsc clean · build clean · AUDIT PASS. Full close-out + the LIVE-WATCH checklist are in `.superpowers/sdd/progress.md` (the "WAVE A — CODE COMPLETE" block).
+
+**What changed, in one line:** capture no longer reads every platform signal as "scrolling stopped" — it classifies (healthy / backpressure / flagged-empty-200 / captcha / screen-time-overlay / offline) and responds like a person (human-cadence scroll + IO re-trigger, no teleport; snooze the reminder; pause+notify+auto-resume on captcha; one auto-refresh on a flagged empty page; honest incompleteness never faked as done). Founder's 3 live interruptions (SESS-01 empty-200, OVLY-01 screen-time modal, CHAL-UX captcha) are all handled. Wire format pinned from a real envelope (`fixtures/tiktok-post-item-list-envelope.json`).
+
+**▶ NEXT = the WAVE-A LIVE PROOF (needs the founder at the browser).** Steps:
+1. Confirm the dev browser (:9222, ext `holif…gefj`) hot-reloaded the new `dist/` (watcher on :9012); if not, Load-Unpacked `~/Dev/attic-extension/dist`.
+2. A2 self-heal is expected to repair the corrupted dev DB on first store open (watch the SW console for a "self-heal / reopening at v… " or "STORAGE REBUILD" log); if it can't, a clean extension remove+reload resets it.
+3. Founder on their TikTok **profile**, TikTok **foregrounded**, **no other TikTok tab / no FYP** (the interceptor also matches `recommend/item_list` → would inflate `count`, CONC-01). Solve any captcha in-tab (capture should pause+notify then auto-resume).
+4. Click **Sync** (or Alt+Shift+A on the profile) → real Likes/Favorites capture. VERIFY against the live-watch checklist: the grid actually scrolls and page-2 fetches within ~1 min (false-giveup signature = HUD "re-triggering n/3"→"waiting k/8" with frozen captured); flat heap/DOM; captcha pause+resume; empty-200 auto-refresh if it fires; screen-time Snooze if it fires; honest done/giveup. **This run also produces the Phase-2 pilot corpus.**
+5. After the proof: pin the `collect`/`favorite` envelope shapes (only `post` is pinned), then Waves B–D per the plan.
+
+**Below is the pre-Wave-A pointer (kept for lineage):**
+
+## (pre-Wave-A) 2026-07-10: CAPTURE RESILIENCE — resume at WAVE A
 
 **What just happened.** A live capture test proved the Phase-2A crash fix works (1,437 items, flat heap/DOM, `hasMore` read) but exposed the core defect: the scroll **motion** (`nudgeToBottom` teleport) fails to re-trigger TikTok's IntersectionObserver → misread as a rate-limit → false giveup. Founder correction: it is NOT rate-limiting. A 16-agent audit (`capture-resilience-audit`, 1.5M tokens, 0 errors) then mapped the FULL surface → **28 ranked failures (4 critical) · 17 gaps · 18 missing capabilities**, grounded in GitHub/SO prior art.
 
