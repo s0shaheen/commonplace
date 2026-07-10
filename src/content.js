@@ -9,6 +9,7 @@ import { initialScrollState, step as scrollStep, GIVEUP_STALL_CYCLES } from "./l
 let lastSource = null;
 let lastHasMore = null; // latest coerced paging signal from the message path (Task 1)
 let lastCursor = null;
+let pageArrivals = 0; // monotonic count of item_list messages — autoScroll keys page_captured on ARRIVAL, not count growth
 
 window.addEventListener("message", (e) => {
   if (e.source !== window || !e.data || e.data.__attic !== true) return;
@@ -19,6 +20,7 @@ window.addEventListener("message", (e) => {
     // the whole envelope on the page thread (§2.3: keep heavy work off the renderer).
     lastHasMore = coerceHasMore(e.data.hasMore);
     lastCursor = e.data.cursor ?? null;
+    pageArrivals++;
     chrome.runtime.sendMessage({ kind: "item_list", url: e.data.url, source: e.data.source, json: e.data.json });
   }
 });
@@ -156,14 +158,27 @@ async function autoScroll() {
   cachedScroller = null;
 
   // The termination decision is NOT here — it lives in the pure, tested `scrollState` reducer.
-  // This loop is dumb glue: observe (did `count` grow? what's the latest hasMore?), feed the
-  // reducer an event, and act on the action it returns. Completion is hasMore:false ONLY; a stall
-  // becomes backoff+wait; an unanswered run becomes a REPORTED giveup — never a silent "done".
+  // This loop is dumb glue: observe (did a page ARRIVE? what's the latest hasMore? did `count`
+  // grow?), feed the reducer an event, and act on the action it returns. Completion is hasMore:false
+  // ONLY; a stall becomes backoff+wait; an unanswered run becomes a REPORTED giveup — never a
+  // silent "done".
   let st = initialScrollState();
-  let prevCount = 0;
   const deps = { now: () => Date.now() }; // backoffMs left to the module's placeholder (Task 2 → pacing.ts)
   let lastSampleLogTs = 0; // console.log a CaptureSample roughly every ~5s while scrolling
   let running = true;
+
+  // PER-RUN RESET (review fix, critical). These module-level signals belong to the PREVIOUS run /
+  // source — a completed Favorites run leaves lastHasMore=false, and the store's `count` is a
+  // cumulative total that persists across runs. Without both resets, re-triggering on a second
+  // source (the exact path Task 5's supervisor drives) would read stale hasMore:false + a
+  // pre-existing count as an instant `done` at zero pages — the very false-completion this task
+  // exists to kill.
+  lastHasMore = null;
+  lastCursor = null;
+  let arrivalsSeen = pageArrivals;
+  // Baseline against the CURRENT persisted total: a pre-existing count is not growth.
+  const { count: initialCount = 0 } = await chrome.storage.local.get("count");
+  let prevCount = initialCount;
 
   while (running) {
     ensureCV();
@@ -172,11 +187,17 @@ async function autoScroll() {
     await sleep(2000 + Math.random() * 1500);
     const { count = 0 } = await chrome.storage.local.get("count");
 
-    // A batch that grew the count is a `page_captured` carrying the latest paging signal; otherwise
-    // this cycle saw nothing new → `tick`. `lastHasMore` defaults to true (more-may-exist) until a
-    // page tells us false, so a not-yet-seen signal can never end capture.
+    // A cycle is a `page_captured` when an item_list message ARRIVED since the last poll (review
+    // fix, important) — count growth alone can't be the key, because an all-duplicates page
+    // (crash-resume re-scroll, or a fully-deduped final page) grows nothing yet its hasMore:false
+    // is the completion signal; keying on growth would drop it and misreport a clean finish as
+    // giveup. Growth-without-arrival is also treated as a page: the SW's `count` write can lag one
+    // poll behind the message, and progress must reset the stall counter, not read as a stall.
+    // The reducer already handles a no-growth page correctly (hasMore:false ⇒ done; true ⇒ stall).
+    const arrived = pageArrivals > arrivalsSeen;
+    arrivalsSeen = pageArrivals;
     const event =
-      count > prevCount
+      arrived || count > prevCount
         ? { kind: "page_captured", newCount: count, hasMore: lastHasMore ?? true }
         : { kind: "tick" };
     prevCount = Math.max(prevCount, count);

@@ -93,9 +93,31 @@ describe("scrollState.step — completion is hasMore:false ONLY", () => {
     expect(state.lastCount).toBe(25);
   });
 
+  it("page_captured with NO growth + hasMore:false ⇒ done (an all-duplicates final page still completes)", () => {
+    // Pins the arrival-keyed glue contract: a crash-resume re-scroll delivers pages whose records
+    // all dedupe away (count never grows). The final page's hasMore:false must STILL complete —
+    // the reducer checks hasMore before growth, so a fully-deduped last page is a clean done.
+    let s = initialScrollState();
+    ({ state: s } = step(s, { kind: "page_captured", newCount: 40, hasMore: true }, deps));
+    const { state, action } = step(s, { kind: "page_captured", newCount: 40, hasMore: false }, deps);
+    expect(action).toEqual({ kind: "done" });
+    expect(state.status).toBe("done");
+    expect(state.lastCount).toBe(40);
+  });
+
   it("terminal states are absorbing (done stays done; giveup stays giveup)", () => {
     const done = step(initialScrollState(), { kind: "page_captured", newCount: 1, hasMore: false }, deps).state;
     expect(step(done, { kind: "tick" }, deps).action).toEqual({ kind: "done" });
+
+    // giveup is absorbing too: no later event (not even a page_captured) re-opens capture,
+    // and the action keeps carrying the original reason.
+    let g = step(initialScrollState(), { kind: "tick" }, deps);
+    while (g.action.kind !== "giveup") g = step(g.state, { kind: "tick" }, deps);
+    const after = step(g.state, { kind: "page_captured", newCount: 999, hasMore: true }, deps);
+    expect(after.action.kind).toBe("giveup");
+    if (after.action.kind !== "giveup") throw new Error("unreachable");
+    expect(after.action.reason).toMatch(/more may remain/i);
+    expect(after.state.status).toBe("giveup");
   });
 
   it("is deterministic for a given injected now()", () => {

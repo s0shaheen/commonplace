@@ -110,10 +110,7 @@ export function step(state: ScrollState, event: ScrollEvent, deps: ScrollDeps): 
     return stall(state, true, now, backoff);
   }
 
-  // tick: no page arrived this cycle. If the last page already told us no-more we're done (defensive;
-  // the page_captured:false branch normally gets there first), else it's a stall.
-  if (state.hasMore === false) {
-    return { state: { ...state, status: "done", reason: null, updatedAt: now }, action: { kind: "done" } };
-  }
+  // tick: no page arrived this cycle → a stall. (state.hasMore is always true here: false is only
+  // ever written together with status:"done", which the absorbing check above already returned.)
   return stall(state, state.hasMore, now, backoff);
 }

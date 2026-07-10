@@ -37,7 +37,16 @@ async function migrateLegacyItems(): Promise<void> {
 migrateLegacyItems().catch((e) => console.log("[commonplace] legacy migration failed:", (e as Error).message));
 
 interface ItemListMsg { kind: "item_list"; json: unknown; source?: string | null; url?: string }
-interface ScrollDoneMsg { kind: "scroll_done" }
+// Task 1: content.js reports HOW the scroll ended. status "done" = TikTok's own hasMore:false;
+// "giveup" = bounded backoff exhausted with more possibly remaining — an INCOMPLETE capture that
+// must never be exported as if it were a success.
+interface ScrollDoneMsg {
+  kind: "scroll_done";
+  status?: "done" | "giveup" | string;
+  reason?: string | null;
+  captured?: number;
+  cursor?: string | null;
+}
 interface ExportEnrichedMsg { kind: "export_enriched"; results: unknown[] }
 interface DownloadTestMsg { kind: "download_test"; n?: number }
 interface QueueStartMsg { kind: "queue_start" }
@@ -60,7 +69,7 @@ chrome.runtime.onMessage.addListener((msg: Msg, _sender, _sendResponse) => {
   if (msg.kind === "item_list") {
     void handleItemList(msg);
   } else if (msg.kind === "scroll_done") {
-    void handleScrollDone();
+    void handleScrollDone(msg);
   } else if (msg.kind === "export_enriched") {
     exportData("attic-enriched.json", msg.results);
   } else if (msg.kind === "download_test") {
@@ -178,8 +187,18 @@ async function storePosters(s: CpStore, items: CapturedItem[]): Promise<number> 
   return stored;
 }
 
-async function handleScrollDone(): Promise<void> {
+async function handleScrollDone(msg: ScrollDoneMsg): Promise<void> {
   const recs = await (await store()).allRecords();
+  if (msg.status === "giveup") {
+    // Review fix: a giveup must not masquerade as success at this layer either. We STILL export —
+    // it's the user's data — but under a name that says incomplete, with the reason logged loudly.
+    console.warn(
+      `[commonplace] capture INCOMPLETE — ${msg.reason ?? "gave up after backoff"} ` +
+        `(reported ${msg.captured ?? "?"} captured; exporting ${recs.length} records)`,
+    );
+    exportData("attic-favorites.INCOMPLETE.json", recs.map((r) => r.item));
+    return;
+  }
   exportData("attic-favorites.json", recs.map((r) => r.item));
 }
 

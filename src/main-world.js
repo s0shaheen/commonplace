@@ -12,14 +12,15 @@
 
   function emit(url, json) {
     try {
-      // Forward TikTok's own paging signals RAW alongside the payload (Task 1). We do NOT coerce
-      // here — the page world stays dumb transport; the defensive coercion (missing → more-may-exist)
-      // lives in the tested pure module `coerceHasMore`, which content.js applies. `cursor` falls
-      // back through maxCursor/max_cursor. Shape is UNVERIFIED in recon (recon/0.1-findings.md:8) —
-      // hence raw pass-through so the parser, not this glue, owns the interpretation.
+      // Forward TikTok's paging signals alongside the payload (Task 1). hasMore rides RAW — its
+      // defensive coercion (missing → more-may-exist) lives in the tested pure module `coerceHasMore`,
+      // which content.js applies. cursor is String()-coerced at the source (mirrors interceptParse's
+      // readCursor: cursors, like ids, stay strings — never risk number-precision loss in untested
+      // glue). Fallback chain cursor→maxCursor→max_cursor; shape UNVERIFIED in recon
+      // (recon/0.1-findings.md:8), so the parser owns interpretation of hasMore.
       const hasMore = json && typeof json === "object" ? json.hasMore : undefined;
-      const cursor =
-        json && typeof json === "object" ? json.cursor ?? json.maxCursor ?? json.max_cursor ?? null : null;
+      const rawCursor = json && typeof json === "object" ? json.cursor ?? json.maxCursor ?? json.max_cursor : null;
+      const cursor = rawCursor == null ? null : String(rawCursor);
       window.postMessage(
         { __attic: true, kind: "item_list", url, source: sourceFromUrl(url), json, hasMore, cursor },
         "*"
