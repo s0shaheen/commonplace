@@ -1,0 +1,241 @@
+{
+  "__fixture_provenance": "Captured live 2026-07-10 from a real post/item_list PAGINATION response (founder session, own profile). Top-level paging/status keys are VERBATIM and are the pin for COMPL-02: hasMore (boolean), cursor (string, \"-1\" on the final page), statusCode (0 = API-ok) + status_code/status_msg. itemList trimmed to 1 item; all URLs redacted (they were signed+expiring). This is a genuine final page: hasMore:false + cursor:\"-1\". CAVEATS: story/item_list uses PascalCase (HasMoreAfter/MaxCursor) so the defensive multi-key read stays; collect/favorite pagination envelopes still need a live pin at the Wave-A proof; first-page *_list responses can be HTTP 200 with an EMPTY body when the session is flagged (SESS-01) — an empty body is a transport signal, not a parse failure.",
+  "cursor": "-1",
+  "extra": {
+    "fatal_item_ids": [],
+    "logid": "20260710093156D95501461B01E806A257",
+    "now": 1783675916000
+  },
+  "hasMore": false,
+  "itemList": [
+    {
+      "AIGCDescription": "",
+      "CategoryType": 120,
+      "HasPromoteEntry": 0,
+      "IsHDBitrate": true,
+      "IsHDSelfView": true,
+      "ShowAIGC": true,
+      "anchors": [
+        {
+          "description": "CapCut · Video Editor",
+          "extraInfo": {
+            "subtype": ""
+          },
+          "icon": {
+            "urlList": [
+              "https://REDACTED.example/signed",
+              "https://REDACTED.example/signed",
+              "https://REDACTED.example/signed"
+            ]
+          },
+          "id": "0",
+          "keyword": "CapCut · Editing made easy",
+          "logExtra": "{\"anchor_id\":0,\"anchor_name\":\"CapCut · Editing made easy\",\"anchor_title_detail\":\"None\",\"anchor_title_id\":21502485763,\"anchor_type\":\"TT_CAPCUT\",\"capability_key\":\"default\",\"ccep_vip\":0,\"if_race_trigger\":0,\"is_two_line\":0,\"landing_page_style_id\":21502486275,\"maker_source\":\"\",\"publish_key\":\"capability\",\"template_id\":\"none\",\"tutorial_id\":\"none\",\"viamaker_anchor_capability_key_weight\":1,\"viamaker_anchor_style_idx\":-1,\"viamaker_anchor_style_source\":3,\"video_source\":0,\"video_type_id\":1}",
+          "schema": "https://REDACTED.example/signed",
+          "thumbnail": {
+            "height": 64,
+            "urlList": [
+              "https://REDACTED.example/signed",
+              "https://REDACTED.example/signed",
+              "https://REDACTED.example/signed"
+            ],
+            "width": 64
+          },
+          "type": 54
+        }
+      ],
+      "author": {
+        "UserStoryStatus": 0,
+        "avatarLarger": "https://REDACTED.example/signed",
+        "avatarMedium": "https://REDACTED.example/signed",
+        "avatarThumb": "https://REDACTED.example/signed",
+        "downloadSetting": 3,
+        "ftc": false,
+        "id": "6723005858453881861",
+        "isADVirtual": false,
+        "isEmbedBanned": false,
+        "nickname": "sunny",
+        "openFavorite": false,
+        "privateAccount": true,
+        "relation": 0,
+        "secUid": "MS4wLjABAAAAs1BGowrJD2cRw60_s9Y6uf4NMLOCLI8kx2HnY5gfT_-i8hDOAU-0-TCmzggf0fmm",
+        "secret": true,
+        "shortDramaCreator": {},
+        "signature": "",
+        "uniqueId": "bhaihours",
+        "verified": false
+      },
+      "authorStats": {
+        "diggCount": 10800,
+        "followerCount": 82,
+        "followingCount": 256,
+        "friendCount": 0,
+        "heart": 0,
+        "heartCount": 0,
+        "videoCount": 0
+      },
+      "authorStatsV2": {
+        "diggCount": "10800",
+        "followerCount": "82",
+        "followingCount": "256",
+        "friendCount": "0",
+        "heart": "0",
+        "heartCount": "0",
+        "videoCount": "0"
+      },
+      "backendSourceEventTracking": "",
+      "collected": false,
+      "createTime": 1751125674,
+      "creatorAIComment": {
+        "eligibleVideo": false,
+        "hasAITopic": false,
+        "notEligibleReason": 211
+      },
+      "desc": "",
+      "digged": false,
+      "duetDisplay": 0,
+      "forFriend": false,
+      "id": "7521027298364001550",
+      "isAd": false,
+      "isReviewing": false,
+      "itemCommentStatus": 0,
+      "item_control": {
+        "can_repost": false
+      },
+      "music": {
+        "album": "jazz is for ordinary people",
+        "authorName": "berlioz",
+        "coverLarge": "https://REDACTED.example/signed",
+        "coverMedium": "https://REDACTED.example/signed",
+        "coverThumb": "https://REDACTED.example/signed",
+        "duration": 60,
+        "id": "7213146494273243137",
+        "isCopyrighted": false,
+        "is_commerce_music": true,
+        "is_unlimited_music": false,
+        "original": false,
+        "playUrl": "https://REDACTED.example/signed",
+        "private": false,
+        "shoot_duration": 60,
+        "title": "jazz is for ordinary people",
+        "tt2dsp": {
+          "dsp_platform_selected_by_user": 3,
+          "tt_to_dsp_song_infos": [
+            {
+              "meta_song_id": "7213146488665278466",
+              "platform": 3,
+              "song_id": "12BaQt9aYdTlEtKreqB5V4"
+            }
+          ]
+        }
+      },
+      "officalItem": false,
+      "originalItem": false,
+      "privateItem": true,
+      "secret": true,
+      "shareEnabled": true,
+      "stats": {
+        "collectCount": 0,
+        "commentCount": 0,
+        "diggCount": 0,
+        "playCount": 0,
+        "shareCount": 0
+      },
+      "statsV2": {
+        "collectCount": "0",
+        "commentCount": "0",
+        "diggCount": "0",
+        "playCount": "0",
+        "repostCount": "0",
+        "shareCount": "0"
+      },
+      "stitchDisplay": 0,
+      "textLanguage": "un",
+      "textTranslatable": false,
+      "video": {
+        "PlayAddrStruct": {
+          "DataSize": 7062145,
+          "FileCs": "c:0-92636-8dfb",
+          "FileHash": "28d5eb691626a2354a4bafb04e0acc2f",
+          "Height": 1024,
+          "Uri": "v12044gd0000d1g0q9nog65j6og39e30",
+          "UrlKey": "v12044gd0000d1g0q9nog65j6og39e30_h264_540p_1204525",
+          "UrlList": [
+            "https://REDACTED.example/signed",
+            "https://REDACTED.example/signed",
+            "https://REDACTED.example/signed"
+          ],
+          "Width": 576
+        },
+        "VQScore": "0",
+        "bitrate": 1204525,
+        "bitrateInfo": [
+          {
+            "Bitrate": 1204525,
+            "BitrateFPS": 30,
+            "CodecType": "h264",
+            "Format": "mp4",
+            "GearName": "normal_540_0",
+            "MVMAF": "",
+            "PlayAddr": {
+              "DataSize": 7062145,
+              "FileCs": "c:0-92636-8dfb",
+              "FileHash": "28d5eb691626a2354a4bafb04e0acc2f",
+              "Height": 1024,
+              "Uri": "v12044gd0000d1g0q9nog65j6og39e30",
+              "UrlKey": "v12044gd0000d1g0q9nog65j6og39e30_h264_540p_1204525",
+              "UrlList": [
+                "https://REDACTED.example/signed",
+                "https://REDACTED.example/signed",
+                "https://REDACTED.example/signed"
+              ],
+              "Width": 576
+            },
+            "QualityType": 20,
+            "VideoExtra": "{\"PktOffsetMap\":\"\",\"mvmaf\":\"\",\"ufq\":\"\",\"volume_info_json\":\"\",\"transcode_feature_id\":\"b1cb202f98cf51d95e455ae01e100ce9\",\"dec_info\":\"\",\"gearvqm\":\"\",\"audio_bit_rate\":64209}"
+          }
+        ],
+        "claInfo": {
+          "enableAutoCaption": true,
+          "hasOriginalAudio": true,
+          "noCaptionReason": 1
+        },
+        "codecType": "h264",
+        "cover": "https://REDACTED.example/signed",
+        "definition": "540p",
+        "downloadAddr": "https://REDACTED.example/signed",
+        "duration": 46,
+        "dynamicCover": "https://REDACTED.example/signed",
+        "encodeUserTag": "",
+        "encodedType": "normal",
+        "format": "mp4",
+        "height": 1024,
+        "id": "7521027298364001550",
+        "originCover": "https://REDACTED.example/signed",
+        "playAddr": "https://REDACTED.example/signed",
+        "ratio": "540p",
+        "size": 7062145,
+        "videoID": "v12044gd0000d1g0q9nog65j6og39e30",
+        "videoQuality": "normal",
+        "volumeInfo": {
+          "Loudness": -18.2,
+          "Peak": 0.51286
+        },
+        "width": 576,
+        "zoomCover": {
+          "240": "https://REDACTED.example/signed",
+          "480": "https://REDACTED.example/signed",
+          "720": "https://REDACTED.example/signed",
+          "960": "https://REDACTED.example/signed"
+        }
+      },
+      "vl1": true
+    }
+  ],
+  "log_pb": {
+    "impr_id": "20260710093156D95501461B01E806A257"
+  },
+  "statusCode": 0,
+  "status_code": 0,
+  "status_msg": ""
+}
