@@ -128,6 +128,53 @@ Passive network interception (no request forging → no doc_id-rotation tax, str
 
 ---
 
+## 8. Implementation specs (the testable-core decomposition — dispatch-ready)
+
+**Testing strategy (the crux).** Today's `content.js`/`main-world.js` are untested spike JS, and browser-world scroll/DOM/timing code can't be meaningfully unit-tested in place. So — exactly as Phase 3 did with the pure `queue.ts` behind thin offscreen glue — every *decision* moves into pure TypeScript modules under **`src/lib/capture/`** (vitest, TDD, injected I/O and RNG), leaving the world scripts as **thin glue** that only wires DOM/events to the core. esbuild already bundles `content.js`/`main-world.js` as IIFE, so they import these modules directly. **Rule for every task: if it contains an `if`, a threshold, or a state transition, it lives in a tested module — not in the glue.**
+
+**Global constraints (violations are review-rejects):**
+- **Completion is `hasMore:false` ONLY.** No timeout, no count-stability, ever decides "done." A stall with `hasMore:true` is backpressure, not completion.
+- **Capture is network-sourced; the DOM is disposable.** Pruning/eviction may never gate on or lose captured data — the network interceptor is the only source of truth. Idempotent dedup by id means a re-scroll is always safe.
+- **Human-cadence default; no request construction.** Passive skim only (SPEC §7 posture preserved). Pacing is jittered, injectable-RNG for tests.
+- **No secrets, no schema/engine/analysis-queue changes.** This phase touches only capture + a new supervisor.
+- Determinism in tests: inject `now()` and `rng()` (no `Date.now`/`Math.random` in pure modules), mirroring `queue.ts`.
+
+### Task 0 — Instrument (`src/lib/capture/instrument.ts` + HUD scaffold)
+- **Pure:** `sampleMemory(nav, docNodeCount): CaptureSample` → `{ ts, capturedCount, domNodes, heapUsedMB|null }` (reads `performance.memory` where present, null-safe); `formatHudLine(state): string`. Tested: null-heap path, formatting.
+- **Glue:** `content.js` renders a HUD element (fixed-position) showing captured/source/hasMore/heap/DOM-nodes/state; logs a `CaptureSample` every N seconds. The **live crash-curve capture** (today's code vs. rebuilt) is recorded at the Task-6 proof run (needs a real session — founder chose to wait), NOT here; this task ships the instrument that makes that measurement exist.
+- **Done-when:** instrument module tested; HUD renders on a TikTok tab and prints samples; a before-baseline note stub added to the plan for Task 6 to fill.
+
+### Task 1 — Honest completion (`interceptParse.ts` + `scrollState.ts`)
+- **`interceptParse.ts`:** `parseItemListEnvelope(json): { items: RawItem[]; hasMore: boolean; cursor: string|null }` — extend `capture.js`'s extraction to also read `hasMore` (TikTok: top-level `hasMore` 0/1 or bool) and `cursor`/`maxCursor`. Tested against fixtures incl. `hasMore:false`, missing-field defensiveness.
+- **`scrollState.ts`:** a pure reducer `step(state, event): {state, action}` where `event ∈ {page_captured{newCount,hasMore}, tick}` and `action ∈ {scroll, wait(ms), done, giveup}`. Encodes: `hasMore:false` ⇒ `done`; new items ⇒ reset stall, `scroll`; tick with no new items + `hasMore:true` ⇒ enter/continue backoff (`wait`), and after a bounded number of exhausted max-backoff cycles ⇒ `giveup` (a *reported* incomplete, never a silent done). **This module is the §2.1 fix as a unit test.**
+- **Glue:** `main-world.js` forwards `{hasMore, cursor}` with each capture; `content.js` feeds `page_captured`/`tick` into `scrollState`, acts on the action.
+- **Done-when:** `scrollState` tests prove stall≠done, `hasMore:false`=done, giveup is distinct+reported; a real full-source run ends only on `hasMore:false`.
+
+### Task 2 — Human-cadence pacing (`pacing.ts`)
+- **Pure:** `nextDwellMs(rng): number` (jittered human dwell, e.g. base 900–2200ms ranges — final constants set in the task from a quick cadence sanity-check, documented); `backoffMs(stallCount, rng): number` (exponential, cap ~60s, jittered — reuse the `queue.ts` backoff shape). Tested: ranges/bounds/monotonicity with seeded rng.
+- **Glue:** `content.js` uses `nextDwellMs` between scroll nudges and `backoffMs` for `scrollState`'s `wait`; HUD shows "waiting out a rate-limit… Ns" during backoff so a stall reads as working.
+- **Done-when:** pacing tested; a large source captures to completion without tripping the ~360 throttle, or recovers from it via backoff (evidenced at Task 6; unit-level here).
+
+### Task 3 — DOM eviction + slim handoff (`pruneWindow.ts`)
+- **`pruneWindow.ts`:** `tilesToEvict(total, liveWindow, alreadyEvicted): number[]` — keep a live window of the most-recent K tiles near the viewport, return indices safe to remove; pure, tested (window boundaries, idempotence, never-evict-live-window).
+- **Glue:** `content.js` removes evicted tiles from the confirmed grid (guardrails from today's `resolveGrid` retained: only a confirmed repeating grid, network-based capture so eviction cannot lose data); `main-world.js` transfers the **slim** parsed slice (drop `raw`/heavy `video` sub-objects on the way out) instead of the full envelope cloned twice.
+- **Done-when:** pruneWindow tested; instrumented heap/DOM-nodes stay ~flat across a full large capture vs. Task-0 baseline (the §2.3 fix, measured).
+
+### Task 4 — Decouple media (`background.ts`/offscreen)
+- Remove the inline poster fetch from `handleItemList` (background.ts:149-179). Posters fetched in a **throttled, resumable pass** kicked off when a source finishes enumerating (offscreen doc or SW, off the page thread); video bytes stay on-demand in offscreen for analyzed items only. Reuse the `rateLimiter` + job-record patterns already in the store.
+- **Done-when:** the capture intake path holds zero media Blobs; posters still land (expiry-safe — pass starts right after enumeration); tested (poster-pass state + resumption).
+
+### Task 5 — Supervisor + Sync + two modes (`supervisor.ts`)
+- **Pure `supervisor.ts`:** a source-sequencing + resume state machine (I/O injected, à la `queue.ts`). `nextAction(progress, event)` over sources `[favorites, likes, posts, reposts]`; persists `{source, phase, done[], lastCount}`; resume-after-crash returns the unfinished source; idempotent restart is safe. Tested: full sequence, mid-source crash→resume, all-done, skip-completed.
+- **Glue:** a **Sync action** (popup button + message). **Semi-auto (default):** drives the founder's foreground TikTok tab. **Autonomous (opt-in toggle in options, off by default, with an account-risk note):** `chrome.tabs.create/focus` a TikTok saved URL, then drive. Both share the scroll engine + supervisor; persistence in IndexedDB (`meta`); revival via the existing alarm spine.
+- **Done-when:** one Sync drives all four sources to completion untouched (semi-auto); a mid-run tab crash resumes and finishes; the autonomous toggle opens+drives a tab; supervisor logic fully unit-tested.
+
+### Task 6 — Whole-subsystem review + proof run + SPEC §7
+- Final whole-branch review (cross-task seams: interceptParse→scrollState→pacing→supervisor; the completion invariant end-to-end; no data-loss on eviction). **Live proof run on the founder's real library** (semi-auto): full TikTok library captures in one unattended run, no crash, counts verified complete — and this run **produces the Phase-2 pilot corpus**. Fill Task-0's before/after memory curve. Update **SPEC §7** to the new contract + roadmap status log + decision-log entry.
+- **Done-when:** the founder's full library captured in one unattended pass, no crash, counts complete; SPEC §7 updated.
+
+**Sequencing:** T0 → T1 → T2 → T3 (each builds on the prior scroll surface) · T4 parallel-safe after T0 · T5 depends on T1–T3 · T6 last (needs a founder session). Files: all pure modules under `src/lib/capture/*.ts` with `*.test.ts`; glue in `src/content.js`, `src/main-world.js`, `src/background.ts`, `src/offscreen.ts`, `src/popup.*` (new Sync UI), `src/options.*` (autonomous toggle), `manifest.json` (`tabs` permission for autonomous mode + popup).
+
 ## 7. Sequencing + spec impact
 - This slots as a **capture-hardening phase ahead of Phase 2** (the pilot depends on a real corpus this produces) and runs parallel to Phase 4. It does **not** touch the frozen schema, the engine, or the analysis queue — only the capture driver + a new supervisor.
 - On resolution of §6, this plan updates **SPEC §7** (the capture contract: `hasMore`-completion, human-cadence, DOM-eviction, decoupled media, the Sync supervisor) and appends the roadmap status log + a decision-log entry.
