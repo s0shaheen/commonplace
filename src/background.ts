@@ -24,6 +24,14 @@ import {
 import { loadConfig, type CpConfig, type StorageLike } from "./lib/config.js";
 import type { CapturedItem } from "./lib/types.js";
 
+// DEV-ONLY hot-reload. `__DEV_RELOAD__` is an esbuild `define`: "true" under `npm run dev`, "false"
+// for `npm run build`. In prod the whole block (and the dynamic import) is dead-code-eliminated, so
+// the reload client never reaches dist/ — enforced by scripts/audit-dist.mjs. See src/devReload.ts.
+declare const __DEV_RELOAD__: boolean;
+if (__DEV_RELOAD__) {
+  import("./devReload.js").catch(() => {});
+}
+
 // Decoupled poster pass (Task 4): posters are NO LONGER fetched inline during capture — that inline
 // fetch was a §2.3 crash vector (3k image fetches + Blob decodes contending with the live scroll).
 // They land in a throttled, resumable post-enumeration pass instead — HONESTLY SERIAL: one fetch at

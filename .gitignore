@@ -1,6 +1,9 @@
 node_modules/
 dist/
 
+# dev browser profile — dedicated Chrome profile for `npm run dev:browser` (keeps TikTok/IG logins)
+.dev-profile/
+
 # CWS submission zip — build artifact, never committed (regenerate with `npm run package`)
 commonplace-cws-v*.zip
 src/lib/generated/*

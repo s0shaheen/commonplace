@@ -6,7 +6,8 @@
   "description": "Commonplace — a commonplace book for the video age. Local-first library for your saved videos, with evidence-backed analysis and grounded entities.",
   "scripts": {
     "build": "node scripts/build-validators.mjs && node scripts/build.mjs",
-    "dev": "npm run build -- --watch",
+    "dev": "node scripts/dev.mjs",
+    "dev:browser": "node scripts/dev-browser.mjs",
     "package": "npm run build && node scripts/package-cws.mjs",
     "audit": "node scripts/audit-dist.mjs",
     "test": "vitest run",
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@types/chrome": "^0.2.2",
     "@types/node": "^20.19.41",
+    "@types/ws": "^8.18.1",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "esbuild": "^0.28.1",
@@ -27,7 +29,8 @@
     "promptfoo": "^0.121.18",
     "tsx": "^4.22.3",
     "typescript": "^5.9.3",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "ws": "^8.21.0"
   },
   "dependencies": {
     "idb": "^8.0.3"

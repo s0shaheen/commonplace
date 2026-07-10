@@ -7,16 +7,20 @@
 //   • ESM (service worker + document contexts): background / offscreen / options.
 //   • IIFE (content scripts run in page worlds, no module loader): content / main-world / capture.
 // Validators are regenerated first (idempotent) so a bare `node scripts/build.mjs` is self-sufficient.
+//
+// The esbuild option objects + copyStatics are EXPORTED so the dev watcher (scripts/dev.mjs) reuses
+// the exact same build config — no duplication, one source of truth. `main()` only runs when this
+// file is executed directly (not when imported), so `npm run build` is unchanged.
 
 import * as esbuild from "esbuild";
 import { copyFileSync, mkdirSync, rmSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, resolve } from "node:path";
 import { buildValidators } from "./build-validators.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, "..");
-const DIST = resolve(ROOT, "dist");
+export const ROOT = resolve(__dirname, "..");
+export const DIST = resolve(ROOT, "dist");
 const watch = process.argv.includes("--watch");
 
 const common = {
@@ -25,10 +29,14 @@ const common = {
   outdir: DIST,
   logLevel: "info",
   sourcemap: watch ? "inline" : false,
+  // PRODUCTION SAFETY: the dev-only hot-reload client is behind `if (__DEV_RELOAD__)`. Defining it
+  // `false` here makes esbuild dead-code-eliminate that branch AND its dynamic import(), so the
+  // reload client can never reach a production dist/. scripts/dev.mjs overrides this to "true".
+  define: { __DEV_RELOAD__: "false" },
 };
 
 // ESM: service worker (type:module) + offscreen document + options page.
-const esmOptions = {
+export const esmOptions = {
   ...common,
   format: "esm",
   entryPoints: {
@@ -40,7 +48,7 @@ const esmOptions = {
 };
 
 // IIFE: content scripts execute in page worlds with no module loader.
-const iifeOptions = {
+export const iifeOptions = {
   ...common,
   format: "iife",
   entryPoints: {
@@ -50,7 +58,7 @@ const iifeOptions = {
   },
 };
 
-function copyStatics() {
+export function copyStatics() {
   mkdirSync(resolve(DIST, "prompts"), { recursive: true });
   const copies = [
     ["manifest.json", "manifest.json"],
@@ -83,7 +91,11 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Only run the build when executed directly (`node scripts/build.mjs`), NOT when imported by dev.mjs.
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

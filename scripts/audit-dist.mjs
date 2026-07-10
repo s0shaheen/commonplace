@@ -45,6 +45,18 @@ const SECRET_PATTERNS = [
   { name: "literal secrets.js reference", re: /secrets\.js/ },
 ];
 
+// DEV-ARTIFACT GUARD — the regression test that the hot-reload dev tooling can NEVER ship. The
+// reload client (src/devReload.ts) is compiled into dist/ ONLY under `npm run dev` (__DEV_RELOAD__
+// = true) and is dead-code-eliminated by `npm run build` (__DEV_RELOAD__ = false). If any of these
+// fingerprints survives into a production dist/, the reload client leaked — fail the build.
+// (Patterns are word/char-anchored to their exact source forms so they can't false-positive on
+// unrelated code; e.g. the manifest's `http://localhost/*` host-permission is NOT `ws://localhost`.)
+const DEV_ARTIFACT_PATTERNS = [
+  { name: "hot-reload client reference (devReload)", re: /devReload/ },
+  { name: "dev reload WebSocket URL (ws://localhost)", re: /ws:\/\/localhost/ },
+  { name: "dev-reload build flag left true (__DEV_RELOAD__)", re: /__DEV_RELOAD__/ },
+];
+
 const failures = [];
 
 function fail(msg) {
@@ -112,6 +124,12 @@ for (const file of files) {
   for (const { name, re } of SECRET_PATTERNS) {
     if (re.test(text)) {
       fail(`${rel} contains a ${name}.`);
+    }
+  }
+  // Dev-artifact guard: the hot-reload client must never appear in a production dist/.
+  for (const { name, re } of DEV_ARTIFACT_PATTERNS) {
+    if (re.test(text)) {
+      fail(`${rel} contains a ${name} — the DEV hot-reload client leaked into a production build. Rebuild with \`npm run build\` (not \`npm run dev\`).`);
     }
   }
 }
