@@ -41,16 +41,19 @@ export function shouldLogSample(prevTs: number, ts: number, intervalMs: number):
 
 /**
  * A compact single-line HUD render, e.g.:
- *   "⛏ 1240 · likes · more:yes · heap 512MB · dom 8300 · scrolling"
+ *   "⛏ 1240 · likes · more:yes · heap 512MB · dom 8300 · evicted 120 · scrolling"
  * Deterministic for a given (sample, extra) pair — no clock formatting, so it's directly testable.
+ * `evicted` (Task 3 DOM eviction) is shown only when supplied — 0 is a real value and IS rendered;
+ * absent/null omits the segment (back-compat with pre-eviction callers).
  */
 export function formatHudLine(
   s: CaptureSample,
-  extra: { source?: string | null; hasMore?: boolean | null; state?: string },
+  extra: { source?: string | null; hasMore?: boolean | null; state?: string; evicted?: number | null },
 ): string {
   const source = extra.source ?? "—";
   const more = extra.hasMore === true ? "yes" : extra.hasMore === false ? "no" : "—";
   const heap = s.heapUsedMB === null ? "heap —" : `heap ${s.heapUsedMB}MB`;
+  const evicted = extra.evicted == null ? "" : ` · evicted ${extra.evicted}`;
   const state = extra.state ? ` · ${extra.state}` : "";
-  return `⛏ ${s.capturedCount} · ${source} · more:${more} · ${heap} · dom ${s.domNodes}${state}`;
+  return `⛏ ${s.capturedCount} · ${source} · more:${more} · ${heap} · dom ${s.domNodes}${evicted}${state}`;
 }

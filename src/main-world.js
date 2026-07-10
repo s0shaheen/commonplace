@@ -1,5 +1,7 @@
 // Runs in the page's MAIN world. Skims TikTok's OWN already-signed item_list responses.
 // Matches every *_list variant: collect (Favorites), favorite (Likes), post (Posts), repost — confirmed via recon.
+import { parseItemListEnvelope } from "./lib/capture/interceptParse.js";
+
 (() => {
   const TARGET = /\/api\/[^?]*item_list/i;
 
@@ -12,19 +14,17 @@
 
   function emit(url, json) {
     try {
-      // Forward TikTok's paging signals alongside the payload (Task 1). hasMore rides RAW — its
-      // defensive coercion (missing → more-may-exist) lives in the tested pure module `coerceHasMore`,
-      // which content.js applies. cursor is String()-coerced at the source (mirrors interceptParse's
-      // readCursor: cursors, like ids, stay strings — never risk number-precision loss in untested
-      // glue). Fallback chain cursor→maxCursor→max_cursor; shape UNVERIFIED in recon
-      // (recon/0.1-findings.md:8), so the parser owns interpretation of hasMore.
-      const hasMore = json && typeof json === "object" ? json.hasMore : undefined;
-      const rawCursor = json && typeof json === "object" ? json.cursor ?? json.maxCursor ?? json.max_cursor : null;
-      const cursor = rawCursor == null ? null : String(rawCursor);
-      window.postMessage(
-        { __attic: true, kind: "item_list", url, source: sourceFromUrl(url), json, hasMore, cursor },
-        "*"
-      );
+      // §2.3 fix: parse + NORMALIZE here, in the MAIN world, and post only the SLIM items — never the
+      // heavy raw envelope (which used to be structured-cloned to content.js and re-serialized to the
+      // SW, a full-payload copy on the page thread every page, forever). parseItemListEnvelope reuses
+      // capture.js's extractItems (single source of truth for record shape) and drops the bulky
+      // `raw`/`video` sub-objects on the way out; it also reads TikTok's paging signals — `hasMore`
+      // coerced defensively (missing → more-may-exist, never a false "done") and a String()-safe
+      // `cursor` (cursor→maxCursor→max_cursor). Passing `source` in means items arrive already
+      // source-tagged (sources:[source]), so the SW no longer re-normalizes — see interceptParse.ts.
+      const source = sourceFromUrl(url);
+      const { items, hasMore, cursor } = parseItemListEnvelope(json, source);
+      window.postMessage({ __attic: true, kind: "item_list", url, source, items, hasMore, cursor }, "*");
     } catch (_) {}
   }
 

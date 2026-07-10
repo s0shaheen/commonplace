@@ -6,6 +6,7 @@ import { sampleMemory, formatHudLine, shouldLogSample } from "./lib/capture/inst
 import { coerceHasMore } from "./lib/capture/interceptParse.js";
 import { initialScrollState, step as scrollStep, GIVEUP_STALL_CYCLES } from "./lib/capture/scrollState.js";
 import { nextDwellMs, backoffMs } from "./lib/capture/pacing.js";
+import { tilesToEvict, DEFAULT_LIVE_WINDOW } from "./lib/capture/pruneWindow.js";
 
 let lastSource = null;
 let lastHasMore = null; // latest coerced paging signal from the message path (Task 1)
@@ -22,7 +23,10 @@ window.addEventListener("message", (e) => {
     lastHasMore = coerceHasMore(e.data.hasMore);
     lastCursor = e.data.cursor ?? null;
     pageArrivals++;
-    chrome.runtime.sendMessage({ kind: "item_list", url: e.data.url, source: e.data.source, json: e.data.json });
+    // Relay the SLIM, already-normalized+source-tagged items the main world parsed (Task 3) — the
+    // heavy raw envelope no longer crosses any structured-clone boundary. The SW upserts msg.items
+    // directly (no re-normalization). coerceHasMore above is idempotent on the already-coerced value.
+    chrome.runtime.sendMessage({ kind: "item_list", url: e.data.url, source: e.data.source, items: e.data.items });
   }
 });
 
@@ -47,13 +51,14 @@ function getScroller() {
   return best;
 }
 
-// ── content-visibility pruning ────────────────────────────────────────────────
-// Keeps the page fast on huge lists (thousands of likes) by letting the browser SKIP
-// layout/paint for off-screen tiles. It mutates ZERO tiles (just a <style> + one attr),
-// so it's transparent to TikTok's React; capture is network-based (main-world intercepts
-// item_list), so this can NEVER lose corpus data. Kill anytime with Alt+Shift+K.
-const CV_STYLE_ID = "attic-cv";
-let cvGrid = null;
+// ── DOM tile eviction ─────────────────────────────────────────────────────────
+// The §2.3 memory fix (the "slows at 1k, crashes at 3k" vector). The old code used
+// content-visibility, which only skipped PAINT for off-screen tiles and evicted NOTHING — the nodes,
+// React fibers and decoded thumbnails all stayed resident until the renderer OOMed. This actually
+// REMOVES the oldest tiles, holding the DOM at a bounded live window (DEFAULT_LIVE_WINDOW) no matter
+// how large the corpus grows. The which-to-remove decision is the pure, tested `tilesToEvict`; the
+// grid GUARDRAILS from the old code are ported wholesale below (resolveGrid: a confirmed, repeating,
+// anchor-derived grid only — refuse to act otherwise).
 
 function resolveGrid() {
   const anchors = document.querySelectorAll('a[href*="/video/"], a[href*="/photo/"]');
@@ -72,38 +77,36 @@ function resolveGrid() {
   return best.parentElement;
 }
 
-function enableCV() {
-  if (document.getElementById(CV_STYLE_ID)) return true;
+// Per-grid eviction bookkeeping. `evictGrid` is the grid element we're currently pruning; when
+// TikTok re-renders (SPA tab switch Likes<->Favorites) the element is replaced, so we reset the
+// per-grid counter for the fresh node. `evictedInGrid` is `alreadyEvicted` for the pure function.
+let evictGrid = null;
+let evictedInGrid = 0;
+
+// Trim the confirmed grid to the live window by removing the OLDEST (front) tiles. Returns the
+// number evicted this cycle (for the HUD's running total). Guardrail: does nothing without a
+// confirmed repeating grid.
+//
+// SAFETY — eviction can NEVER lose corpus data: capture is network-sourced (main-world intercepts
+// TikTok's own item_list responses and forwards the normalized items). A grid tile carries ZERO
+// information for us once its page is captured; it exists only to make TikTok paginate. Removing it
+// frees renderer memory and loses nothing. Idempotent dedup by id means even a re-scroll is safe.
+function pruneGrid() {
   const g = resolveGrid();
-  if (!g) return false;
-  cvGrid = g;
-  const sample = g.querySelector(":scope > *");
-  const h = (sample && Math.round(sample.getBoundingClientRect().height)) || 300;
-  g.setAttribute("data-attic-grid", "1");
-  const s = document.createElement("style");
-  s.id = CV_STYLE_ID;
-  s.textContent = `[data-attic-grid] > * { content-visibility: auto; contain-intrinsic-size: auto ${h}px; }`;
-  document.documentElement.appendChild(s); // outside TikTok's #app → React never reconciles it
-  console.log("[attic-spike] content-visibility pruning ON (grid: %d tiles)", g.childElementCount);
-  return true;
-}
-
-function killCV() {
-  document.getElementById(CV_STYLE_ID)?.remove();
-  cvGrid?.removeAttribute("data-attic-grid");
-  cvGrid = null;
-  console.log("[attic-spike] content-visibility pruning OFF");
-}
-
-// Keep the rule live across TikTok re-renders / SPA tab switches (Likes <-> Favorites).
-function ensureCV() {
-  if (!document.getElementById(CV_STYLE_ID)) return enableCV();
-  if (!cvGrid || !cvGrid.isConnected) {
-    killCV();
-    return enableCV(); // grid element replaced → re-resolve
+  if (!g) return 0; // no confirmed repeating grid → refuse to act (ported guardrail)
+  if (g !== evictGrid) {
+    evictGrid = g; // new / re-rendered grid element → reset per-grid bookkeeping
+    evictedInGrid = 0;
   }
-  if (!cvGrid.hasAttribute("data-attic-grid")) cvGrid.setAttribute("data-attic-grid", "1"); // attr stripped → re-assert
-  return true;
+  const present = g.childElementCount;
+  const total = evictedInGrid + present; // logical tiles this grid element has ever held
+  const evict = tilesToEvict(total, DEFAULT_LIVE_WINDOW, evictedInGrid);
+  // `evict` is always the contiguous oldest prefix, so removing `evict.length` first-children removes
+  // exactly those tiles (= max(0, present − liveWindow) — drift-proof even if TikTok virtualized some
+  // itself; see pruneWindow.ts). We keep the newest DEFAULT_LIVE_WINDOW tiles at the end.
+  for (let k = 0; k < evict.length; k++) g.firstElementChild?.remove();
+  evictedInGrid += evict.length;
+  return evict.length;
 }
 
 // ── Capture HUD ────────────────────────────────────────────────────────────────
@@ -144,6 +147,9 @@ function removeHud() {
 
 function nudgeToBottom() {
   // Drive the last loaded item into view — scrolls all ancestor containers as needed (virtualization-safe).
+  // EVICTION-SAFE: pruneGrid only ever removes the OLDEST tiles and always keeps the newest
+  // DEFAULT_LIVE_WINDOW at the end of the grid, so `links[links.length-1]` is still the newest tile
+  // after a prune — this nudge keeps targeting the real bottom and TikTok's loader keeps firing.
   const links = document.querySelectorAll('a[href*="/video/"], a[href*="/photo/"]');
   if (links.length) links[links.length - 1].scrollIntoView({ block: "end" });
   const sc = getScroller();
@@ -183,9 +189,16 @@ async function autoScroll() {
   // Baseline against the CURRENT persisted total: a pre-existing count is not growth.
   const { count: initialCount = 0 } = await chrome.storage.local.get("count");
   let prevCount = initialCount;
+  // Per-run eviction reset: start fresh so the HUD's "evicted N" is this run's tally and pruneGrid
+  // re-resolves the grid from scratch (a new source/tab is a new grid element).
+  evictGrid = null;
+  evictedInGrid = 0;
+  let evictedTotal = 0;
 
   while (running) {
-    ensureCV();
+    // Evict the oldest tiles down to the live window BEFORE nudging (the §2.3 memory fix). Keeps the
+    // DOM bounded regardless of corpus size; can never lose captured data (capture is network-sourced).
+    evictedTotal += pruneGrid();
     const domCount = nudgeToBottom();
     // Human-cadence dwell (pacing.ts, §2.2): jittered 900–2200ms base + an occasional longer
     // "look" pause — never the metronome that tripped the ~360-item throttle.
@@ -226,7 +239,7 @@ async function autoScroll() {
         : st.stall > 0
           ? `${st.status} ${st.stall}/${GIVEUP_STALL_CYCLES}`
           : st.status;
-    updateHud(formatHudLine(sample, { source: lastSource, hasMore: st.hasMore, state: hudState }));
+    updateHud(formatHudLine(sample, { source: lastSource, hasMore: st.hasMore, state: hudState, evicted: evictedTotal }));
     if (shouldLogSample(lastSampleLogTs, sample.ts, 5000)) {
       lastSampleLogTs = sample.ts;
       console.log("[commonplace] capture sample", sample);
@@ -252,7 +265,6 @@ async function autoScroll() {
   }
 
   scrolling = false;
-  killCV(); // restore the page to its natural state now capture is done
   removeHud();
   chrome.runtime.sendMessage({
     kind: "scroll_done",
@@ -314,7 +326,6 @@ window.addEventListener("keydown", (e) => {
     chrome.runtime.sendMessage({ kind: "queue_status" });
     console.log("[commonplace] queue_status requested → see service-worker console");
   }
-  if (e.code === "KeyK") killCV(); // manual kill-switch for content-visibility pruning
   if (e.code === "KeyD") {
     chrome.runtime.sendMessage({ kind: "download_test", n: 3 });
     console.log("[attic-spike] Path 1: chrome.downloads test (3 videos)");
@@ -326,5 +337,5 @@ window.addEventListener("keydown", (e) => {
 });
 
 console.log(
-  "[commonplace] ready — A:auto-scroll · S:open-schema-export · E:queue-start · Q:queue-status · K:kill-pruning · D:download(chrome.downloads) · F:download(fetch)"
+  "[commonplace] ready — A:auto-scroll · S:open-schema-export · E:queue-start · Q:queue-status · D:download(chrome.downloads) · F:download(fetch)"
 );

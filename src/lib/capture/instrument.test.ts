@@ -95,4 +95,22 @@ describe("formatHudLine", () => {
     expect(line).toContain("1240");
     expect(line).not.toContain("undefined");
   });
+
+  it("renders the evicted-tiles count when provided (Task 3 DOM eviction)", () => {
+    const line = formatHudLine(base, { source: "likes", hasMore: true, state: "scrolling", evicted: 120 });
+    expect(line).toBe("⛏ 1240 · likes · more:yes · heap 512MB · dom 8300 · evicted 120 · scrolling");
+  });
+
+  it("omits the evicted segment when absent or null (back-compat with pre-eviction callers)", () => {
+    expect(formatHudLine(base, { source: "likes", hasMore: true, state: "scrolling" })).not.toContain("evicted");
+    expect(formatHudLine(base, { source: "likes", hasMore: true, state: "scrolling", evicted: null })).not.toContain(
+      "evicted",
+    );
+  });
+
+  it("renders evicted 0 explicitly (0 is a real value, not 'absent')", () => {
+    expect(formatHudLine(base, { source: "likes", hasMore: true, state: "scrolling", evicted: 0 })).toContain(
+      "evicted 0",
+    );
+  });
 });

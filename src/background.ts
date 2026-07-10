@@ -8,7 +8,6 @@
 // fetch each new item's cover bytes immediately (bounded to 3 concurrent, skipping items we
 // already have, non-fatal on failure). Capturing the poster at save-time is the whole point.
 
-import { extractItems } from "./capture.js";
 import { openStore, type CpStore } from "./lib/store.js";
 import type { CapturedItem } from "./lib/types.js";
 
@@ -36,7 +35,11 @@ async function migrateLegacyItems(): Promise<void> {
 }
 migrateLegacyItems().catch((e) => console.log("[commonplace] legacy migration failed:", (e as Error).message));
 
-interface ItemListMsg { kind: "item_list"; json: unknown; source?: string | null; url?: string }
+// Task 3: the message now carries ALREADY-normalized, source-tagged items (the main world parsed
+// them via parseItemListEnvelope) — the heavy raw `json` envelope no longer crosses the wire. The
+// SW upserts these directly; extractItems is no longer re-run here (it stays capture.js's export,
+// used by the main-world parser + capture.test.js). `source` still rides along for the log line.
+interface ItemListMsg { kind: "item_list"; items: CapturedItem[]; source?: string | null; url?: string }
 // Task 1: content.js reports HOW the scroll ended. status "done" = TikTok's own hasMore:false;
 // "giveup" = bounded backoff exhausted with more possibly remaining — an INCOMPLETE capture that
 // must never be exported as if it were a success.
@@ -144,11 +147,12 @@ async function onReviveAlarm(): Promise<void> {
   if (unfinished) await startQueue();
 }
 
-// Capture intake: normalize → store → refresh `count` → eagerly grab posters.
+// Capture intake: store already-normalized items → refresh `count` → eagerly grab posters.
 async function handleItemList(msg: ItemListMsg): Promise<void> {
-  // extractItems is the unchanged pure normalizer (loose SpikeItem shape); at the store boundary
-  // it IS a CapturedItem (identical runtime shape, sources included).
-  const incoming = extractItems(msg.json, msg.source ?? null) as CapturedItem[];
+  // Items arrive pre-normalized AND source-tagged (sources:[source]) from the main world's
+  // parseItemListEnvelope → extractItems(json, source) — identical shape/tags to the old SW-side
+  // normalization, just done once, off the page thread, without cloning the raw envelope twice.
+  const incoming = msg.items ?? [];
   const s = await store();
   const { added, merged } = await s.upsertItems(incoming, new Date().toISOString());
   const count = await s.count();
