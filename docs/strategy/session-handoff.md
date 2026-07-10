@@ -1,6 +1,6 @@
 # RESUME POINTER (read me first after a /clear)
 
-> **⚠ LOCAL PATH CHANGED (2026-07-09 eve):** the working directory was renamed `~/Dev/attic-extension` → **`~/Dev/commonplace`** (matching the project rename). If a session launches in the old path and fails, `cd ~/Dev/commonplace`. Remote unchanged: `github.com/s0shaheen/commonplace`.
+> **⚠ LOCAL PATH (2026-07-10):** the repo is at **`~/Dev/attic-extension`** (it was briefly renamed to `~/Dev/commonplace` on 2026-07-09 then renamed back). Remote: `github.com/s0shaheen/commonplace`. **Gotcha:** the running dev browser's profile (with TikTok/IG logins + the extension's IndexedDB) lives at **`~/Dev/commonplace/.dev-profile`** because `npm run dev:browser` was launched while the repo was at that path — do NOT delete `~/Dev/commonplace`; it holds that live profile. Recommend the founder pick ONE directory name and stop flipping it (the flip orphaned files + split the dev-profile from the repo). Memory project dir stays keyed to `-Users-s0shaheen-Dev-attic-extension`.
 
 **Operating contract lives in `CLAUDE.md`** (repo root, auto-loaded) — Frame / Truth / Verdict. The `memory/` notes hold the *why*.
 

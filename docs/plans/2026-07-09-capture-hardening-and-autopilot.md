@@ -1,5 +1,7 @@
 # Capture — Hardening + Autopilot (the front door has to just work)
 
+> **⚠ SUPERSEDED IN PART (2026-07-10):** Tasks 0–5 landed and their pure cores (reducer, pacing, eviction, supervisor) are reused. But the §8 scroll-motion assumption was WRONG — the live test showed the `nudgeToBottom` teleport doesn't trigger TikTok's lazy-load. The full failure surface is now in the governing spec **`docs/specs/capture-resilience.md`** and the ordered build in **`docs/plans/2026-07-10-capture-resilience-plan.md`**. Start there; this doc is retained for lineage + the Task 0–5 record.
+
 > **Status:** Forks RESOLVED (2026-07-09, §6). Ready to execute pending founder go-ahead on the build. On completion this updates SPEC §7 + the roadmap + decision log.
 >
 > **Founder decisions (2026-07-09):** ① **Both self-driving modes** — ship semi-auto (default) AND fully-autonomous (opt-in), user-selectable. ② **Human-cadence** default pacing (ban-averse). ③ **Wait for the hardened tool** to produce the pilot corpus — so **Phase 2 (gold set) now depends on this phase's Task 6.**
