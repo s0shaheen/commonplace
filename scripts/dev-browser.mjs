@@ -1,15 +1,22 @@
 // dev-browser.mjs — launch a PERSISTENT dev browser (`npm run dev:browser`).
 //
-// Opens the system Chrome with the built extension already loaded and a dedicated, gitignored
-// profile (.dev-profile) that KEEPS your TikTok/Instagram logins across restarts. Pair it with
-// `npm run dev` (the hot-reload watcher) for a save→auto-reload loop.
+// Opens a browser on a dedicated, gitignored profile (.dev-profile) that KEEPS your TikTok/Instagram
+// logins across restarts, with the CDP port open for automation. Pair it with `npm run dev` (the
+// hot-reload watcher) for a save→auto-reload loop.
 //
 //   • --user-data-dir=<repo>/.dev-profile   dedicated profile — NEVER your real Chrome profile
-//   • --load-extension=<repo>/dist          extension auto-loaded (no manual "Load unpacked")
 //   • --remote-debugging-port=9222          CDP endpoint for automation
-//   • opens tiktok.com + instagram.com on first launch
+//   • opens tiktok.com + instagram.com (+ chrome://extensions on first launch)
 //
-// Pass --print (or --dry-run) to print the exact command line WITHOUT launching Chrome.
+// LOADING THE EXTENSION: stable Google Chrome (M137+, 2025) NO LONGER honors the `--load-extension`
+// CLI flag (Google disabled it to curb malware). So on stable Chrome you Load Unpacked ONCE:
+//   chrome://extensions → enable "Developer mode" → "Load unpacked" → select the dist/ folder.
+// That's a ONE-TIME step — the unpacked extension PERSISTS in .dev-profile, and `npm run dev`'s
+// hot-reload updates it on every code change (no reload dance). We still pass --load-extension because
+// it IS honored by Chrome for Testing / Chromium: set CHROME_PATH to one of those for zero-touch
+// auto-loading (you'd log into TikTok/IG once in that binary's profile).
+//
+// Pass --print (or --dry-run) to print the exact command line WITHOUT launching.
 
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -57,12 +64,15 @@ if (!existsSync(DIST)) {
   process.exit(1);
 }
 
+const firstLaunch = !existsSync(PROFILE);
 const args = [
   `--user-data-dir=${PROFILE}`,
-  `--load-extension=${DIST}`,
+  `--load-extension=${DIST}`, // honored by Chrome-for-Testing/Chromium; silently ignored by stable Chrome M137+
   `--remote-debugging-port=${CDP_PORT}`,
   "--no-first-run",
   "--no-default-browser-check",
+  // On first launch, open chrome://extensions so the one-time Load-Unpacked step is right there.
+  ...(firstLaunch ? ["chrome://extensions"] : []),
   "https://www.tiktok.com",
   "https://www.instagram.com",
 ];
@@ -76,17 +86,19 @@ if (DRY_RUN) {
   process.exit(0);
 }
 
-const firstLaunch = !existsSync(PROFILE);
 if (firstLaunch) {
   console.log(
-    "[dev:browser] FIRST LAUNCH — log into TikTok + Instagram once in this window. The .dev-profile\n" +
-      "              keeps you logged in for every future launch (it's gitignored — your real Chrome\n" +
-      "              profile is never touched).",
+    "[dev:browser] FIRST LAUNCH:\n" +
+      "  1. Log into TikTok + Instagram once (the gitignored .dev-profile keeps you logged in after).\n" +
+      "  2. On the chrome://extensions tab: enable 'Developer mode' → 'Load unpacked' → select:\n" +
+      `       ${DIST}\n` +
+      "     (One-time. Stable Chrome ignores --load-extension; the unpacked extension then PERSISTS,\n" +
+      "      and `npm run dev` hot-reloads it on every code change.)",
   );
 }
-console.log(`[dev:browser] CDP endpoint:  http://localhost:${CDP_PORT}  (attach automation here)`);
-console.log(`[dev:browser] profile:       ${PROFILE}`);
-console.log(`[dev:browser] extension:     ${DIST}`);
+console.log(`[dev:browser] extension dist:  ${DIST}   (Load Unpacked this folder once on chrome://extensions)`);
+console.log(`[dev:browser] CDP endpoint:    http://localhost:${CDP_PORT}  (attach automation here)`);
+console.log(`[dev:browser] profile:         ${PROFILE}`);
 
 // Detached so the terminal stays free; Chrome owns its own lifecycle.
 const child = spawn(chromePath, args, { stdio: "inherit", detached: false });
