@@ -3,16 +3,23 @@
 // (Alt+Shift+E), and logs queue status to the SW console (Alt+Shift+Q).
 
 import { sampleMemory, formatHudLine, shouldLogSample } from "./lib/capture/instrument.js";
-import { coerceHasMore } from "./lib/capture/interceptParse.js";
+import { coerceHasMore, isTerminalPage } from "./lib/capture/interceptParse.js";
 import { initialScrollState, step as scrollStep, GIVEUP_STALL_CYCLES } from "./lib/capture/scrollState.js";
 import { nextDwellMs, backoffMs } from "./lib/capture/pacing.js";
 import { tilesToEvict, DEFAULT_LIVE_WINDOW } from "./lib/capture/pruneWindow.js";
 import { arrivalDrivesRun } from "./lib/capture/supervisor.js";
+import { stepMotion, initialMotionState, MAX_RETRIGGERS } from "./lib/capture/scrollMotion.js";
+import { classifyOverlay } from "./lib/capture/overlayClassifier.js";
+import { stepRecovery, initialRecoveryState } from "./lib/capture/sessionRecovery.js";
+import { clampUpPx } from "./lib/capture/scrollGeom.js";
 
 let lastSource = null;
 let lastHasMore = null; // latest coerced paging signal from the message path (Task 1)
 let lastCursor = null;
+let lastTransport = null; // latest typed transport signal (§6.5) — feeds sessionRecovery + terminal gate
 let pageArrivals = 0; // monotonic count of item_list messages — autoScroll keys page_captured on ARRIVAL, not count growth
+let healthyArrivals = 0; // monotonic count of transport:"ok" arrivals — the auto-resume signal for a paused run
+let lastRequestsIssued = 0; // monotonic count of item_list requests INITIATED (from main-world) — scrollMotion's discriminator
 // Carry-forward (2), Task 5: the source the supervisor asked THIS run to capture. Set at the start of
 // a capture run, cleared at its end. While set, only arrivals whose source matches may drive the run's
 // scroll signals — a straggler from the previous source must not inject its hasMore into this run.
@@ -21,15 +28,23 @@ let activeRunSource = null;
 
 window.addEventListener("message", (e) => {
   if (e.source !== window || !e.data || e.data.__attic !== true) return;
+  if (e.data.kind === "request_issued") {
+    // scrollMotion's decisive discriminator (§6.1 §A4): main-world bumps this the instant an item_list
+    // request is INITIATED. A dwell that elapses with no arrival AND no new request ⇒ self-inflicted
+    // lazy-load stall (retrigger); a request that fired but returned nothing ⇒ backpressure (backoff).
+    lastRequestsIssued = e.data.count | 0;
+    return;
+  }
   if (e.data.kind === "item_list") {
     // ALWAYS relay the SLIM, already-normalized+source-tagged items the main world parsed (Task 3) —
     // the heavy raw envelope no longer crosses any structured-clone boundary. Even a straggler from
     // the previous source is valid data: the SW upserts by id (idempotent, unions sources), so we
-    // never drop a real capture. coerceHasMore below is idempotent on the already-coerced value.
+    // never drop a real capture. An empty/challenge transport relays items:[] (nothing to store) —
+    // fine; the SIGNAL is what the run needs. coerceHasMore below is idempotent on the coerced value.
     chrome.runtime.sendMessage({ kind: "item_list", url: e.data.url, source: e.data.source, items: e.data.items });
     // Carry-forward (2): but only let an arrival whose source matches the ACTIVE run drive that run's
-    // completion signals (pageArrivals / lastHasMore / lastCursor). A late favorites page delivered
-    // during the likes run must not bump likes' arrival count or, worse, inject favorites' hasMore:false.
+    // completion signals (pageArrivals / lastHasMore / lastCursor / lastTransport). A late favorites
+    // page delivered during the likes run must not bump likes' arrival count or inject favorites' state.
     if (!arrivalDrivesRun(activeRunSource, e.data.source)) return;
     lastSource = e.data.source ?? lastSource;
     // main-world forwards RAW hasMore; coerce it through the tested pure module (missing/unknown →
@@ -37,6 +52,8 @@ window.addEventListener("message", (e) => {
     // the whole envelope on the page thread (§2.3: keep heavy work off the renderer).
     lastHasMore = coerceHasMore(e.data.hasMore);
     lastCursor = e.data.cursor ?? null;
+    lastTransport = e.data.transport ?? "ok";
+    if (lastTransport === "ok") healthyArrivals++;
     pageArrivals++;
   }
 });
@@ -179,18 +196,193 @@ function removeHud() {
   document.getElementById(HUD_ID)?.remove();
 }
 
-function nudgeToBottom() {
-  // Drive the last loaded item into view — scrolls all ancestor containers as needed (virtualization-safe).
-  // EVICTION-SAFE: pruneGrid only ever removes the OLDEST tiles and always keeps the newest
-  // DEFAULT_LIVE_WINDOW at the end of the grid, so `links[links.length-1]` is still the newest tile
-  // after a prune — this nudge keeps targeting the real bottom and TikTok's loader keeps firing.
-  const links = document.querySelectorAll('a[href*="/video/"], a[href*="/photo/"]');
-  if (links.length) links[links.length - 1].scrollIntoView({ block: "end" });
-  const sc = getScroller();
-  if (sc) sc.scrollTop = sc.scrollHeight;
-  window.scrollTo(0, document.documentElement.scrollHeight);
-  return links.length;
+// ── Physical motion glue (§6.1) ──────────────────────────────────────────────────
+// scrollMotion.ts decides WHICH physical command to issue; these realize it against the DOM. NEVER a
+// teleport (`scrollTop = scrollHeight`) — that never makes TikTok's edge-triggered IntersectionObserver
+// sentinel leave→re-enter, and is the #1 anti-bot tell. Every motion is an incremental, jittered wheel
+// transit followed by a `scrollBy` to realize it (virtualization-safe).
+
+// Incremental wheel-DOWN transit: dispatch a real WheelEvent in 3–5 sub-steps (so any wheel listeners /
+// IO polyfills see the motion) then `scrollBy` to realize it. `px` is the jittered band from the core.
+function wheelBy(scroller, px) {
+  if (!scroller || px <= 0) return;
+  const steps = 3 + Math.floor(Math.random() * 3); // 3..5 sub-steps
+  const per = px / steps;
+  for (let i = 0; i < steps; i++) {
+    try {
+      scroller.dispatchEvent(new WheelEvent("wheel", { deltaY: per, deltaMode: 0, bubbles: true, cancelable: true }));
+    } catch (_) {}
+  }
+  scroller.scrollBy(0, px);
 }
+
+// The topmost LIVE tile's top offset in the scroller's content coordinate space. Eviction removes the
+// oldest tiles, so the region above this is gone — the retrigger up-nudge must not scroll into it.
+// (0 = no tile to measure → the top of the scroller is the bound; see scrollGeom.clampUpPx.)
+function topmostLiveTileTop(scroller) {
+  const tiles = document.querySelectorAll(TILE_ANCHOR_SEL);
+  if (!tiles.length || !scroller) return 0;
+  const tr = tiles[0].getBoundingClientRect();
+  const sr = scroller.getBoundingClientRect();
+  return scroller.scrollTop + (tr.top - sr.top);
+}
+
+// maxSafeUpPx: clamp the core's desired up-distance so the retrigger stays above the topmost live tile
+// (never into evicted space — §6.4). The clamp arithmetic is the pure, tested scrollGeom.clampUpPx.
+function maxSafeUpPx(scroller, desiredUp) {
+  return clampUpPx(desiredUp, scroller ? scroller.scrollTop : 0, topmostLiveTileTop(scroller));
+}
+
+// Up-then-down re-trigger: scroll UP the clamped distance (real wheel), a brief human pause, then wheel
+// DOWN past the prior max so the sentinel leaves→re-enters and TikTok's IntersectionObserver re-fires.
+async function doRetrigger(scroller, upPx) {
+  if (!scroller) return;
+  const priorTop = scroller.scrollTop;
+  if (upPx > 0) {
+    try {
+      scroller.dispatchEvent(new WheelEvent("wheel", { deltaY: -upPx, deltaMode: 0, bubbles: true, cancelable: true }));
+    } catch (_) {}
+    scroller.scrollBy(0, -upPx);
+  }
+  await sleep(120 + Math.random() * 180); // brief pause between the up and the down (human cadence)
+  const overshoot = 200 + Math.random() * 220; // land PAST the prior max so the sentinel re-enters
+  try {
+    scroller.dispatchEvent(new WheelEvent("wheel", { deltaY: upPx + overshoot, deltaMode: 0, bubbles: true, cancelable: true }));
+  } catch (_) {}
+  scroller.scrollBy(0, priorTop + overshoot - scroller.scrollTop);
+}
+
+// Wait up to `maxMs` for a new arrival (poll storage.count / pageArrivals), returning EARLY the moment
+// content lands. Replaces the old blind timer: the dwell is a human-cadence budget, not a fixed sleep,
+// and the ACTUAL elapsed wait is fed back to stepMotion next cycle as `dwellElapsedMs`.
+async function waitForContent(beforeCount, beforeArrivals, maxMs) {
+  const start = Date.now();
+  const POLL_MS = 150;
+  while (true) {
+    const elapsed = Date.now() - start;
+    if (elapsed >= maxMs) break;
+    await sleep(Math.min(POLL_MS, maxMs - elapsed));
+    if (pageArrivals > beforeArrivals) break; // a page arrived → stop waiting, act on it
+    try {
+      const { count = 0 } = await chrome.storage.local.get("count");
+      if (count > beforeCount) break;
+    } catch (_) {}
+  }
+  return Date.now() - start;
+}
+
+// ── Overlay detection glue (OVLY-01, §6.6) ─────────────────────────────────────
+// Every DOM read for an overlay lives here; the VERDICT is the pure classifyOverlay. We find the
+// topmost blocking layer, extract its text + button labels, probe whether input is being swallowed,
+// and check for a captcha-shaped container — then hand plain facts to the classifier.
+
+function isVisible(el) {
+  if (!el) return false;
+  const s = getComputedStyle(el);
+  if (s.display === "none" || s.visibility === "hidden" || parseFloat(s.opacity || "1") === 0) return false;
+  const r = el.getBoundingClientRect();
+  return r.width > 4 && r.height > 4;
+}
+
+// A fixed/absolute, high-z element covering the viewport CENTER (a modal scrim). Excludes our own HUD
+// and pointer-events:none decorations. Walks up from the center element to the covering ancestor.
+function findCoveringLayer() {
+  const cx = Math.floor(window.innerWidth / 2);
+  const cy = Math.floor(window.innerHeight / 2);
+  let el = document.elementFromPoint(cx, cy);
+  for (let hops = 0; el && el !== document.body && el !== document.documentElement && hops < 20; hops++) {
+    if (el.id === HUD_ID) return null; // our own click-through HUD sits at center-ish z — never a modal
+    const s = getComputedStyle(el);
+    if ((s.position === "fixed" || s.position === "absolute") && s.pointerEvents !== "none") {
+      const z = parseInt(s.zIndex, 10);
+      const r = el.getBoundingClientRect();
+      const coversMost = r.width >= window.innerWidth * 0.6 && r.height >= window.innerHeight * 0.5;
+      if (Number.isFinite(z) && z >= 100 && coversMost) return el;
+    }
+    el = el.parentElement;
+  }
+  return null;
+}
+
+function findBlockingLayer() {
+  const dialogs = document.querySelectorAll('[role="dialog"], [aria-modal="true"]');
+  for (const d of dialogs) if (isVisible(d)) return d;
+  return findCoveringLayer();
+}
+
+function collectButtonLabels(el) {
+  const out = [];
+  for (const b of el.querySelectorAll('button, [role="button"], a[role="button"]')) {
+    const t = (b.textContent || "").trim();
+    if (t) out.push(t);
+  }
+  return out;
+}
+
+// A captcha-shaped container is a strong standalone signal (classifyOverlay honors it even absent a
+// blocking-layer flag) — so require it to be VISIBLE, not just present in the DOM.
+function detectCaptchaContainer() {
+  const sels = [
+    'iframe[src*="captcha" i]',
+    '[class*="captcha" i]',
+    '[id*="captcha" i]',
+    '#captcha-verify-container',
+    '[class*="captcha_verify" i]',
+  ];
+  for (const sel of sels) {
+    for (const el of document.querySelectorAll(sel)) {
+      if (isVisible(el)) return true;
+    }
+  }
+  return false;
+}
+
+// "My input isn't landing." Record scrollTop, attempt a small real scroll, re-read after a tick; if a
+// blocking layer is present AND scrollTop didn't move, input is being swallowed (composes with §6.1's
+// closed-loop motion check — this routes to a pause BEFORE it ever reads as a stall).
+async function probeInputSwallowed(scroller) {
+  const before = scroller.scrollTop;
+  try {
+    scroller.dispatchEvent(new WheelEvent("wheel", { deltaY: 60, deltaMode: 0, bubbles: true, cancelable: true }));
+    scroller.scrollBy(0, 60);
+  } catch (_) {}
+  await sleep(60);
+  return Math.abs(scroller.scrollTop - before) < 2;
+}
+
+async function gatherOverlayFacts(scroller) {
+  const el = findBlockingLayer();
+  const hasBlockingLayer = !!el;
+  const overlayText = el ? (el.textContent || "").trim().slice(0, 2000) : "";
+  const buttonLabels = el ? collectButtonLabels(el) : [];
+  const captchaContainerPresent = detectCaptchaContainer();
+  let inputSwallowed = false;
+  if (hasBlockingLayer && scroller) inputSwallowed = await probeInputSwallowed(scroller);
+  return { hasBlockingLayer, overlayText, buttonLabels, captchaContainerPresent, inputSwallowed, el };
+}
+
+// Click the button in `container` whose visible text matches `label` (case-insensitive, contains-ok).
+function clickByLabel(container, label) {
+  if (!container || !label) return false;
+  const want = String(label).trim().toLowerCase();
+  for (const b of container.querySelectorAll('button, [role="button"], a[role="button"]')) {
+    const t = (b.textContent || "").trim().toLowerCase();
+    if (t && (t === want || t.includes(want) || want.includes(t))) {
+      try {
+        b.click();
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+  }
+  return false;
+}
+
+// Fixed pause reasons for the two paths the pure cores don't supply one for.
+const CHALLENGE_REASON_OVERLAY = "a captcha is blocking capture — solve it in the TikTok tab; capture resumes automatically";
+const FLAGGED_PAUSE_REASON =
+  "TikTok returned empty pages after a refresh — the session looks flagged; try again shortly or solve any challenge in the tab";
 
 let scrolling = false;
 // autoScroll drives ONE source to completion. `source` (Task 5) tags the run for carry-forward (2)'s
@@ -211,78 +403,220 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   // exists to kill.
   lastHasMore = null;
   lastCursor = null;
+  lastTransport = null;
   let arrivalsSeen = pageArrivals;
+  const startHealthy = healthyArrivals; // baseline for the paused-run auto-resume watch
   // Baseline against the CURRENT persisted total: a pre-existing count is not growth.
   const { count: initialCount = 0 } = await chrome.storage.local.get("count");
   let prevCount = initialCount;
 
-  // The termination decision is NOT here — it lives in the pure, tested `scrollState` reducer.
-  // This loop is dumb glue: observe (did a page ARRIVE? what's the latest hasMore? did `count`
-  // grow?), feed the reducer an event, and act on the action it returns. Completion is hasMore:false
-  // ONLY; a stall becomes backoff+wait; an unanswered run becomes a REPORTED giveup — never a
-  // silent "done".
+  // Reload guard (§6.5 SESS-01): at most ONE auto-refresh per Sync attempt per source. Persisted so a
+  // reload-resume (a fresh content script after location.reload) knows it already spent its reload and
+  // escalates to the challenge pause instead of reload-looping a flagged session (bot-hammering). A
+  // fresh (non-resuming) run clears it; a resuming run keeps it.
+  let reloadedThisRun = false;
+  if (source) {
+    const { captureReloadedSource } = await chrome.storage.local.get("captureReloadedSource");
+    if (resuming && captureReloadedSource === source) {
+      reloadedThisRun = true;
+    } else if (captureReloadedSource != null) {
+      await chrome.storage.local.set({ captureReloadedSource: null });
+    }
+  }
+
+  // The termination decision is NOT here — it lives in the pure, tested `scrollState` reducer, now
+  // sitting BEHIND `scrollMotion` (physical motion + lazy-load recovery) and `sessionRecovery`
+  // (flagged-session ladder). This loop is dumb glue: gather DOM facts, feed the pure cores, and act
+  // on the commands they return. Completion is a VERIFIED terminal only (isTerminalPage on a healthy
+  // transport); a stall/challenge/empty-page is NEVER `done`.
   //
   // The reducer starts from the SAME persisted baseline (fix round 1): during a resume, the prefix's
-  // zero-new pages must read as zero-new (grace-eligible), not as a first-page "growth" from 0 that
-  // would instantly burn the bounded resume grace (scrollState drops the grace on first REAL growth).
+  // zero-new pages must read as zero-new (grace-eligible), not as a first-page "growth" from 0.
   let st = initialScrollState(initialCount);
+  // Seed the motion discriminator's baseline to the requests ALREADY issued at run start (COLD-START
+  // fix). A freshly-loaded profile fired its own item_list requests during page load, so
+  // lastRequestsIssued is already > 0. Left at initialMotionState's 0, the first idle cycle (no arrival
+  // yet — the grid is static until we scroll) would read requestsIssued > lastRequestCount ⇒ `backoff`,
+  // which does NO physical scrolling; since `down` needs an arrival and only `retrigger` scrolls from a
+  // cold idle, the run would back off to `giveup` WITHOUT EVER SCROLLING. Baselining to the current
+  // count makes the first idle cycle read "no NEW request since start" ⇒ `retrigger` (scrolls, triggers
+  // the next page). Steady-state semantics are unchanged (an arrival re-snapshots the baseline).
+  let motionState = { ...initialMotionState(Date.now()), lastRequestCount: lastRequestsIssued };
+  let rec = initialRecoveryState(Date.now());
   // Task 2: the real human-cadence backoff replaces scrollState's placeholder. Math.random and
-  // Date.now live ONLY here (glue) — pacing.ts/scrollState.ts stay pure. Giveup semantics are
-  // untouched: the reducer still bounds the run at GIVEUP_STALL_CYCLES; only the wait LENGTHS change.
-  // `resuming` threads the carry-forward-1 signal into the reducer (see scrollState.ts).
+  // Date.now live ONLY here (glue). `resuming` threads the carry-forward-1 signal into the reducer.
   const deps = { now: () => Date.now(), backoffMs: (stall) => backoffMs(stall, Math.random), resuming };
   let lastSampleLogTs = 0; // console.log a CaptureSample roughly every ~5s while scrolling
   let running = true;
+  let dwellElapsedMs = 0; // actual wait since the last motion — fed to stepMotion (observability)
+  let snoozeCount = 0; // screen-time reminders auto-snoozed this run (logged, never a passcode)
   // Per-run eviction reset: start fresh so the HUD's "evicted N" is this run's tally and pruneGrid
   // re-resolves the grid from scratch (a new source/tab is a new grid element).
   evictGrid = null;
   evictedInGrid = 0;
   let evictedTotal = 0;
 
-  while (running) {
-    // Evict the oldest tiles down to the live window BEFORE nudging (the §2.3 memory fix). Keeps the
-    // DOM bounded regardless of corpus size; can never lose captured data (capture is network-sourced).
-    evictedTotal += pruneGrid();
-    const domCount = nudgeToBottom();
-    // Human-cadence dwell (pacing.ts, §2.2): jittered 900–2200ms base + an occasional longer
-    // "look" pause — never the metronome that tripped the ~360-item throttle.
-    await sleep(nextDwellMs(Math.random));
-    const { count = 0 } = await chrome.storage.local.get("count");
+  // Enter a user-visible, resumable PAUSE (CHAL-UX): freeze the giveup ladder (we stop feeding the
+  // reducer while paused), notify the SW (chrome notification + popup reason), and watch for recovery.
+  // A pause is NEVER converted into a giveup — a paused-on-captcha run stays paused with its reason
+  // until it's solved (healthy arrivals return / the overlay clears / we're back online) or the tab
+  // closes. Returns once resumed; the caller then `continue`s and the run picks up where it left off.
+  async function enterPause(level, reason, opts = {}) {
+    const overlayTriggered = !!opts.overlayTriggered;
+    const resumeWhenOnline = !!opts.resumeWhenOnline;
+    try {
+      chrome.runtime.sendMessage({ kind: "capture_notice", level, reason });
+    } catch (_) {}
+    console.warn(`[commonplace] capture PAUSED (${level}) — ${reason}`);
+    const pauseStartHealthy = healthyArrivals;
+    const PAUSE_POLL_MS = 1500;
+    while (true) {
+      try {
+        const sample = sampleMemory({
+          now: Date.now(),
+          capturedCount: prevCount,
+          domNodes: document.getElementsByTagName("*").length,
+          heap: performance.memory,
+        });
+        updateHud(formatHudLine(sample, { source: lastSource, hasMore: "?", state: `paused (${level})`, evicted: evictedTotal }));
+      } catch (_) {}
+      await sleep(PAUSE_POLL_MS);
+      if (healthyArrivals > pauseStartHealthy) break; // a fresh healthy page returned → auto-resume
+      if (resumeWhenOnline && navigator.onLine !== false) break; // back online → resume (regenerate arrivals)
+      if (overlayTriggered) {
+        const f = await gatherOverlayFacts(getScroller());
+        if (!f.hasBlockingLayer && !f.inputSwallowed) break; // the overlay cleared → resume
+      }
+    }
+    console.log(`[commonplace] capture RESUMED (was paused: ${level})`);
+    return true;
+  }
 
-    // A cycle is a `page_captured` when an item_list message ARRIVED since the last poll (review
-    // fix, important) — count growth alone can't be the key, because an all-duplicates page
-    // (crash-resume re-scroll, or a fully-deduped final page) grows nothing yet its hasMore:false
-    // is the completion signal; keying on growth would drop it and misreport a clean finish as
-    // giveup. Growth-without-arrival is also treated as a page: the SW's `count` write can lag one
-    // poll behind the message, and progress must reset the stall counter, not read as a stall.
-    // The reducer already handles a no-growth page correctly (hasMore:false ⇒ done; true ⇒ stall).
+  while (running) {
+    const scroller = getScroller();
+
+    // ── 1. OVERLAY GUARD FIRST — classify any blocking layer and respond like a person.
+    const overlay = await gatherOverlayFacts(scroller);
+    const verdict = classifyOverlay(overlay);
+    const oa = verdict.action;
+    if (oa.kind === "snooze") {
+      const clicked = clickByLabel(overlay.el, oa.buttonLabel);
+      snoozeCount++;
+      console.log(`[commonplace] screen-time reminder — snoozed via "${oa.buttonLabel}" (${clicked ? "clicked" : "no button found"}); snooze #${snoozeCount}`);
+      await sleep(1000); // let the modal dismiss; never rapid-click
+      continue;
+    }
+    if (oa.kind === "dismiss") {
+      const clicked = clickByLabel(overlay.el, oa.buttonLabel);
+      console.log(`[commonplace] benign overlay (${verdict.overlay}) — dismissed via "${oa.buttonLabel}" (${clicked ? "clicked" : "no button found"})`);
+      await sleep(1000);
+      continue;
+    }
+    if (oa.kind === "challenge") {
+      await enterPause("challenge", CHALLENGE_REASON_OVERLAY, { overlayTriggered: true });
+      continue;
+    }
+    if (oa.kind === "pause_notify") {
+      await enterPause("overlay", oa.reason, { overlayTriggered: true });
+      continue;
+    }
+
+    // ── 2. EVICT the oldest tiles down to the live window (§2.3 memory fix). Network-sourced capture
+    //    means this can never lose data.
+    evictedTotal += pruneGrid();
+
+    // ── 3. MOTION DECISION — the pure scrollMotion reducer picks the physical command.
     const arrived = pageArrivals > arrivalsSeen;
     arrivalsSeen = pageArrivals;
-    // `cursor` rides along (fix round 1): the reducer treats a REPEATED identical cursor as
-    // non-progress even under the resume grace — a throttle serving the same stale page repeats its
-    // cursor, so a stuck cursor can never be mistaken for forward pagination.
-    const event =
-      arrived || count > prevCount
-        ? { kind: "page_captured", newCount: count, hasMore: lastHasMore ?? true, cursor: lastCursor }
-        : { kind: "tick" };
-    prevCount = Math.max(prevCount, count);
-    const stepped = scrollStep(st, event, deps);
-    st = stepped.state;
-    const action = stepped.action;
+    const mStep = stepMotion(
+      motionState,
+      { now: Date.now(), arrivedSinceLast: arrived, requestsIssued: lastRequestsIssued, dwellElapsedMs },
+      { rng: Math.random },
+    );
+    motionState = mStep.state;
+    const command = mStep.command;
 
-    // Telemetry: real Date.now()/performance.memory/document reads happen ONLY here (glue) —
-    // the pure sampleMemory/formatHudLine in lib/capture/instrument.js take everything injected.
+    // ── 4. FEED scrollState (the completion reducer) — only on ARRIVAL or a CONFIRMED stall/backoff.
+    const { count = 0 } = await chrome.storage.local.get("count");
+    let action = null;
+    if (arrived) {
+      // `done` fires ONLY on a genuine terminal per a HEALTHY transport (isTerminalPage). A hasMore:false
+      // riding a challenge/empty transport is NOT done — the transport gate inside isTerminalPage rejects it.
+      const terminal = isTerminalPage({ items: [], hasMore: lastHasMore ?? true, cursor: lastCursor }, lastTransport ?? "ok");
+      const stepped = scrollStep(st, { kind: "page_captured", newCount: count, hasMore: terminal ? false : true, cursor: lastCursor }, deps);
+      st = stepped.state;
+      action = stepped.action;
+    } else if (command.kind === "stall" || command.kind === "backoff") {
+      // scrollMotion exhausted its lazy-load ladder (confirmed stall) or diagnosed server backpressure
+      // (a request fired, nothing came back) → NOW hand scrollState a `tick`. A `down`/`retrigger` with
+      // no arrival does NOT step scrollState — motion is still trying, no stall accrues (the SCROLL-01 fix).
+      const stepped = scrollStep(st, { kind: "tick" }, deps);
+      st = stepped.state;
+      action = stepped.action;
+    }
+    prevCount = Math.max(prevCount, count);
+
+    // ── 5. SESSION-RECOVERY on the transport signal (independent of scrollState). A pause here freezes
+    //    the giveup ladder and takes precedence over any scrollState wait/giveup this cycle.
+    let recSignal = null;
+    if (navigator.onLine === false) recSignal = "offline";
+    else if (arrived) {
+      if (lastTransport === "ok") recSignal = "healthy_arrival";
+      else if (lastTransport === "empty_ok") recSignal = "empty_ok";
+      else if (lastTransport === "challenge") recSignal = "challenge";
+      else if (lastTransport === "offline") recSignal = "offline";
+      // http_error / api_error carry no recovery signal — scrollState's backoff→giveup owns them.
+    }
+    if (recSignal) {
+      const r = stepRecovery(rec, recSignal, { now: Date.now() });
+      rec = r.state;
+      const rc = r.command;
+      if (rc.kind === "reload") {
+        if (reloadedThisRun) {
+          // Already spent this Sync attempt's one reload (across a prior page-load) and it's still
+          // empty → escalate to the challenge pause rather than reload-loop a flagged session.
+          await enterPause("flagged", FLAGGED_PAUSE_REASON);
+          continue;
+        }
+        reloadedThisRun = true;
+        if (source) await chrome.storage.local.set({ captureReloadedSource: source });
+        console.warn("[commonplace] flagged session (empty pages after a refresh) — reloading ONCE to recover (the founder's manual fix, automated)");
+        location.reload(); // page navigates away; the supervisor's `current` checkpoint re-drives this run after reload
+        return;
+      }
+      if (rc.kind === "pause_notify") {
+        const level = recSignal === "offline" ? "offline" : recSignal === "challenge" ? "challenge" : "flagged";
+        await enterPause(level, rc.reason, { resumeWhenOnline: recSignal === "offline" });
+        continue;
+      }
+      // rc.kind === "continue": nothing to do.
+    }
+
+    // ── 6. ACT on the scrollState completion action (after recovery — a pause already `continue`d).
+    if (action) {
+      if (action.kind === "done") {
+        running = false;
+        console.log(`[commonplace] capture COMPLETE — TikTok reported a verified terminal (hasMore:false); ${prevCount} captured`);
+      } else if (action.kind === "giveup") {
+        running = false;
+        console.warn(`[commonplace] capture INCOMPLETE — ${action.reason}`);
+      }
+      // action.kind === "wait": the backoff sleep happens in the dwell below; "scroll": nothing extra.
+    }
+
+    // Telemetry + HUD (real Date.now()/performance.memory/document reads happen ONLY here — glue).
+    const domCount = document.querySelectorAll(TILE_ANCHOR_SEL).length;
     const sample = sampleMemory({
       now: Date.now(),
       capturedCount: count,
       domNodes: document.getElementsByTagName("*").length,
       heap: performance.memory,
     });
-    // During backoff the HUD must read as WORKING, not frozen: show the rate-limit wait and its
-    // length in seconds. Normal dwell keeps the plain status label ("scrolling").
-    const hudState =
-      action.kind === "wait"
-        ? `waiting out a rate-limit… ${Math.ceil(action.ms / 1000)}s (${st.stall}/${GIVEUP_STALL_CYCLES})`
+    const waiting = action && action.kind === "wait";
+    const hudState = waiting
+      ? `backing off… ${Math.ceil(action.ms / 1000)}s (${st.stall}/${GIVEUP_STALL_CYCLES})`
+      : command.kind === "retrigger"
+        ? `re-triggering lazy-load (${motionState.retriggerAttempts}/${MAX_RETRIGGERS})`
         : st.stall > 0
           ? `${st.status} ${st.stall}/${GIVEUP_STALL_CYCLES}`
           : st.status;
@@ -292,27 +626,38 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       console.log("[commonplace] capture sample", sample);
     }
     console.log(
-      `[commonplace] ${st.status}… captured ${count} (hasMore ${st.hasMore}, stall ${st.stall}, DOM ${domCount})`
+      `[commonplace] ${st.status}… captured ${count} (hasMore ${st.hasMore}, stall ${st.stall}, motion ${command.kind}, DOM ${domCount})`,
     );
 
-    if (action.kind === "wait") {
-      // A stall with more-maybe-left is backpressure, not completion — wait it out and say so, so a
-      // pause reads as "working," not "frozen."
-      console.log(`[commonplace] waiting out a TikTok rate-limit… ${action.ms}ms (stall ${st.stall})`);
-      await sleep(action.ms);
-    } else if (action.kind === "done") {
-      running = false;
-      console.log(`[commonplace] capture COMPLETE — TikTok reported hasMore:false; ${prevCount} captured`);
-    } else if (action.kind === "giveup") {
-      running = false;
-      // An incomplete NEVER masquerades as success.
-      console.warn(`[commonplace] capture INCOMPLETE — ${action.reason}`);
+    if (!running) break; // done / giveup — skip motion + dwell, fall through to scroll_done
+
+    // ── 7. REALIZE the physical motion (nothing on a conceded stall / backoff — the wait paces it).
+    if (command.kind === "down") {
+      wheelBy(scroller, command.px);
+    } else if (command.kind === "retrigger") {
+      await doRetrigger(scroller, maxSafeUpPx(scroller, command.upPx));
     }
-    // action.kind === "scroll": nothing extra; the loop nudges again at the top.
+
+    // ── 8. DWELL / WAIT. On a scrollState `wait` (backoff) sleep exactly that; otherwise wait up to the
+    //    human dwell for a new arrival, returning early once content lands. The ACTUAL elapsed is fed
+    //    to stepMotion next cycle as dwellElapsedMs.
+    if (waiting) {
+      console.log(`[commonplace] backing off (backpressure)… ${action.ms}ms (stall ${st.stall})`);
+      await sleep(action.ms);
+      dwellElapsedMs = action.ms;
+    } else {
+      const beforeArrivals = pageArrivals;
+      dwellElapsedMs = await waitForContent(count, beforeArrivals, nextDwellMs(Math.random));
+    }
   }
 
   scrolling = false;
   removeHud();
+  if (source) {
+    // Terminal reached this attempt — clear the reload guard so a later fresh Sync of this source can
+    // reload again if IT hits a flag. (The reload path `return`s earlier and never reaches here.)
+    await chrome.storage.local.set({ captureReloadedSource: null });
+  }
   chrome.runtime.sendMessage({
     kind: "scroll_done",
     status: st.status,
@@ -322,7 +667,9 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     source, // Task 5: which source this run drove — lets background.ts's supervisor advance the sequence
   });
   activeRunSource = null; // disarm the carry-forward-2 filter; the run is over
-  console.log(`[commonplace] auto-scroll ended (${st.status}, source ${source ?? "manual"}) — ${prevCount} captured`);
+  console.log(
+    `[commonplace] auto-scroll ended (${st.status}, source ${source ?? "manual"}) — ${prevCount} captured, ${snoozeCount} snooze(s)`,
+  );
 }
 
 // Path 2: content-script fetch → blob → anchor download. Needs DNR to set Referer (fix 403)

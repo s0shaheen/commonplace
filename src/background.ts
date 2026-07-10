@@ -66,6 +66,48 @@ function store(): Promise<CpStore> {
 type CaptureHalt = { reason: "storage_full" | "storage_unrecoverable"; at: string; detail?: string };
 let captureHalt: CaptureHalt | null = null;
 
+// Capture notice (CHAL-UX / OVLY-01, spec §6.5–6.6): a resumable PAUSE the content script raised — a
+// captcha/challenge, an input-swallowing overlay, a flagged empty-session, or offline. Unlike a halt
+// it is NOT terminal: the run stays paused and auto-resumes when healthy arrivals return. We raise a
+// chrome notification (the founder may be away from the tab) AND persist the latest notice so the
+// popup can surface a human-readable reason via syncStatus. SW-lifetime state; the freshest wins.
+type CaptureNotice = { level: string; reason: string; at: string };
+let captureNotice: CaptureNotice | null = null;
+
+// A tiny self-contained icon (1×1 transparent PNG data URL) — chrome.notifications requires an
+// iconUrl and the extension ships no image asset, so we inline one rather than add a file.
+const NOTICE_ICON =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+function noticeTitle(level: string): string {
+  switch (level) {
+    case "challenge":
+      return "Commonplace — solve the captcha to resume";
+    case "overlay":
+      return "Commonplace — a popup is blocking capture";
+    case "flagged":
+      return "Commonplace — session looks flagged";
+    case "offline":
+      return "Commonplace — paused (offline)";
+    default:
+      return "Commonplace — capture paused";
+  }
+}
+
+// Raise the notification + persist the notice. Best-effort: a failed notification (e.g. no permission)
+// still leaves the popup-readable notice latched, so the pause is never silent.
+function notifyCapture(level: string, reason: string): void {
+  captureNotice = { level, reason, at: new Date().toISOString() };
+  try {
+    chrome.notifications.create(
+      { type: "basic", iconUrl: NOTICE_ICON, title: noticeTitle(level), message: reason },
+      () => void chrome.runtime.lastError, // read lastError so a failed create doesn't warn in the console
+    );
+  } catch (e) {
+    console.warn("[commonplace] notification failed:", (e as Error).message);
+  }
+}
+
 // Classify a caught storage error and, when it's a halt-class failure, latch `captureHalt` LOUDLY. A
 // QuotaExceeded is DISTINCT — a "storage full" halt, never counted toward any failure ceiling and
 // never presented as done. An unrecoverable-DB throw is the STORE-01 last rung. Anything else is
@@ -154,6 +196,9 @@ interface ScrollDoneMsg {
 }
 interface SyncStartMsg { kind: "sync_start" } // popup Sync button → begin/continue the source sequence
 interface SyncStatusMsg { kind: "sync_status" } // popup poll → responds with live supervisor + capture status
+// CHAL-UX / OVLY-01: content.js raised a resumable pause (captcha/overlay/flagged/offline). Notify the
+// founder (chrome notification) and persist a popup-readable reason. `level` is the notice class.
+interface CaptureNoticeMsg { kind: "capture_notice"; level: string; reason: string }
 interface ExportEnrichedMsg { kind: "export_enriched"; results: unknown[] }
 interface DownloadTestMsg { kind: "download_test"; n?: number }
 interface QueueStartMsg { kind: "queue_start" }
@@ -172,7 +217,8 @@ type Msg =
   | QueueBlockedMsg
   | ExportOpenSchemaMsg
   | SyncStartMsg
-  | SyncStatusMsg;
+  | SyncStatusMsg
+  | CaptureNoticeMsg;
 
 chrome.runtime.onMessage.addListener((msg: Msg, _sender, sendResponse) => {
   if (msg.kind === "item_list") {
@@ -185,6 +231,9 @@ chrome.runtime.onMessage.addListener((msg: Msg, _sender, sendResponse) => {
     // Popup poll — respond async (channel kept open by the `return true` below).
     void syncStatus().then(sendResponse);
     return true;
+  } else if (msg.kind === "capture_notice") {
+    // A resumable pause from the content script — notify + persist (never terminal; the run resumes).
+    notifyCapture(msg.level, msg.reason);
   } else if (msg.kind === "export_enriched") {
     exportData("attic-enriched.json", msg.results);
   } else if (msg.kind === "download_test") {
@@ -605,13 +654,15 @@ async function syncStatus(): Promise<{
   posterRunning: boolean;
   count: number;
   halt: CaptureHalt | null;
+  notice: CaptureNotice | null;
 }> {
   const s = await store();
   const [progress, count] = await Promise.all([loadSupervisorProgress(s), s.count()]);
   // `halt` surfaces a storage-full / unrecoverable-DB stop to the popup (invariant 4: honest, never a
   // false success). A halt during the open itself would reject this call — the popup treats a failed
-  // poll as "not healthy" too.
-  return { progress, running: supervisorRunning, posterRunning: posterPassRunning, count, halt: captureHalt };
+  // poll as "not healthy" too. `notice` mirrors it for a RESUMABLE pause (captcha/overlay/flagged/
+  // offline) — a reason the popup can show while the run waits, distinct from a terminal halt.
+  return { progress, running: supervisorRunning, posterRunning: posterPassRunning, count, halt: captureHalt, notice: captureNotice };
 }
 
 async function handleScrollDone(msg: ScrollDoneMsg): Promise<void> {

@@ -33,6 +33,7 @@ const PERMISSION_ALLOWLIST = [
   "offscreen",
   "alarms",
   "tabs", // Task 5: the capture supervisor opens/focuses/messages the TikTok tab it drives (semi-auto + autonomous)
+  "notifications", // Wave A (CHAL-UX/OVLY-01): a resumable capture pause (captcha/overlay/flagged/offline) raises a chrome notification
 ];
 
 // Secret-shaped patterns. `[A-Za-z0-9_\-]` covers the base64url charset real Google keys use.
