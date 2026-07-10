@@ -3,15 +3,22 @@
 // (Alt+Shift+E), and logs queue status to the SW console (Alt+Shift+Q).
 
 import { sampleMemory, formatHudLine } from "./lib/capture/instrument.js";
+import { coerceHasMore } from "./lib/capture/interceptParse.js";
+import { initialScrollState, step as scrollStep, GIVEUP_STALL_CYCLES } from "./lib/capture/scrollState.js";
 
 let lastSource = null;
-let lastHasMore = null;
+let lastHasMore = null; // latest coerced paging signal from the message path (Task 1)
+let lastCursor = null;
 
 window.addEventListener("message", (e) => {
   if (e.source !== window || !e.data || e.data.__attic !== true) return;
   if (e.data.kind === "item_list") {
     lastSource = e.data.source ?? lastSource;
-    // hasMore isn't forwarded by main-world.js yet (Task 1) — stays null until then.
+    // main-world forwards RAW hasMore; coerce it through the tested pure module (missing/unknown →
+    // more-may-exist, NEVER false). We coerce the tiny forwarded field rather than re-normalizing
+    // the whole envelope on the page thread (§2.3: keep heavy work off the renderer).
+    lastHasMore = coerceHasMore(e.data.hasMore);
+    lastCursor = e.data.cursor ?? null;
     chrome.runtime.sendMessage({ kind: "item_list", url: e.data.url, source: e.data.source, json: e.data.json });
   }
 });
@@ -147,19 +154,35 @@ async function autoScroll() {
   if (scrolling) return;
   scrolling = true;
   cachedScroller = null;
-  let stable = 0;
-  let prev = -1;
-  const MAX = 15; // ~15 idle polls (~45s of no new items) before giving up — patient
+
+  // The termination decision is NOT here — it lives in the pure, tested `scrollState` reducer.
+  // This loop is dumb glue: observe (did `count` grow? what's the latest hasMore?), feed the
+  // reducer an event, and act on the action it returns. Completion is hasMore:false ONLY; a stall
+  // becomes backoff+wait; an unanswered run becomes a REPORTED giveup — never a silent "done".
+  let st = initialScrollState();
+  let prevCount = 0;
+  const deps = { now: () => Date.now() }; // backoffMs left to the module's placeholder (Task 2 → pacing.ts)
   let lastSampleLogTs = 0; // console.log a CaptureSample roughly every ~5s while scrolling
-  while (stable < MAX) {
+  let running = true;
+
+  while (running) {
     ensureCV();
     const domCount = nudgeToBottom();
+    // Task 2 (pacing.ts) replaces this fixed dwell with jittered human cadence.
     await sleep(2000 + Math.random() * 1500);
     const { count = 0 } = await chrome.storage.local.get("count");
-    if (count !== prev) {
-      stable = 0;
-      prev = count;
-    } else stable++;
+
+    // A batch that grew the count is a `page_captured` carrying the latest paging signal; otherwise
+    // this cycle saw nothing new → `tick`. `lastHasMore` defaults to true (more-may-exist) until a
+    // page tells us false, so a not-yet-seen signal can never end capture.
+    const event =
+      count > prevCount
+        ? { kind: "page_captured", newCount: count, hasMore: lastHasMore ?? true }
+        : { kind: "tick" };
+    prevCount = Math.max(prevCount, count);
+    const stepped = scrollStep(st, event, deps);
+    st = stepped.state;
+    const action = stepped.action;
 
     // Telemetry: real Date.now()/performance.memory/document reads happen ONLY here (glue) —
     // the pure sampleMemory/formatHudLine in lib/capture/instrument.js take everything injected.
@@ -169,20 +192,43 @@ async function autoScroll() {
       domNodes: document.getElementsByTagName("*").length,
       heap: performance.memory,
     });
-    const state = stable > 0 ? `idle ${stable}/${MAX}` : "scrolling";
-    updateHud(formatHudLine(sample, { source: lastSource, hasMore: lastHasMore, state }));
+    const hudState = st.stall > 0 ? `${st.status} ${st.stall}/${GIVEUP_STALL_CYCLES}` : st.status;
+    updateHud(formatHudLine(sample, { source: lastSource, hasMore: st.hasMore, state: hudState }));
     if (sample.ts - lastSampleLogTs >= 5000) {
       lastSampleLogTs = sample.ts;
       console.log("[commonplace] capture sample", sample);
     }
+    console.log(
+      `[commonplace] ${st.status}… captured ${count} (hasMore ${st.hasMore}, stall ${st.stall}, DOM ${domCount})`
+    );
 
-    console.log(`[attic-spike] scrolling… captured ${count} (idle ${stable}/${MAX}, DOM ${domCount})`);
+    if (action.kind === "wait") {
+      // A stall with more-maybe-left is backpressure, not completion — wait it out and say so, so a
+      // pause reads as "working," not "frozen."
+      console.log(`[commonplace] waiting out a TikTok rate-limit… ${action.ms}ms (stall ${st.stall})`);
+      await sleep(action.ms);
+    } else if (action.kind === "done") {
+      running = false;
+      console.log(`[commonplace] capture COMPLETE — TikTok reported hasMore:false; ${prevCount} captured`);
+    } else if (action.kind === "giveup") {
+      running = false;
+      // An incomplete NEVER masquerades as success.
+      console.warn(`[commonplace] capture INCOMPLETE — ${action.reason}`);
+    }
+    // action.kind === "scroll": nothing extra; the loop nudges again at the top.
   }
+
   scrolling = false;
   killCV(); // restore the page to its natural state now capture is done
   removeHud();
-  chrome.runtime.sendMessage({ kind: "scroll_done" });
-  console.log(`[attic-spike] auto-scroll complete — ${prev} captured`);
+  chrome.runtime.sendMessage({
+    kind: "scroll_done",
+    status: st.status,
+    reason: st.reason ?? null,
+    captured: prevCount,
+    cursor: lastCursor,
+  });
+  console.log(`[commonplace] auto-scroll ended (${st.status}) — ${prevCount} captured`);
 }
 
 // Path 2: content-script fetch → blob → anchor download. Needs DNR to set Referer (fix 403)
