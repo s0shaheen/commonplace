@@ -43,6 +43,15 @@ Analysis is a resumable queue that must survive the service worker being torn do
 wakes the worker to revive the queue from its last checkpoint (resume in-flight items, apply 429
 backoff) so a long analysis run completes reliably instead of stalling when Chrome suspends the worker.
 
+### `tabs`
+Powers the one-click **Sync** capture supervisor. Sync enumerates the user's own saved sources
+(favorites, likes, posts, reposts) in sequence; to do that the extension must find the user's open
+TikTok tab and message it to start capturing (semi-auto, the default — the user is present on their
+own saved page), or, if the user opts into autonomous capture, open and focus a TikTok tab to drive it
+unattended. `tabs` is used only to locate/open/focus the TikTok tab being synced and to send it the
+"capture this source" instruction; it reads no tab content and touches no non-TikTok tabs. The toolbar
+popup (the Sync button and its live progress readout) is the surface that triggers this.
+
 ---
 
 ## Host permissions

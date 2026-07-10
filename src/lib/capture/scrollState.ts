@@ -40,6 +40,16 @@ export interface ScrollDeps {
   now(): number;
   /** Optional injected backoff (Task 2's pacing.ts). Falls back to the placeholder below. */
   backoffMs?: (stall: number) => number;
+  /**
+   * Carry-forward (1), Task 5 — RESUME-RUN flag. A crash-resume re-scroll walks the already-captured
+   * prefix first: every page ARRIVES with hasMore:true but its items all dedupe away (count never
+   * grows). Under the normal reducer each zero-new arrival is a stall, so we'd hit `giveup` ~
+   * GIVEUP_STALL_CYCLES pages in — before the uncaptured tail. When `resuming` is true, a zero-new
+   * page that ARRIVED is treated as PROGRESS (stall reset, scroll): TikTok answered, so it is
+   * paginating FORWARD, not throttling. Only genuine SILENCE (a `tick`, no arrival) still accrues
+   * stall → the giveup safety net survives even during resume. Default false (normal forward scroll).
+   */
+  resuming?: boolean;
 }
 
 /** How many consecutive unanswered backoff cycles before we declare a (reported) incomplete. */
@@ -106,7 +116,17 @@ export function step(state: ScrollState, event: ScrollEvent, deps: ScrollDeps): 
         action: { kind: "scroll" },
       };
     }
-    // A captured page with no growth is indistinguishable from a stall → back off.
+    // A captured page with no growth. In a RESUME run (carry-forward 1) this is the expected shape
+    // over the captured prefix — TikTok answered (an arrival), so it is paginating forward toward the
+    // uncaptured tail; count that as PROGRESS (reset stall, keep scrolling) so a long prefix can't
+    // prematurely `giveup`. In a normal forward scroll a zero-new arrival is indistinguishable from a
+    // throttle serving a stale page → treat it as a stall so the giveup bound still applies.
+    if (deps.resuming) {
+      return {
+        state: { ...state, hasMore: true, stall: 0, status: "scrolling", reason: null, updatedAt: now },
+        action: { kind: "scroll" },
+      };
+    }
     return stall(state, true, now, backoff);
   }
 

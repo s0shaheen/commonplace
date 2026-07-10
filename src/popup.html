@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Commonplace — Sync</title>
+    <style>
+      body { font: 13px/1.5 system-ui, sans-serif; width: 300px; margin: 0; padding: 0.9rem 1rem 1rem; color: #1a1a1a; }
+      h1 { font-size: 1.05rem; margin: 0 0 0.15rem; }
+      p.sub { color: #666; margin: 0 0 0.8rem; font-size: 0.85em; }
+      button#sync { font: inherit; font-weight: 600; padding: 0.5rem 1rem; border: 0; border-radius: 6px; background: #1a1a1a; color: #fff; cursor: pointer; width: 100%; }
+      button#sync:hover { background: #333; }
+      button#sync:disabled { background: #999; cursor: default; }
+      .status { margin-top: 0.8rem; border-top: 1px solid #eee; padding-top: 0.7rem; }
+      .row { display: flex; justify-content: space-between; gap: 0.5rem; margin: 0.2rem 0; }
+      .row .k { color: #666; }
+      .row .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+      .sources { margin: 0.4rem 0 0; padding: 0; list-style: none; font-size: 0.9em; }
+      .sources li { display: flex; justify-content: space-between; padding: 0.12rem 0; }
+      .badge { font-size: 0.8em; padding: 0.02rem 0.35rem; border-radius: 4px; }
+      .badge.done { background: #e6f6ea; color: #178a3a; }
+      .badge.giveup { background: #fdeaea; color: #b02525; }
+      .badge.current { background: #eef2ff; color: #3a4db0; }
+      .badge.pending { background: #f2f2f2; color: #888; }
+      .foot { margin-top: 0.7rem; font-size: 0.8em; color: #888; }
+      .foot a { color: #3a4db0; cursor: pointer; text-decoration: none; }
+      .foot a:hover { text-decoration: underline; }
+      .mode { font-size: 0.8em; color: #888; margin-top: 0.15rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Commonplace</h1>
+    <p class="sub">Sync your saved TikToks into your local archive.</p>
+
+    <button id="sync" type="button">Sync now</button>
+    <p class="mode" id="mode"></p>
+
+    <div class="status">
+      <div class="row"><span class="k">State</span><span class="v" id="state">idle</span></div>
+      <div class="row"><span class="k">In library</span><span class="v" id="count">—</span></div>
+      <ul class="sources" id="sources"></ul>
+      <div class="row" id="poster-row" hidden><span class="k">Posters</span><span class="v" id="poster">—</span></div>
+    </div>
+
+    <p class="foot"><a id="settings">Settings &amp; autonomous mode →</a></p>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

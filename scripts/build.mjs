@@ -35,6 +35,7 @@ const esmOptions = {
     background: resolve(ROOT, "src/background.ts"),
     offscreen: resolve(ROOT, "src/offscreen.ts"),
     options: resolve(ROOT, "src/options.ts"),
+    popup: resolve(ROOT, "src/popup.ts"),
   },
 };
 
@@ -55,6 +56,7 @@ function copyStatics() {
     ["manifest.json", "manifest.json"],
     ["rules.json", "rules.json"],
     ["src/options.html", "options.html"],
+    ["src/popup.html", "popup.html"],
     ["src/offscreen.html", "offscreen.html"],
     ["prompts/extract_v1.md", "prompts/extract_v1.md"],
   ];

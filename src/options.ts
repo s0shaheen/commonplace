@@ -25,6 +25,7 @@ function populate(cfg: CpConfig) {
   $<HTMLInputElement>("placesEnabled").checked = cfg.placesEnabled;
   $<HTMLInputElement>("placesKey").value = cfg.placesKey ?? "";
   $<HTMLInputElement>("concurrency").value = String(cfg.concurrency);
+  $<HTMLInputElement>("autonomousCapture").checked = cfg.autonomousCapture;
 }
 
 function readForm(): Partial<CpConfig> {
@@ -41,6 +42,7 @@ function readForm(): Partial<CpConfig> {
     placesEnabled: $<HTMLInputElement>("placesEnabled").checked,
     placesKey: placesKey || null,
     concurrency: Math.max(1, Number($<HTMLInputElement>("concurrency").value) || 1),
+    autonomousCapture: $<HTMLInputElement>("autonomousCapture").checked, // opt-in self-driving (Task 5)
     // escalateNative is intentionally NOT written from the UI — locked off (SPEC §13).
   };
 }

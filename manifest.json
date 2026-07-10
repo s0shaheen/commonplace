@@ -3,7 +3,7 @@
   "name": "Commonplace (dev)",
   "version": "0.1.0",
   "description": "Commonplace — turn your saved short-form content into a searchable, structured personal archive. Dev build.",
-  "permissions": ["storage", "downloads", "unlimitedStorage", "declarativeNetRequest", "offscreen", "alarms"],
+  "permissions": ["storage", "downloads", "unlimitedStorage", "declarativeNetRequest", "offscreen", "alarms", "tabs"],
   "host_permissions": [
     "*://*.tiktok.com/*",
     "*://*.tiktokcdn.com/*",
@@ -34,5 +34,6 @@
       "run_at": "document_start"
     }
   ],
+  "action": { "default_popup": "popup.html", "default_title": "Commonplace — Sync" },
   "options_page": "options.html"
 }

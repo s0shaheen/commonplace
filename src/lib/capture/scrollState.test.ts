@@ -127,3 +127,57 @@ describe("scrollState.step — completion is hasMore:false ONLY", () => {
     expect(a.state.updatedAt).toBe(42); // now() flows into the state, deterministically
   });
 });
+
+// ── Carry-forward (1): the resume-stall distinction (Task-5, BINDING) ──────────────────────────
+// A crash-resume re-scroll walks the ALREADY-captured prefix first: every page ARRIVES with
+// hasMore:true but its items all dedupe away (count never grows). Under the normal reducer each such
+// zero-new arrival is a stall, so ~GIVEUP_STALL_CYCLES pages in we'd hit `giveup` — long before the
+// uncaptured tail. The fix: a run-level `resuming` flag. During resume, a zero-new page that ARRIVED
+// (TikTok answered → it is paginating FORWARD) counts as PROGRESS (stall reset), so the re-scroll can
+// reach the tail. Only genuine SILENCE (ticks, no arrival) still accrues stall → the giveup safety net
+// survives even during resume.
+describe("scrollState.step — resume run (carry-forward 1)", () => {
+  const resuming: ScrollDeps = { now: () => 1_000, resuming: true };
+
+  it("under resuming, a long run of zero-new arrivals (hasMore:true) NEVER gives up — each is progress", () => {
+    let s = initialScrollState();
+    ({ state: s } = step(s, { kind: "page_captured", newCount: 500, hasMore: true }, resuming)); // captured prefix tip
+    // Re-scroll delivers 3× GIVEUP_STALL_CYCLES all-duplicate pages: count is pinned, hasMore stays true.
+    for (let i = 0; i < GIVEUP_STALL_CYCLES * 3; i++) {
+      const r = step(s, { kind: "page_captured", newCount: 500, hasMore: true }, resuming);
+      s = r.state;
+      expect(r.action).toEqual({ kind: "scroll" }); // progress, not wait/giveup
+      expect(s.stall).toBe(0); // stall never accrues on an arrival during resume
+      expect(s.status).toBe("scrolling");
+    }
+  });
+
+  it("under resuming, the SAME zero-new sequence WOULD give up without the flag (contrast)", () => {
+    // Identical events, default (non-resume) deps: zero-new arrivals ARE stalls → bounded giveup.
+    let last = step(initialScrollState(), { kind: "page_captured", newCount: 500, hasMore: true }, deps);
+    for (let i = 0; i < GIVEUP_STALL_CYCLES; i++) {
+      last = step(last.state, { kind: "page_captured", newCount: 500, hasMore: true }, deps);
+    }
+    expect(last.action.kind).toBe("giveup");
+  });
+
+  it("under resuming, SILENCE (ticks with no arrival) still bounds out to giveup — the safety net holds", () => {
+    let last = step(initialScrollState(), { kind: "tick" }, resuming);
+    for (let i = 1; i < GIVEUP_STALL_CYCLES; i++) {
+      last = step(last.state, { kind: "tick" }, resuming);
+    }
+    expect(last.action.kind).toBe("giveup"); // resume does NOT disable the incomplete-report path
+  });
+
+  it("under resuming, hasMore:false after the prefix still completes cleanly (reaches the tail)", () => {
+    let s = initialScrollState();
+    ({ state: s } = step(s, { kind: "page_captured", newCount: 500, hasMore: true }, resuming));
+    for (let i = 0; i < 12; i++) ({ state: s } = step(s, { kind: "page_captured", newCount: 500, hasMore: true }, resuming));
+    // tail: new items, then the honest hasMore:false end.
+    ({ state: s } = step(s, { kind: "page_captured", newCount: 540, hasMore: true }, resuming));
+    const { state, action } = step(s, { kind: "page_captured", newCount: 540, hasMore: false }, resuming);
+    expect(action).toEqual({ kind: "done" });
+    expect(state.status).toBe("done");
+    expect(state.lastCount).toBe(540);
+  });
+});

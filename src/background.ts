@@ -12,6 +12,16 @@
 import { openStore, type CpStore } from "./lib/store.js";
 import { createRateLimiter } from "./lib/rateLimiter.js";
 import { runPosterPass, selectPosterWork, type PosterFailures } from "./lib/capture/posterPass.js";
+import {
+  SOURCES,
+  SUPERVISOR_META_KEY,
+  initialProgress,
+  nextAction,
+  type Source,
+  type SupervisorEvent,
+  type SupervisorProgress,
+} from "./lib/capture/supervisor.js";
+import { loadConfig, type CpConfig, type StorageLike } from "./lib/config.js";
 import type { CapturedItem } from "./lib/types.js";
 
 // Decoupled poster pass (Task 4): posters are NO LONGER fetched inline during capture — that inline
@@ -60,7 +70,10 @@ interface ScrollDoneMsg {
   reason?: string | null;
   captured?: number;
   cursor?: string | null;
+  source?: string | null; // Task 5: the source this run drove (null = manual Alt+Shift+A) — advances the supervisor
 }
+interface SyncStartMsg { kind: "sync_start" } // popup Sync button → begin/continue the source sequence
+interface SyncStatusMsg { kind: "sync_status" } // popup poll → responds with live supervisor + capture status
 interface ExportEnrichedMsg { kind: "export_enriched"; results: unknown[] }
 interface DownloadTestMsg { kind: "download_test"; n?: number }
 interface QueueStartMsg { kind: "queue_start" }
@@ -77,13 +90,21 @@ type Msg =
   | QueueStatusMsg
   | QueueProgressMsg
   | QueueBlockedMsg
-  | ExportOpenSchemaMsg;
+  | ExportOpenSchemaMsg
+  | SyncStartMsg
+  | SyncStatusMsg;
 
-chrome.runtime.onMessage.addListener((msg: Msg, _sender, _sendResponse) => {
+chrome.runtime.onMessage.addListener((msg: Msg, _sender, sendResponse) => {
   if (msg.kind === "item_list") {
     void handleItemList(msg);
   } else if (msg.kind === "scroll_done") {
     void handleScrollDone(msg);
+  } else if (msg.kind === "sync_start") {
+    void runSupervisorEvent({ kind: "start" });
+  } else if (msg.kind === "sync_status") {
+    // Popup poll — respond async (channel kept open by the `return true` below).
+    void syncStatus().then(sendResponse);
+    return true;
   } else if (msg.kind === "export_enriched") {
     exportData("attic-enriched.json", msg.results);
   } else if (msg.kind === "download_test") {
@@ -162,6 +183,19 @@ async function onReviveAlarm(): Promise<void> {
   // Reusing this alarm (rather than a parallel timer) keeps ONE revival mechanism; the pass is
   // idempotent (stored posters short-circuit) so a redundant wake is cheap.
   if (await posterWorkRemains(s)) void runPosterPassNow();
+
+  // Task 5: resume an interrupted Sync run. If persisted progress shows a source still `current` (a
+  // capture was in flight when the worker died) and nothing is running now, feed `restarted` — the
+  // reducer returns that source with resuming:true (carry-forward 1). Only attempt when a tab is
+  // actually reachable, so a semi-auto run with no TikTok tab open doesn't log every minute.
+  if (!supervisorRunning) {
+    const progress = await loadSupervisorProgress(s);
+    if (progress.current != null) {
+      const config = await loadConfig(configStorage);
+      const tabId = await resolveCaptureTab(config);
+      if (tabId != null) void runSupervisorEvent({ kind: "restarted" });
+    }
+  }
 }
 
 // Capture intake: METADATA-ONLY and fast. Store already-normalized items → refresh `count`. NO media
@@ -254,10 +288,122 @@ async function posterWorkRemains(s: CpStore): Promise<boolean> {
   return selectPosterWork(candidates, failures ?? {}, 1).length > 0;
 }
 
+// ── Capture supervisor (Task 5) ────────────────────────────────────────────────────────────────
+// The thin glue around the pure `supervisor.ts` reducer: it PERSISTS progress, resolves/opens the tab
+// (semi-auto = the founder's foreground tab; autonomous = a tab we open via chrome.tabs), tells
+// content.js which source to capture, and — when scroll_done comes back — advances the sequence. The
+// resumability spine is the SAME `cp_queue_revive` alarm: a Sync run interrupted by SW death resumes
+// its unfinished source (persisted `current`) on the next wake.
+//
+// FRAGILE SEAM — Task-6-validation-pending: the CROSS-SOURCE walk (favorites→likes→posts→reposts)
+// depends on content.js's best-effort SPA sub-tab navigation, unverified against the live site (Fork
+// 2). What IS robust here: the pure sequencing/resume/persistence, semi-auto driving of the current
+// source, and autonomous tab-open. A nav miss can't corrupt state (carry-forward 2 filters foreign
+// arrivals); it degrades to a reported giveup the supervisor records and sequences past.
+
+let supervisorRunning = false; // one live capture run at a time per SW lifetime (belt; supervisor's idle is suspenders)
+
+// chrome.storage.local satisfies StorageLike (same shape options.ts uses).
+const configStorage: StorageLike = {
+  get: (k) => chrome.storage.local.get(k),
+  set: (o) => chrome.storage.local.set(o),
+};
+
+async function loadSupervisorProgress(s: CpStore): Promise<SupervisorProgress> {
+  return (await s.getMeta<SupervisorProgress>(SUPERVISOR_META_KEY)) ?? initialProgress();
+}
+
+function isSource(v: unknown): v is Source {
+  return typeof v === "string" && (SOURCES as readonly string[]).includes(v);
+}
+
+// Resolve the tab to drive. Autonomous: focus an existing TikTok tab or open one. Semi-auto: the
+// founder's active TikTok tab (fall back to any open TikTok tab). Returns null when there is nothing
+// to drive (semi-auto with no TikTok tab present) — the caller then stands down until the next Sync.
+async function resolveCaptureTab(config: CpConfig): Promise<number | null> {
+  if (config.autonomousCapture) {
+    const existing = (await chrome.tabs.query({ url: "*://*.tiktok.com/*" }))[0];
+    if (existing?.id != null) {
+      await chrome.tabs.update(existing.id, { active: true });
+      return existing.id;
+    }
+    // No TikTok tab open — start one. NOTE (Task-6-pending): to drive the founder's OWN saved sources
+    // this must land on their profile; we don't capture the handle, so autonomous MULTI-source is not
+    // yet complete (the tab opens + focuses + drives, but reaching favorites/likes needs the profile).
+    const created = await chrome.tabs.create({ url: "https://www.tiktok.com/", active: true });
+    return created.id ?? null;
+  }
+  const active = (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0];
+  if (active?.id != null && (active.url ?? "").includes("tiktok.com")) return active.id;
+  const anyTikTok = (await chrome.tabs.query({ url: "*://*.tiktok.com/*" }))[0];
+  return anyTikTok?.id ?? null;
+}
+
+// Feed one event to the pure reducer, persist the new progress, then act on the returned action.
+async function runSupervisorEvent(event: SupervisorEvent): Promise<void> {
+  const s = await store();
+  const progress = await loadSupervisorProgress(s);
+  const { progress: next, action } = nextAction(progress, event);
+  await s.setMeta(SUPERVISOR_META_KEY, next); // CHECKPOINT before driving — the crash-resume anchor
+
+  if (action.kind === "idle") return; // a run is already in flight; do not double-drive
+  if (action.kind === "all_done") {
+    supervisorRunning = false;
+    console.log("[commonplace] Sync complete — all sources enumerated", summarizeProgress(next));
+    return;
+  }
+
+  // capture_source: resolve/open the tab and tell content.js to drive that source.
+  const config = await loadConfig(configStorage);
+  const tabId = await resolveCaptureTab(config);
+  if (tabId == null) {
+    supervisorRunning = false; // nothing to drive right now; a later Sync (or the alarm) retries
+    console.warn(
+      `[commonplace] Sync: no TikTok tab to drive ${action.source} — ` +
+        (config.autonomousCapture ? "could not open one." : "open your TikTok saved page, then click Sync."),
+    );
+    return;
+  }
+  supervisorRunning = true;
+  try {
+    await chrome.tabs.sendMessage(tabId, { kind: "capture_source", source: action.source, resuming: action.resuming });
+    console.log(`[commonplace] Sync → driving ${action.source}${action.resuming ? " (resuming)" : ""} on tab ${tabId}`);
+  } catch (e) {
+    // The content script may not be injected yet (fresh autonomous tab still loading). Stand down;
+    // the run is checkpointed as `current`, so the revival alarm resumes it once the tab is ready.
+    supervisorRunning = false;
+    console.warn(`[commonplace] Sync: could not reach content script on tab ${tabId} yet:`, (e as Error).message);
+  }
+}
+
+function summarizeProgress(p: SupervisorProgress): Record<string, unknown> {
+  return { done: p.done, current: p.current, counts: p.counts };
+}
+
+// Popup status poll: the live picture — supervisor progress, whether a run/poster-pass is active,
+// and the canonical library count.
+async function syncStatus(): Promise<{
+  progress: SupervisorProgress;
+  running: boolean;
+  posterRunning: boolean;
+  count: number;
+}> {
+  const s = await store();
+  const [progress, count] = await Promise.all([loadSupervisorProgress(s), s.count()]);
+  return { progress, running: supervisorRunning, posterRunning: posterPassRunning, count };
+}
+
 async function handleScrollDone(msg: ScrollDoneMsg): Promise<void> {
   // A source finished enumerating (done OR giveup — partial capture still deserves posters). Kick the
   // decoupled poster pass NOW, before cover URLs expire. Fire-and-forget; never fails the export.
   void runPosterPassNow();
+
+  // Task 5: if this run was supervisor-driven (a tagged source), advance the sequence to the next
+  // source. A manual Alt+Shift+A run carries source:null and is left untouched (dev path preserved).
+  if (isSource(msg.source)) {
+    const status = msg.status === "done" ? "done" : "giveup";
+    void runSupervisorEvent({ kind: "source_finished", source: msg.source, captured: msg.captured ?? 0, status });
+  }
 
   const recs = await (await store()).allRecords();
   if (msg.status === "giveup") {

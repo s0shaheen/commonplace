@@ -15,6 +15,7 @@ describe("cp_config", () => {
     expect(DEFAULT_CONFIG.escalateNative).toBe(false);
     expect(DEFAULT_CONFIG.placesEnabled).toBe(false);
     expect(DEFAULT_CONFIG.concurrency).toBe(2);
+    expect(DEFAULT_CONFIG.autonomousCapture).toBe(false); // opt-in, off by default (account-risk)
   });
   it("loadConfig merges a stored partial over defaults", async () => {
     const s = memStorage({ cp_config: { engineLane: "local", geminiKey: "k" } });

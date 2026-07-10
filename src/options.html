@@ -58,6 +58,21 @@
       </fieldset>
 
       <fieldset>
+        <legend>Capture mode</legend>
+        <label class="inline"><input type="checkbox" id="autonomousCapture" /> Autonomous capture (opt-in)</label>
+        <p class="hint">
+          Default (unchecked) is <strong>semi-auto</strong>: you open your TikTok saved page and click
+          <em>Sync</em>; capture runs in your foreground tab while you're present.
+        </p>
+        <p class="disabled-note">
+          Autonomous mode lets the extension open and drive a TikTok tab unattended. This puts the
+          largest automated-scroll footprint on your real account and carries a higher rate-limit /
+          account-safety risk. Capture is always paced to human cadence, but leave this off unless you
+          want the click-once-and-forget workflow.
+        </p>
+      </fieldset>
+
+      <fieldset>
         <legend>Performance</legend>
         <label>Concurrency
           <input type="number" id="concurrency" min="1" max="16" step="1" />

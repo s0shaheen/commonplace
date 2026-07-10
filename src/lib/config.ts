@@ -16,6 +16,11 @@ export interface CpConfig {
   placesEnabled: boolean; // default false — key not provisioned
   placesKey: string | null; // default null
   concurrency: number; // default 2
+  // Capture self-driving mode (Task 5). false (default) = SEMI-AUTO: Sync drives the founder's
+  // foreground TikTok tab, a human is present. true = AUTONOMOUS: the supervisor opens/focuses a
+  // TikTok tab via chrome.tabs and drives it with no presence — opt-in behind the options toggle's
+  // account-risk note (it puts the largest automated-scroll footprint on the real account).
+  autonomousCapture: boolean; // default false
 }
 
 /** chrome.storage.local satisfies this shape. */
@@ -39,6 +44,7 @@ export const DEFAULT_CONFIG: CpConfig = {
   placesEnabled: false,
   placesKey: null,
   concurrency: 2,
+  autonomousCapture: false,
 };
 
 /** Read the stored partial and merge it over the frozen defaults. */

@@ -32,6 +32,7 @@ const PERMISSION_ALLOWLIST = [
   "declarativeNetRequest",
   "offscreen",
   "alarms",
+  "tabs", // Task 5: the capture supervisor opens/focuses/messages the TikTok tab it drives (semi-auto + autonomous)
 ];
 
 // Secret-shaped patterns. `[A-Za-z0-9_\-]` covers the base64url charset real Google keys use.

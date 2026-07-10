@@ -7,15 +7,30 @@ import { coerceHasMore } from "./lib/capture/interceptParse.js";
 import { initialScrollState, step as scrollStep, GIVEUP_STALL_CYCLES } from "./lib/capture/scrollState.js";
 import { nextDwellMs, backoffMs } from "./lib/capture/pacing.js";
 import { tilesToEvict, DEFAULT_LIVE_WINDOW } from "./lib/capture/pruneWindow.js";
+import { arrivalDrivesRun } from "./lib/capture/supervisor.js";
 
 let lastSource = null;
 let lastHasMore = null; // latest coerced paging signal from the message path (Task 1)
 let lastCursor = null;
 let pageArrivals = 0; // monotonic count of item_list messages — autoScroll keys page_captured on ARRIVAL, not count growth
+// Carry-forward (2), Task 5: the source the supervisor asked THIS run to capture. Set at the start of
+// a capture run, cleared at its end. While set, only arrivals whose source matches may drive the run's
+// scroll signals — a straggler from the previous source must not inject its hasMore into this run.
+// Null = the manual Alt+Shift+A dev path (no supervisor tag) → arrivalDrivesRun accepts everything.
+let activeRunSource = null;
 
 window.addEventListener("message", (e) => {
   if (e.source !== window || !e.data || e.data.__attic !== true) return;
   if (e.data.kind === "item_list") {
+    // ALWAYS relay the SLIM, already-normalized+source-tagged items the main world parsed (Task 3) —
+    // the heavy raw envelope no longer crosses any structured-clone boundary. Even a straggler from
+    // the previous source is valid data: the SW upserts by id (idempotent, unions sources), so we
+    // never drop a real capture. coerceHasMore below is idempotent on the already-coerced value.
+    chrome.runtime.sendMessage({ kind: "item_list", url: e.data.url, source: e.data.source, items: e.data.items });
+    // Carry-forward (2): but only let an arrival whose source matches the ACTIVE run drive that run's
+    // completion signals (pageArrivals / lastHasMore / lastCursor). A late favorites page delivered
+    // during the likes run must not bump likes' arrival count or, worse, inject favorites' hasMore:false.
+    if (!arrivalDrivesRun(activeRunSource, e.data.source)) return;
     lastSource = e.data.source ?? lastSource;
     // main-world forwards RAW hasMore; coerce it through the tested pure module (missing/unknown →
     // more-may-exist, NEVER false). We coerce the tiny forwarded field rather than re-normalizing
@@ -23,10 +38,6 @@ window.addEventListener("message", (e) => {
     lastHasMore = coerceHasMore(e.data.hasMore);
     lastCursor = e.data.cursor ?? null;
     pageArrivals++;
-    // Relay the SLIM, already-normalized+source-tagged items the main world parsed (Task 3) — the
-    // heavy raw envelope no longer crosses any structured-clone boundary. The SW upserts msg.items
-    // directly (no re-normalization). coerceHasMore above is idempotent on the already-coerced value.
-    chrome.runtime.sendMessage({ kind: "item_list", url: e.data.url, source: e.data.source, items: e.data.items });
   }
 });
 
@@ -182,10 +193,15 @@ function nudgeToBottom() {
 }
 
 let scrolling = false;
-async function autoScroll() {
+// autoScroll drives ONE source to completion. `source` (Task 5) tags the run for carry-forward (2)'s
+// arrival filter; `resuming` (carry-forward 1) tells the reducer this is a crash-resume re-scroll, so
+// zero-new arrivals over the already-captured prefix count as progress, not stalls. Both default to
+// the manual Alt+Shift+A dev path (no tag, forward scroll).
+async function autoScroll({ source = null, resuming = false } = {}) {
   if (scrolling) return;
   scrolling = true;
   cachedScroller = null;
+  activeRunSource = source; // arm the carry-forward-2 filter BEFORE any arrival can land
 
   // The termination decision is NOT here — it lives in the pure, tested `scrollState` reducer.
   // This loop is dumb glue: observe (did a page ARRIVE? what's the latest hasMore? did `count`
@@ -196,7 +212,8 @@ async function autoScroll() {
   // Task 2: the real human-cadence backoff replaces scrollState's placeholder. Math.random and
   // Date.now live ONLY here (glue) — pacing.ts/scrollState.ts stay pure. Giveup semantics are
   // untouched: the reducer still bounds the run at GIVEUP_STALL_CYCLES; only the wait LENGTHS change.
-  const deps = { now: () => Date.now(), backoffMs: (stall) => backoffMs(stall, Math.random) };
+  // `resuming` threads the carry-forward-1 signal into the reducer (see scrollState.ts).
+  const deps = { now: () => Date.now(), backoffMs: (stall) => backoffMs(stall, Math.random), resuming };
   let lastSampleLogTs = 0; // console.log a CaptureSample roughly every ~5s while scrolling
   let running = true;
 
@@ -295,8 +312,10 @@ async function autoScroll() {
     reason: st.reason ?? null,
     captured: prevCount,
     cursor: lastCursor,
+    source, // Task 5: which source this run drove — lets background.ts's supervisor advance the sequence
   });
-  console.log(`[commonplace] auto-scroll ended (${st.status}) — ${prevCount} captured`);
+  activeRunSource = null; // disarm the carry-forward-2 filter; the run is over
+  console.log(`[commonplace] auto-scroll ended (${st.status}, source ${source ?? "manual"}) — ${prevCount} captured`);
 }
 
 // Path 2: content-script fetch → blob → anchor download. Needs DNR to set Referer (fix 403)
@@ -333,6 +352,73 @@ async function downloadViaFetch(n) {
     await new Promise((r) => setTimeout(r, 900));
   }
 }
+
+// ── Supervisor-driven capture (Task 5) ──────────────────────────────────────────────────────────
+// background.ts's supervisor tells THIS tab which source to capture. We (best-effort) navigate to the
+// source's SPA sub-tab, then drive autoScroll for it. The scroll_done we emit carries `source`, which
+// lets the supervisor advance to the next source. Semi-auto: this tab is the founder's foreground tab.
+// Autonomous: background opened/focused this tab first.
+//
+// FRAGILE SEAM — Task-6-validation-pending. TikTok's favorites/likes/posts/reposts are SPA sub-tabs of
+// the profile, NOT distinct URLs; switching between them is real DOM automation against churny markup.
+// The selectors below (data-e2e first — the most stable handle TikTok exposes — then aria/text) are a
+// best-effort HYPOTHESIS not yet verified against a live logged-in session (Fork 2 deferred the live
+// run). If nav fails, no matching-source page arrives, the carry-forward-2 filter keeps this run clean,
+// and the run bounds out to a REPORTED giveup — an honest incomplete the supervisor records and
+// sequences past, never a fake "done." Task 6 must confirm/repair these selectors on the real site.
+const SOURCE_TAB_HINTS = {
+  favorites: { e2e: ["favorites-tab", "user-favorite"], text: [/^favorites$/i] },
+  likes: { e2e: ["liked-tab", "user-liked"], text: [/^liked$/i, /^likes$/i] },
+  posts: { e2e: ["user-post", "posts-tab"], text: [/^videos$/i, /^posts$/i] },
+  reposts: { e2e: ["user-repost", "repost-tab"], text: [/^reposts$/i] },
+};
+
+function findSourceTab(source) {
+  const hints = SOURCE_TAB_HINTS[source];
+  if (!hints) return null;
+  for (const e2e of hints.e2e) {
+    const el = document.querySelector(`[data-e2e="${e2e}"]`);
+    if (el) return el.closest('[role="tab"], a, button, p, div[tabindex]') || el;
+  }
+  // Fallback: a tab-ish element whose visible text matches the source label.
+  const candidates = document.querySelectorAll('[role="tab"], a[href], button, p[data-e2e]');
+  for (const el of candidates) {
+    const t = (el.textContent || "").trim();
+    if (t && hints.text.some((re) => re.test(t))) return el;
+  }
+  return null;
+}
+
+async function navigateToSource(source) {
+  if (!source) return false;
+  const tab = findSourceTab(source);
+  if (!tab) {
+    console.warn(
+      `[commonplace] navigateToSource(${source}): no sub-tab found — capture will run against whatever ` +
+        `is showing; a non-matching source is filtered out (carry-forward 2) and the run reports giveup. ` +
+        `(FRAGILE SEAM — Task 6 must verify the SPA sub-tab selectors on the live site.)`,
+    );
+    return false;
+  }
+  tab.click();
+  console.log(`[commonplace] navigateToSource(${source}) → clicked sub-tab; waiting for it to load`);
+  await sleep(1500); // let TikTok swap the grid + fire the first source item_list before we scroll
+  return true;
+}
+
+async function runCaptureForSource(source, resuming) {
+  activeRunSource = source ?? null; // arm the filter BEFORE nav so the first arrival is already gated
+  await navigateToSource(source);
+  await autoScroll({ source, resuming });
+}
+
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg && msg.kind === "capture_source") {
+    console.log(`[commonplace] supervisor → capture ${msg.source}${msg.resuming ? " (resuming)" : ""}`);
+    void runCaptureForSource(msg.source ?? null, !!msg.resuming);
+  }
+  // Not returning true: this listener is fire-and-forget (no async sendResponse).
+});
 
 window.addEventListener("keydown", (e) => {
   if (!e.altKey || !e.shiftKey) return;
