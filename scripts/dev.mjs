@@ -37,6 +37,16 @@ wss.on("connection", (sock) => {
 });
 
 function broadcastReload() {
+  // An incremental rebuild only rewrites the changed bundle's JS. The OTHER bundle's outputs and the
+  // static assets (manifest.json, *.html, rules.json, prompts/) are NOT re-emitted — and a prior
+  // wipe/incremental-rebuild can leave dist/ missing them, which surfaces as Chrome's
+  // "Manifest file is missing or unreadable". So re-copy statics on EVERY rebuild to keep dist/ a
+  // complete, loadable extension at all times.
+  try {
+    copyStatics();
+  } catch (e) {
+    console.error("[dev] copyStatics failed — dist/ may be incomplete:", e.message);
+  }
   let n = 0;
   for (const client of wss.clients) {
     if (client.readyState === 1 /* OPEN */) {
@@ -44,7 +54,7 @@ function broadcastReload() {
       n++;
     }
   }
-  console.log(`[dev] rebuild → broadcast "reload" to ${n} client${n === 1 ? "" : "s"}` + (n === 0 ? " (none connected yet)" : ""));
+  console.log(`[dev] rebuild → statics refreshed, broadcast "reload" to ${n} client${n === 1 ? "" : "s"}` + (n === 0 ? " (none connected yet)" : ""));
 }
 
 // Both the ESM and IIFE contexts fire onEnd on every rebuild; debounce so one save = one broadcast.
