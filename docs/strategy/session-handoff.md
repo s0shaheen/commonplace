@@ -1,5 +1,7 @@
 # RESUME POINTER (read me first after a /clear)
 
+> **⚠ LOCAL PATH CHANGED (2026-07-09 eve):** the working directory was renamed `~/Dev/attic-extension` → **`~/Dev/commonplace`** (matching the project rename). If a session launches in the old path and fails, `cd ~/Dev/commonplace`. Remote unchanged: `github.com/s0shaheen/commonplace`.
+
 **Operating contract lives in `CLAUDE.md`** (repo root, auto-loaded) — Frame / Truth / Verdict. The `memory/` notes hold the *why*.
 
 > ## ▶ EXECUTION PLAN: `docs/strategy/roadmap.md`

@@ -63,3 +63,39 @@ The reload client is gated behind an esbuild `define`, `__DEV_RELOAD__`:
 file) if any file in a production `dist/` contains `devReload`, `ws://localhost`, or
 `__DEV_RELOAD__`. `npm run package` runs the audit first and refuses to zip a dist that fails. So the
 production path is: `npm run build && npm run audit` → clean dist, `AUDIT PASS`.
+
+## Letting Claude drive TikTok/Instagram (persistent auth)
+
+The question was: can Claude test capture on TikTok/IG using logins that persist, ideally reusing the
+real logged-in browser. Three approaches — the recommendation is the **persistent dev profile above**,
+not cookie extraction.
+
+**A. Persistent dev profile (recommended, and already built).** `npm run dev:browser` gives a Chrome
+that (1) has the extension auto-loaded, (2) keeps its TikTok/IG login across restarts via
+`.dev-profile`, and (3) exposes CDP on `http://localhost:9222`. You log in **once**; from then on the
+session is native to that browser — a real, normally-established login, which is the *least*
+bot-flagged state. Claude drives it by attaching over CDP (`:9222`) — no credential handling, no
+copying, and it survives restarts. This is the durable "logins are already ready" setup you asked for.
+
+**B. Claude-in-Chrome against your everyday Chrome (fastest to start).** Your real Chrome is already
+logged into both platforms. If the extension is loaded there (or in the dev profile) and the Claude
+Chrome extension is connected, Claude can drive that live session directly. Best for a quick
+supervised test *today*; it's your foreground session, so it's not unattended and not isolated.
+
+**C. Copying cookies out of your real Chrome — NOT recommended (and I won't set this up).** It's the
+tempting "just take my cookies" path, and it's the wrong tool:
+- **It's brittle by design now.** Since ~Chrome 127 (2024) macOS uses App-Bound Encryption; cookies
+  are Keychain-gated and the scheme changes across Chrome updates. Extraction needs Keychain access
+  and breaks on upgrades. (When I probed the encryption scheme during setup, the environment's own
+  safety layer *blocked* the read — a fair signal that programmatically handling your auth material is
+  exactly what tooling is built to prevent.)
+- **It gets your account flagged.** TikTok and Instagram fingerprint the device/session; a cookie
+  lifted into a different browser (different UA/TLS/canvas fingerprint) is routinely challenged,
+  silently rate-limited, or flagged — putting your *real* account at risk to save a one-time login.
+- **It's your most sensitive material.** Extracting and storing live session cookies is a standing
+  liability for zero durable benefit over (A), which yields the same "already logged in" result
+  safely.
+
+**Bottom line:** log in once in the dev profile (A). It is the same outcome as "reuse my cookies"
+without the fragility or the account risk, and it persists across every future browser launch and
+automation run.
