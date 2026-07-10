@@ -396,6 +396,16 @@ function findSourceTab(source) {
   return null;
 }
 
+// Is this a TikTok PROFILE page — the saved/profile surface where the favorites/likes/posts/reposts
+// sub-tabs live (path `/@handle…`)? A single video/photo permalink (`/@user/video/…`) is NOT, nor is
+// the FYP. Fix round 2 (#1, leg a): a supervisor-driven run must never bot-cadence-scroll a non-profile
+// tab (the founder's live browsing). Kept in sync with background.ts's isProfileUrl.
+function isProfilePage() {
+  const p = location.pathname || "";
+  if (!/^\/@[^/]+/.test(p)) return false; // must be a @handle page
+  return !/\/(video|photo)\//.test(p); // …but not a single video/photo permalink
+}
+
 async function navigateToSource(source) {
   if (!source) return false;
   const tab = findSourceTab(source);
@@ -432,7 +442,28 @@ async function runCaptureForSource(source, resuming) {
   captureRunActive = true;
   try {
     activeRunSource = source ?? null; // arm the filter BEFORE nav so the first arrival is already gated
-    await navigateToSource(source);
+    const navigated = await navigateToSource(source);
+    // Fix round 2 (#1, leg a): if a supervisor-driven run can't reach the source's sub-tab AND we're
+    // not even on a profile page (e.g. an alarm resumed onto the FYP or a video the founder is
+    // watching), report giveup IMMEDIATELY — never cadence-scroll a wrong tab through the full
+    // backoff ladder. On a profile page we still try (the sub-tab may already be active, or the
+    // selectors just didn't match — carry-forward 2 keeps a mismatched source from driving the run).
+    if (source && !navigated && !isProfilePage()) {
+      console.warn(
+        `[commonplace] capture ${source}: not on a TikTok profile page and no sub-tab found — ` +
+          `reporting giveup instead of scrolling this tab.`,
+      );
+      chrome.runtime.sendMessage({
+        kind: "scroll_done",
+        status: "giveup",
+        reason: "not on a TikTok profile page (no saved-sources tabs to capture)",
+        captured: 0,
+        cursor: null,
+        source,
+      });
+      activeRunSource = null;
+      return;
+    }
     await autoScroll({ source, resuming });
   } finally {
     captureRunActive = false;

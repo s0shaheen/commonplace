@@ -36,6 +36,14 @@ export interface ScrollState {
    * same stale page repeats its cursor, while real forward pagination advances it.
    */
   lastPageCursor: string | null;
+  /**
+   * Fix round 2: count of grace-granted scrolls this run (a resume's zero-growth arrival treated as
+   * progress). The residual hole after round 1 was a null-cursor + always-arriving + zero-growth
+   * resume: cursor-repeat can't fire on null cursors and silence never comes, so grace had NO bound.
+   * This is the ABSOLUTE cap's counter — past MAX_GRACE_SCROLLS grace stops and normal stall/giveup
+   * bounding takes over, so even that pathological resume always terminates. Only grace increments it.
+   */
+  graceScrolls: number;
 }
 
 export type ScrollEvent =
@@ -75,6 +83,20 @@ export interface ScrollDeps {
 /** How many consecutive unanswered backoff cycles before we declare a (reported) incomplete. */
 export const GIVEUP_STALL_CYCLES = 8;
 
+/**
+ * Fix round 2 — the ABSOLUTE per-run cap on grace-granted scrolls (a resume's zero-growth-but-arrived
+ * pages treated as forward progress). Past this many, the resume grace stops and the run falls to
+ * normal stall/giveup bounding, so a null-cursor + perpetual-zero-growth resume can never scroll
+ * forever unattended.
+ *
+ * Sizing (generous but finite): TikTok item_list pages carry ~30 items, and one grace-scroll walks
+ * roughly one already-captured page of the prefix. 400 grace-scrolls ⇒ ~12,000 items of prefix — well
+ * past any real corpus (the founder's largest observed was ~4,661), so a legitimate resume of even a
+ * very large captured prefix reaches its uncaptured tail (which then produces growth, dropping the
+ * grace anyway) long before the cap bites. The cap only ever fires on the pathological no-progress case.
+ */
+export const MAX_GRACE_SCROLLS = 400;
+
 const BASE_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 60_000;
 
@@ -102,6 +124,7 @@ export function initialScrollState(initialCount = 0): ScrollState {
     updatedAt: 0,
     grew: false,
     lastPageCursor: null,
+    graceScrolls: 0,
   };
 }
 
@@ -165,14 +188,16 @@ export function step(state: ScrollState, event: ScrollEvent, deps: ScrollDeps): 
     // A captured page with no growth. In a RESUME run (carry-forward 1) this is the expected shape
     // over the captured prefix — TikTok answered (an arrival), so it is paginating forward toward
     // the uncaptured tail; count that as PROGRESS (reset stall, keep scrolling) so a long prefix
-    // can't prematurely `giveup`. The grace is BOUNDED (fix round 1): it holds only while
-    //   (a) no growth has been seen yet (`!state.grew` — growth proves the prefix is behind us), and
+    // can't prematurely `giveup`. The grace is BOUNDED — it holds only while ALL of:
+    //   (a) no growth has been seen yet (`!state.grew` — growth proves the prefix is behind us),
     //   (b) the cursor is advancing (a repeated identical non-null cursor is a throttle serving the
-    //       same stale page, not forward pagination — never progress).
+    //       same stale page, not forward pagination — never progress), and
+    //   (c) the absolute cap isn't reached (fix round 2 — a null-cursor + always-arriving +
+    //       zero-growth resume trips neither (a) nor (b) nor silence, so without this it had NO bound).
     // Outside the grace, a zero-new arrival is indistinguishable from a throttle stall → the normal
     // stall/giveup bound applies, so even an unattended resumed run always terminates.
     const cursorRepeated = cursor != null && cursor === state.lastPageCursor;
-    if (deps.resuming && !state.grew && !cursorRepeated) {
+    if (deps.resuming && !state.grew && !cursorRepeated && state.graceScrolls < MAX_GRACE_SCROLLS) {
       return {
         state: {
           ...state,
@@ -182,6 +207,7 @@ export function step(state: ScrollState, event: ScrollEvent, deps: ScrollDeps): 
           reason: null,
           updatedAt: now,
           lastPageCursor: cursor ?? state.lastPageCursor,
+          graceScrolls: state.graceScrolls + 1,
         },
         action: { kind: "scroll" },
       };

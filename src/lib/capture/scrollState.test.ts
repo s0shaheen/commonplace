@@ -7,6 +7,7 @@ import {
   initialScrollState,
   step,
   GIVEUP_STALL_CYCLES,
+  MAX_GRACE_SCROLLS,
   type ScrollState,
   type ScrollDeps,
 } from "./scrollState.js";
@@ -222,12 +223,43 @@ describe("scrollState.step — resume run (carry-forward 1)", () => {
 
   it("a null/absent cursor carries no repeat signal — the grace still applies (defensive default)", () => {
     // The cursor's on-wire shape is recon-unverified; when it's missing we can't distinguish a stale
-    // repeat, so the grace holds (the growth-drop + silence bounds still protect the run).
+    // repeat, so the grace holds (the growth-drop + silence bounds still protect the run) UNTIL the
+    // absolute cap (below) — kept well under MAX_GRACE_SCROLLS so this stays a pure grace test.
     let s = initialScrollState(500);
     for (let i = 0; i < GIVEUP_STALL_CYCLES + 2; i++) {
       const r = step(s, { kind: "page_captured", newCount: 500, hasMore: true }, resuming);
       s = r.state;
       expect(r.action).toEqual({ kind: "scroll" });
+    }
+  });
+
+  it("ABSOLUTE grace cap: null-cursor + perpetual zero-growth arrivals still TERMINATE (fix round 2)", () => {
+    // The residual hole after fix round 1: with a null cursor the repeat-guard can't fire, and if
+    // pages keep ARRIVING (never silence) with zero growth, grace was granted forever → an unattended
+    // resumed run could bot-scroll indefinitely. Fix: an absolute per-run cap on grace-granted
+    // scrolls. Past the cap, grace stops and normal stall/giveup bounding takes over → the run ends.
+    let last = step(initialScrollState(500), { kind: "page_captured", newCount: 500, hasMore: true }, resuming);
+    let scrolls = 0;
+    // Feed far more than the cap; the machine MUST reach giveup within cap + GIVEUP_STALL_CYCLES + slack.
+    for (let i = 0; last.action.kind !== "giveup" && i < MAX_GRACE_SCROLLS + GIVEUP_STALL_CYCLES + 10; i++) {
+      if (last.action.kind === "scroll") scrolls++;
+      last = step(last.state, { kind: "page_captured", newCount: 500, hasMore: true }, resuming);
+    }
+    expect(last.action.kind).toBe("giveup"); // terminates — never an unbounded scroll
+    // Grace was granted a bounded number of times (never more than the cap).
+    expect(scrolls).toBeLessThanOrEqual(MAX_GRACE_SCROLLS);
+    // …and the cap is actually the thing that bit (we walked most of it), not an accidental early stop.
+    expect(scrolls).toBeGreaterThanOrEqual(MAX_GRACE_SCROLLS - 1);
+  });
+
+  it("the grace cap counts only GRACE scrolls — growth-driven scrolls don't consume it", () => {
+    // A run that keeps making REAL progress (growth) must never be capped: the cap targets the
+    // pathological zero-growth-forever resume, not a healthy long capture.
+    let s = initialScrollState(500);
+    for (let i = 0; i < MAX_GRACE_SCROLLS + 50; i++) {
+      const r = step(s, { kind: "page_captured", newCount: 500 + i + 1, hasMore: true, cursor: `c${i}` }, resuming);
+      s = r.state;
+      expect(r.action).toEqual({ kind: "scroll" }); // growth → always scroll, cap untouched
     }
   });
 

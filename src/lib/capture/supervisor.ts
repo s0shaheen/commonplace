@@ -53,6 +53,13 @@ export interface SupervisorProgress {
    * get past the all-duplicate prefix to the uncaptured tail. Absent ⇒ none.
    */
   retry?: Source[];
+  /**
+   * Wall-clock (ms) when `current` was last (re-)set to a source about to be driven. Fix round 2
+   * (#5) — the GLUE stamps/clears this (the reducer stays pure, no clock); the alarm abandons a
+   * `current` older than a day so a stale in-flight source can't steer an unattended re-drive. Absent
+   * on a fresh/idle progress and on pre-fix persisted blobs (treated as not-stale for one resume).
+   */
+  currentStartedAt?: number;
 }
 
 export type SupervisorEvent =

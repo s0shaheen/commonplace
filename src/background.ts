@@ -100,7 +100,7 @@ chrome.runtime.onMessage.addListener((msg: Msg, _sender, sendResponse) => {
   } else if (msg.kind === "scroll_done") {
     void handleScrollDone(msg);
   } else if (msg.kind === "sync_start") {
-    void runSupervisorEvent({ kind: "start" });
+    void handleSyncClick();
   } else if (msg.kind === "sync_status") {
     // Popup poll — respond async (channel kept open by the `return true` below).
     void syncStatus().then(sendResponse);
@@ -188,17 +188,23 @@ async function onReviveAlarm(): Promise<void> {
   // capture was in flight when the worker died) and nothing is running now, feed `restarted` — the
   // reducer returns that source with resuming:true (carry-forward 1).
   //
-  // Fix round 1 (important): TWO guards before re-driving, because `supervisorRunning` is
-  // SW-lifetime state — a long backoff idles the SW out and resets it while content.js is still
-  // mid-run, so on the next tick the flag alone would let every alarm re-drive the live tab.
-  //   1. The probe is `findCaptureTab` (query-only): it never CREATES or focus-steals a tab — the
-  //      old resolveCaptureTab probe opened a fresh focused tab every tick in autonomous mode.
-  //   2. `isTabScrolling` asks the tab itself ("are you scrolling?"). A live run ⇒ restore
-  //      supervisorRunning=true and stand down; content.js's own run finishes and reports normally.
+  // Guards before re-driving, because `supervisorRunning` is SW-lifetime state — a long backoff idles
+  // the SW out and resets it while content.js is still mid-run, so the flag alone can't stop the
+  // 1-min alarm from re-driving. In order:
+  //   0. STALENESS (fix round 2, #5): a `current` older than STALE_CURRENT_MS is abandoned — it means
+  //      a run was interrupted and never resumed for a day. Don't chase it; wait for a fresh Sync.
+  //   1. PROFILE-ONLY (fix round 2, #1): resume only onto a reachable PROFILE tab. A stale `current`
+  //      must never let the alarm cadence-scroll an arbitrary tab (FYP, a video) the founder is
+  //      browsing — unattended control of the wrong tab in the DEFAULT mode. `findProfileTab` is
+  //      query-only (no create/focus-steal, fix round 1).
+  //   2. LIVE-RUN (fix round 1): `isTabScrolling` asks the tab itself; a live run ⇒ re-arm the belt
+  //      and stand down rather than re-drive.
   if (!supervisorRunning) {
     const progress = await loadSupervisorProgress(s);
-    if (progress.current != null) {
-      const tabId = await findCaptureTab();
+    const startedAt = progress.currentStartedAt ?? null;
+    const stale = startedAt != null && Date.now() - startedAt > STALE_CURRENT_MS;
+    if (progress.current != null && !stale) {
+      const tabId = await findProfileTab();
       if (tabId != null) {
         if (await isTabScrolling(tabId)) {
           supervisorRunning = true; // the run never died — re-arm the belt, don't re-drive
@@ -206,8 +212,10 @@ async function onReviveAlarm(): Promise<void> {
           void runSupervisorEvent({ kind: "restarted" });
         }
       }
-      // No TikTok tab reachable: stand down silently until one exists (or the next Sync click).
-      // In autonomous mode the DRIVE path may create a tab — a mere probe never does.
+      // No reachable PROFILE tab: stand down silently until the founder is on their profile and
+      // clicks Sync (or, autonomous, a Sync-click DRIVE opens one — a mere probe never does).
+    } else if (stale) {
+      console.log("[commonplace] alarm-resume skipped — stale in-flight source; click Sync to resume");
     }
   }
 }
@@ -317,6 +325,11 @@ async function posterWorkRemains(s: CpStore): Promise<boolean> {
 
 let supervisorRunning = false; // one live capture run at a time per SW lifetime (belt; supervisor's idle is suspenders)
 
+// Fix round 2 (#5): the alarm abandons an in-flight `current` older than this — a run interrupted and
+// never resumed for a day requires a fresh Sync click, closing the stale-`current` class that #1
+// exploits (an old `current` steering the alarm onto whatever tab happens to be open).
+const STALE_CURRENT_MS = 24 * 60 * 60 * 1000;
+
 // chrome.storage.local satisfies StorageLike (same shape options.ts uses).
 const configStorage: StorageLike = {
   get: (k) => chrome.storage.local.get(k),
@@ -340,6 +353,34 @@ async function findCaptureTab(): Promise<number | null> {
   if (active?.id != null && (active.url ?? "").includes("tiktok.com")) return active.id;
   const anyTikTok = (await chrome.tabs.query({ url: "*://*.tiktok.com/*" }))[0];
   return anyTikTok?.id ?? null;
+}
+
+// Is this a TikTok PROFILE page — the saved/profile surface where the favorites/likes/posts/reposts
+// sub-tabs live (path `/@handle…`)? A single video/photo page (`/@user/video/…`) is NOT — nor is the
+// FYP (`/foryou`, `/`). Fix round 2 (#1): the alarm-resume must only ever drive a profile-shaped tab,
+// or a stale `current` from an interrupted run would let it bot-scroll an arbitrary tab the founder is
+// browsing. Same shape as content.js's isProfilePage (kept in sync).
+function isProfileUrl(url: string | undefined | null): boolean {
+  if (!url) return false;
+  let path: string;
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    return false;
+  }
+  if (!/^\/@[^/]+/.test(path)) return false; // must be a @handle page
+  return !/\/(video|photo)\//.test(path); // …but not a single video/photo permalink
+}
+
+// PROBE for a reachable PROFILE tab (no side-effects). Returns its id or null. Used ONLY by the
+// alarm-resume gate (#1): an interrupted run whose tab is now the FYP / a video must NOT be resumed
+// onto that tab.
+async function findProfileTab(): Promise<number | null> {
+  const active = (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0];
+  if (active?.id != null && isProfileUrl(active.url)) return active.id;
+  const profiles = await chrome.tabs.query({ url: "*://*.tiktok.com/@*" });
+  const hit = profiles.find((t) => isProfileUrl(t.url));
+  return hit?.id ?? null;
 }
 
 // Resolve the tab to DRIVE (an actual capture is starting — side-effects are intended here, and only
@@ -393,12 +434,35 @@ function runSupervisorEvent(event: SupervisorEvent): Promise<void> {
   return run;
 }
 
+// A founder Sync click. `start` idle-guards a genuinely LIVE run (its "don't stomp" contract). But an
+// interrupted run leaves `current` set with no live scroll — and once the alarm-resume declines it
+// (#1 non-profile tab, or #5 stale), the ONLY recovery is this click. So: if `current` is set and no
+// run is actually live (belt says idle AND the tab isn't scrolling), an explicit click means "resume
+// it" → feed `restarted` (returns capture_source for the in-flight source, resuming:true — the
+// carry-forward-1 grace re-walks its captured prefix). Otherwise `start` (begin / continue / idle).
+async function handleSyncClick(): Promise<void> {
+  const progress = await loadSupervisorProgress(await store());
+  if (progress.current != null && !supervisorRunning) {
+    const tabId = await findCaptureTab();
+    const live = tabId != null && (await isTabScrolling(tabId));
+    if (!live) {
+      await runSupervisorEvent({ kind: "restarted" });
+      return;
+    }
+  }
+  await runSupervisorEvent({ kind: "start" });
+}
+
 // Feed one event to the pure reducer, persist the new progress, then act on the returned action.
 // NEVER call directly — go through runSupervisorEvent (the mutex).
 async function runSupervisorEventUnlocked(event: SupervisorEvent): Promise<void> {
   const s = await store();
   const progress = await loadSupervisorProgress(s);
   const { progress: next, action } = nextAction(progress, event);
+  // Staleness belt (fix round 2, #5): stamp when `current` is (re-)set to a source we're about to
+  // drive, so the alarm can abandon a `current` left untouched for a day. Clear it when nothing is in
+  // flight. The reducer stays pure (no clock); the timestamp is a glue concern.
+  next.currentStartedAt = action.kind === "capture_source" ? Date.now() : next.current == null ? undefined : next.currentStartedAt;
   await s.setMeta(SUPERVISOR_META_KEY, next); // CHECKPOINT before driving — the crash-resume anchor
 
   if (action.kind === "idle") return; // a run is already in flight; do not double-drive
@@ -458,12 +522,20 @@ async function handleScrollDone(msg: ScrollDoneMsg): Promise<void> {
   if (isSource(msg.source)) {
     const status = msg.status === "done" ? "done" : "giveup";
     void runSupervisorEvent({ kind: "source_finished", source: msg.source, captured: msg.captured ?? 0, status });
+    // Fix round 2 (#3): supervisor SWEEPS do NOT auto-download. A 4-source sweep would otherwise fire
+    // 4+ full-library exports, each a base64 data:URL built in the SW — the size-fragile path P3
+    // moved schema export OFF. The data is canonical in IndexedDB; explicit export stays a separate,
+    // deliberate action (and a manual export at scale should route through the offscreen blob path,
+    // not this SW data:URL builder).
+    return;
   }
 
+  // Manual (Alt+Shift+A) run only: keep the dev auto-export.
   const recs = await (await store()).allRecords();
-  if (msg.status === "giveup") {
-    // Review fix: a giveup must not masquerade as success at this layer either. We STILL export —
-    // it's the user's data — but under a name that says incomplete, with the reason logged loudly.
+  // Fix round 2 (#4): a giveup must never export under the success filename — align to "not done"
+  // (the supervisor treats any non-"done" as giveup; this branch must too, so an unexpected status
+  // can't slip through as a clean "attic-favorites.json").
+  if (msg.status !== "done") {
     console.warn(
       `[commonplace] capture INCOMPLETE — ${msg.reason ?? "gave up after backoff"} ` +
         `(reported ${msg.captured ?? "?"} captured; exporting ${recs.length} records)`,
