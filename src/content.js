@@ -83,9 +83,16 @@ function resolveGrid() {
 let evictGrid = null;
 let evictedInGrid = 0;
 
+// A "tile" is a grid child that is (or contains) a video/photo anchor — the same anchors
+// resolveGrid keys on. Spinners, ads, skeleton placeholders and loader sentinels are NOT tiles.
+const TILE_ANCHOR_SEL = 'a[href*="/video/"], a[href*="/photo/"]';
+function isTile(el) {
+  return !!el && (el.matches?.(TILE_ANCHOR_SEL) || !!el.querySelector?.(TILE_ANCHOR_SEL));
+}
+
 // Trim the confirmed grid to the live window by removing the OLDEST (front) tiles. Returns the
-// number evicted this cycle (for the HUD's running total). Guardrail: does nothing without a
-// confirmed repeating grid.
+// number evicted this cycle (for the HUD's running total). Guardrails: does nothing without a
+// confirmed repeating grid, and never removes a child that isn't a tile.
 //
 // SAFETY — eviction can NEVER lose corpus data: capture is network-sourced (main-world intercepts
 // TikTok's own item_list responses and forwards the normalized items). A grid tile carries ZERO
@@ -98,15 +105,31 @@ function pruneGrid() {
     evictGrid = g; // new / re-rendered grid element → reset per-grid bookkeeping
     evictedInGrid = 0;
   }
-  const present = g.childElementCount;
+  // Count TILE children only — a trailing skeleton/spinner row must not inflate `present` and
+  // cause over-eviction of real tiles (the pure function's live-window math assumes tiles).
+  let present = 0;
+  for (const child of g.children) if (isTile(child)) present++;
   const total = evictedInGrid + present; // logical tiles this grid element has ever held
   const evict = tilesToEvict(total, DEFAULT_LIVE_WINDOW, evictedInGrid);
-  // `evict` is always the contiguous oldest prefix, so removing `evict.length` first-children removes
-  // exactly those tiles (= max(0, present − liveWindow) — drift-proof even if TikTok virtualized some
+  // `evict` is always the contiguous oldest prefix, so removing that many front TILES removes
+  // exactly those (= max(0, present − liveWindow) — drift-proof even if TikTok virtualized some
   // itself; see pruneWindow.ts). We keep the newest DEFAULT_LIVE_WINDOW tiles at the end.
-  for (let k = 0; k < evict.length; k++) g.firstElementChild?.remove();
-  evictedInGrid += evict.length;
-  return evict.length;
+  // RUNTIME TILE-CHECK (review fix): the pure module's guarantee assumes an append-at-end grid of
+  // tiles. Verify per removal — a non-tile front child (spinner/ad/skeleton) or a prepending/
+  // reordered grid means our positional model is wrong, so ABORT the pass rather than risk eating
+  // the newest tiles; we retry next poll cycle against fresh state.
+  let removed = 0;
+  for (let k = 0; k < evict.length; k++) {
+    const front = g.firstElementChild;
+    if (!isTile(front)) {
+      console.warn("[commonplace] eviction aborted — non-tile front child (grid reordered or decorated)");
+      break;
+    }
+    front.remove();
+    removed++;
+  }
+  evictedInGrid += removed; // advance by ACTUAL removals only, so an aborted pass never desyncs
+  return removed;
 }
 
 // ── Capture HUD ────────────────────────────────────────────────────────────────

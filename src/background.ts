@@ -152,7 +152,14 @@ async function handleItemList(msg: ItemListMsg): Promise<void> {
   // Items arrive pre-normalized AND source-tagged (sources:[source]) from the main world's
   // parseItemListEnvelope → extractItems(json, source) — identical shape/tags to the old SW-side
   // normalization, just done once, off the page thread, without cloning the raw envelope twice.
-  const incoming = msg.items ?? [];
+  // SHAPE GATE (review fix): the old SW-side extractItems implicitly guaranteed a non-empty string
+  // id (its `.filter((x) => x.id)`); now that items cross the wire pre-built, re-assert it here —
+  // an id-less item would throw inside upsertItems. Drop malformed entries, loudly.
+  const raw = msg.items ?? [];
+  const incoming = raw.filter((i) => i && typeof i.id === "string" && i.id.length > 0);
+  if (incoming.length < raw.length) {
+    console.warn(`[commonplace] dropped ${raw.length - incoming.length} malformed item(s) from ${msg.source || "?"}`);
+  }
   const s = await store();
   const { added, merged } = await s.upsertItems(incoming, new Date().toISOString());
   const count = await s.count();
