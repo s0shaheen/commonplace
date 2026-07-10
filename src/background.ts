@@ -74,6 +74,14 @@ let captureHalt: CaptureHalt | null = null;
 type CaptureNotice = { level: string; reason: string; at: string };
 let captureNotice: CaptureNotice | null = null;
 
+// FIX 4b — chrome-notification dedupe. content.js can re-raise the SAME pause level repeatedly while a
+// run flaps in and out of a pause (a captcha that momentarily clears then re-blocks). We still UPDATE
+// the popup-readable `captureNotice` each time (freshest reason wins), but we raise a NEW tray
+// notification only when the ACTIVE level changes — otherwise the tray gets spammed with duplicates.
+// The marker is cleared when a run resumes/completes (next sync_start or scroll_done), so the next
+// genuinely-new pause notifies again.
+let activeNoticeLevel: string | null = null;
+
 // A tiny self-contained icon (1×1 transparent PNG data URL) — chrome.notifications requires an
 // iconUrl and the extension ships no image asset, so we inline one rather than add a file.
 const NOTICE_ICON =
@@ -97,7 +105,11 @@ function noticeTitle(level: string): string {
 // Raise the notification + persist the notice. Best-effort: a failed notification (e.g. no permission)
 // still leaves the popup-readable notice latched, so the pause is never silent.
 function notifyCapture(level: string, reason: string): void {
+  // Always refresh the persisted, popup-readable notice (freshest reason wins).
   captureNotice = { level, reason, at: new Date().toISOString() };
+  // Dedupe the tray notification: same level still active ⇒ update-only, no second chrome notification.
+  if (activeNoticeLevel === level) return;
+  activeNoticeLevel = level;
   try {
     chrome.notifications.create(
       { type: "basic", iconUrl: NOTICE_ICON, title: noticeTitle(level), message: reason },
@@ -106,6 +118,12 @@ function notifyCapture(level: string, reason: string): void {
   } catch (e) {
     console.warn("[commonplace] notification failed:", (e as Error).message);
   }
+}
+
+// Clear the dedupe marker when a run resumes (a fresh Sync) or ends (scroll_done): the next genuinely
+// new pause then raises a tray notification again rather than being suppressed as a duplicate.
+function clearActiveNotice(): void {
+  activeNoticeLevel = null;
 }
 
 // Classify a caught storage error and, when it's a halt-class failure, latch `captureHalt` LOUDLY. A
@@ -588,6 +606,9 @@ function runSupervisorEvent(event: SupervisorEvent): Promise<void> {
 // it" → feed `restarted` (returns capture_source for the in-flight source, resuming:true — the
 // carry-forward-1 grace re-walks its captured prefix). Otherwise `start` (begin / continue / idle).
 async function handleSyncClick(): Promise<void> {
+  // A fresh Sync means the founder is (re)starting a run — clear the notification dedupe marker so the
+  // new run's first pause notifies fresh (FIX 4b).
+  clearActiveNotice();
   const progress = await loadSupervisorProgress(await store());
   if (progress.current != null && !supervisorRunning) {
     const tabId = await findCaptureTab();
@@ -666,6 +687,9 @@ async function syncStatus(): Promise<{
 }
 
 async function handleScrollDone(msg: ScrollDoneMsg): Promise<void> {
+  // The run ended (done or giveup) — clear the notification dedupe marker so a later run's first pause
+  // notifies fresh rather than being suppressed as a duplicate of this run's last pause (FIX 4b).
+  clearActiveNotice();
   // A source finished enumerating (done OR giveup — partial capture still deserves posters). Kick the
   // decoupled poster pass NOW, before cover URLs expire. Fire-and-forget; never fails the export.
   void runPosterPassNow();

@@ -154,6 +154,11 @@ export function classifyTransport(facts: TransportFacts): TransportSignal {
   // 2. Auth wall / session expiry: 401/403, or a redirect-to-login shape (a 3xx surfacing on an API
   //    call is a login/consent redirect). Both are "solve the wall", not "done" and not a plain retry.
   if (facts.status === 401 || facts.status === 403) return "challenge";
+  // A 304 Not Modified is a cache revalidation, NOT an auth/redirect wall — exclude it from the
+  // 3xx→challenge mapping so a conditional-GET revalidation never triggers a spurious captcha pause.
+  // It carries no fresh body either, so "ok" would be a false done; classify it as a transient
+  // http_error and let the glue's stall/retry ladder handle it.
+  if (facts.status === 304) return "http_error";
   if (facts.status >= 300 && facts.status < 400) return "challenge";
 
   // 3. Server / rate errors — the glue decides retry vs wait; we only classify.

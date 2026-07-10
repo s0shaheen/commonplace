@@ -17,9 +17,19 @@ let lastSource = null;
 let lastHasMore = null; // latest coerced paging signal from the message path (Task 1)
 let lastCursor = null;
 let lastTransport = null; // latest typed transport signal (§6.5) — feeds sessionRecovery + terminal gate
+let lastItemsLen = 0; // FIX 5: item count of the latest driving arrival — feeds isTerminalPage's empty-page sentinel
 let pageArrivals = 0; // monotonic count of item_list messages — autoScroll keys page_captured on ARRIVAL, not count growth
 let healthyArrivals = 0; // monotonic count of transport:"ok" arrivals — the auto-resume signal for a paused run
 let lastRequestsIssued = 0; // monotonic count of item_list requests INITIATED (from main-world) — scrollMotion's discriminator
+
+// FIX 6 — nav-window arrival absorption. runCaptureForSource arms these BEFORE navigateToSource's
+// ~1500ms sleep, so a first/only page that lands DURING the nav window is counted as THIS run's
+// arrival instead of being wiped by autoScroll's per-run reset (which used to fire only AFTER the
+// sleep). `runSignalsArmed` tells autoScroll the reset+baseline already happened; the baselines are
+// the pageArrivals/healthyArrivals counts captured at arm time (before any nav-window arrival).
+let runSignalsArmed = false;
+let runArrivalsBaseline = 0;
+let runHealthyBaseline = 0;
 // Carry-forward (2), Task 5: the source the supervisor asked THIS run to capture. Set at the start of
 // a capture run, cleared at its end. While set, only arrivals whose source matches may drive the run's
 // scroll signals — a straggler from the previous source must not inject its hasMore into this run.
@@ -53,6 +63,7 @@ window.addEventListener("message", (e) => {
     lastHasMore = coerceHasMore(e.data.hasMore);
     lastCursor = e.data.cursor ?? null;
     lastTransport = e.data.transport ?? "ok";
+    lastItemsLen = Array.isArray(e.data.items) ? e.data.items.length : 0; // FIX 5: real page item count
     if (lastTransport === "ok") healthyArrivals++;
     pageArrivals++;
   }
@@ -60,10 +71,39 @@ window.addEventListener("message", (e) => {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Find the tallest scrollable element — handles TikTok's inner/virtualized scroll container.
+// Find the tallest scrollable element — handles TikTok's inner/virtualized scroll container. Returns
+// the validated inner scroller, or NULL to mean "drive the document/window" (a document-scrolled page,
+// or a page whose inner-scroller heuristic missed). Callers must route motion through scrollTargetBy /
+// effectiveScrollTop so a null result still produces real motion (FIX 1 / SCROLL-03).
 let cachedScroller = null;
+
+// Closed-loop validation (SCROLL-03): a candidate is only trusted as the effective scroller if a tiny
+// test scrollBy actually MOVES its scrollTop — i.e. it genuinely paginates. A tall overflow:auto match
+// that doesn't move (a sidebar, a decorative rail, a not-yet-populated container) is rejected so we
+// don't drive a non-paginating element; we fall back to the window/documentElement belt instead. The
+// probe is restored to its original position so it never perturbs the run. Tries down first, then up
+// (so a scroller pinned at the bottom still validates).
+function validateScroller(el) {
+  try {
+    const before = el.scrollTop;
+    el.scrollBy(0, 6);
+    if (Math.abs(el.scrollTop - before) >= 1) {
+      el.scrollBy(0, before - el.scrollTop); // restore
+      return true;
+    }
+    el.scrollBy(0, -6);
+    if (Math.abs(el.scrollTop - before) >= 1) {
+      el.scrollBy(0, before - el.scrollTop); // restore
+      return true;
+    }
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
 function getScroller() {
-  if (cachedScroller && cachedScroller.isConnected) return cachedScroller;
+  if (cachedScroller && cachedScroller.isConnected) return cachedScroller; // validated + still attached
   let best = null;
   let bestH = 0;
   for (const el of document.querySelectorAll("div, main, section, ul")) {
@@ -75,8 +115,35 @@ function getScroller() {
       }
     }
   }
-  cachedScroller = best;
-  return best;
+  // Commit to the candidate ONLY if it passes the closed-loop test; otherwise cache null (document
+  // belt). We intentionally do NOT persist the null decision — a page whose inner scroller only becomes
+  // scrollable once its grid loads is re-resolved on a later call (the isConnected check above short-
+  // circuits once a real scroller is found and validated).
+  cachedScroller = best && validateScroller(best) ? best : null;
+  return cachedScroller;
+}
+
+// The effective scrollTop of the run's scroll target: the inner scroller's if we have one, else the
+// document/window position. Everything that reasons about position (topmostLiveTileTop, the retrigger's
+// prior-max math) reads through this so it stays correct whether we're on an inner or document scroller.
+function effectiveScrollTop(scroller) {
+  if (scroller) return scroller.scrollTop;
+  return window.scrollY || (document.scrollingElement ? document.scrollingElement.scrollTop : 0);
+}
+
+// The uniform scroll primitive (FIX 1 / §6.1). Move the resolved inner scroller (if any) AND ALSO nudge
+// the window as a belt — BOTH, exactly like the old code's unconditional `window.scrollTo(...)`. A null
+// or wrong inner scroller therefore still produces real motion (the document belt always fires), which
+// is what kept capture working when the inner-scroller heuristic missed a document-scrolled page.
+function scrollTargetBy(scroller, dy) {
+  if (scroller) {
+    try {
+      scroller.scrollBy(0, dy);
+    } catch (_) {}
+  }
+  try {
+    window.scrollBy(0, dy);
+  } catch (_) {}
 }
 
 // ── DOM tile eviction ─────────────────────────────────────────────────────────
@@ -202,54 +269,67 @@ function removeHud() {
 // sentinel leave→re-enter, and is the #1 anti-bot tell. Every motion is an incremental, jittered wheel
 // transit followed by a `scrollBy` to realize it (virtualization-safe).
 
+// Resolve the DOM element to dispatch WheelEvents at: the inner scroller if we have one, else the
+// document scrolling root (so wheel listeners / IO polyfills on a document-scrolled page still see it).
+function wheelTarget(scroller) {
+  return scroller || document.scrollingElement || document.documentElement || document.body;
+}
+
 // Incremental wheel-DOWN transit: dispatch a real WheelEvent in 3–5 sub-steps (so any wheel listeners /
-// IO polyfills see the motion) then `scrollBy` to realize it. `px` is the jittered band from the core.
+// IO polyfills see the motion) then realize it via scrollTargetBy (inner scroller + window belt, so a
+// null/wrong scroller still moves). `px` is the jittered band from the core.
 function wheelBy(scroller, px) {
-  if (!scroller || px <= 0) return;
+  if (px <= 0) return;
+  const target = wheelTarget(scroller);
   const steps = 3 + Math.floor(Math.random() * 3); // 3..5 sub-steps
   const per = px / steps;
   for (let i = 0; i < steps; i++) {
     try {
-      scroller.dispatchEvent(new WheelEvent("wheel", { deltaY: per, deltaMode: 0, bubbles: true, cancelable: true }));
+      target.dispatchEvent(new WheelEvent("wheel", { deltaY: per, deltaMode: 0, bubbles: true, cancelable: true }));
     } catch (_) {}
   }
-  scroller.scrollBy(0, px);
+  scrollTargetBy(scroller, px);
 }
 
-// The topmost LIVE tile's top offset in the scroller's content coordinate space. Eviction removes the
-// oldest tiles, so the region above this is gone — the retrigger up-nudge must not scroll into it.
-// (0 = no tile to measure → the top of the scroller is the bound; see scrollGeom.clampUpPx.)
+// The topmost LIVE tile's top offset in the effective scroll target's content coordinate space.
+// Eviction removes the oldest tiles, so the region above this is gone — the retrigger up-nudge must not
+// scroll into it. (0 = no tile to measure → the top of the content is the bound; see clampUpPx.)
 function topmostLiveTileTop(scroller) {
   const tiles = document.querySelectorAll(TILE_ANCHOR_SEL);
-  if (!tiles.length || !scroller) return 0;
+  if (!tiles.length) return 0;
   const tr = tiles[0].getBoundingClientRect();
-  const sr = scroller.getBoundingClientRect();
-  return scroller.scrollTop + (tr.top - sr.top);
+  if (scroller) {
+    const sr = scroller.getBoundingClientRect();
+    return scroller.scrollTop + (tr.top - sr.top);
+  }
+  // Document-scrolled: the tile's content-space top is (current scrollY) + (its viewport-relative top).
+  return effectiveScrollTop(scroller) + tr.top;
 }
 
 // maxSafeUpPx: clamp the core's desired up-distance so the retrigger stays above the topmost live tile
-// (never into evicted space — §6.4). The clamp arithmetic is the pure, tested scrollGeom.clampUpPx.
+// (never into evicted space — §6.4). Clamps against the CORRECT scrollTop source (inner vs document).
 function maxSafeUpPx(scroller, desiredUp) {
-  return clampUpPx(desiredUp, scroller ? scroller.scrollTop : 0, topmostLiveTileTop(scroller));
+  return clampUpPx(desiredUp, effectiveScrollTop(scroller), topmostLiveTileTop(scroller));
 }
 
 // Up-then-down re-trigger: scroll UP the clamped distance (real wheel), a brief human pause, then wheel
 // DOWN past the prior max so the sentinel leaves→re-enters and TikTok's IntersectionObserver re-fires.
+// Routes every move through scrollTargetBy so it works on a null/document scroller too (FIX 1).
 async function doRetrigger(scroller, upPx) {
-  if (!scroller) return;
-  const priorTop = scroller.scrollTop;
+  const target = wheelTarget(scroller);
+  const priorTop = effectiveScrollTop(scroller);
   if (upPx > 0) {
     try {
-      scroller.dispatchEvent(new WheelEvent("wheel", { deltaY: -upPx, deltaMode: 0, bubbles: true, cancelable: true }));
+      target.dispatchEvent(new WheelEvent("wheel", { deltaY: -upPx, deltaMode: 0, bubbles: true, cancelable: true }));
     } catch (_) {}
-    scroller.scrollBy(0, -upPx);
+    scrollTargetBy(scroller, -upPx);
   }
   await sleep(120 + Math.random() * 180); // brief pause between the up and the down (human cadence)
   const overshoot = 200 + Math.random() * 220; // land PAST the prior max so the sentinel re-enters
   try {
-    scroller.dispatchEvent(new WheelEvent("wheel", { deltaY: upPx + overshoot, deltaMode: 0, bubbles: true, cancelable: true }));
+    target.dispatchEvent(new WheelEvent("wheel", { deltaY: upPx + overshoot, deltaMode: 0, bubbles: true, cancelable: true }));
   } catch (_) {}
-  scroller.scrollBy(0, priorTop + overshoot - scroller.scrollTop);
+  scrollTargetBy(scroller, priorTop + overshoot - effectiveScrollTop(scroller));
 }
 
 // Wait up to `maxMs` for a new arrival (poll storage.count / pageArrivals), returning EARLY the moment
@@ -337,17 +417,19 @@ function detectCaptchaContainer() {
   return false;
 }
 
-// "My input isn't landing." Record scrollTop, attempt a small real scroll, re-read after a tick; if a
-// blocking layer is present AND scrollTop didn't move, input is being swallowed (composes with §6.1's
-// closed-loop motion check — this routes to a pause BEFORE it ever reads as a stall).
+// "My input isn't landing." Record the effective scrollTop, attempt a small real scroll, re-read after
+// a tick; if a blocking layer is present AND the position didn't move, input is being swallowed
+// (composes with §6.1's closed-loop motion check — this routes to a pause BEFORE it ever reads as a
+// stall). Works on a null/document scroller via effectiveScrollTop + scrollTargetBy (FIX 1).
 async function probeInputSwallowed(scroller) {
-  const before = scroller.scrollTop;
+  const before = effectiveScrollTop(scroller);
+  const target = wheelTarget(scroller);
   try {
-    scroller.dispatchEvent(new WheelEvent("wheel", { deltaY: 60, deltaMode: 0, bubbles: true, cancelable: true }));
-    scroller.scrollBy(0, 60);
+    target.dispatchEvent(new WheelEvent("wheel", { deltaY: 60, deltaMode: 0, bubbles: true, cancelable: true }));
+    scrollTargetBy(scroller, 60);
   } catch (_) {}
   await sleep(60);
-  return Math.abs(scroller.scrollTop - before) < 2;
+  return Math.abs(effectiveScrollTop(scroller) - before) < 2;
 }
 
 async function gatherOverlayFacts(scroller) {
@@ -357,7 +439,8 @@ async function gatherOverlayFacts(scroller) {
   const buttonLabels = el ? collectButtonLabels(el) : [];
   const captchaContainerPresent = detectCaptchaContainer();
   let inputSwallowed = false;
-  if (hasBlockingLayer && scroller) inputSwallowed = await probeInputSwallowed(scroller);
+  // Probe on ANY blocking layer — a null scroller no longer skips the probe (the document belt moves).
+  if (hasBlockingLayer) inputSwallowed = await probeInputSwallowed(scroller);
   return { hasBlockingLayer, overlayText, buttonLabels, captchaContainerPresent, inputSwallowed, el };
 }
 
@@ -379,10 +462,38 @@ function clickByLabel(container, label) {
   return false;
 }
 
+// FIX 4a — cap on consecutive overlay ACTIONS taken against the same unresolved overlay before we
+// stop acting and enter one sticky pause. Bounds two churn loops: a snooze/dismiss whose click never
+// clears the layer (would loop forever at ~1s), and a persistent captcha-container false-positive that
+// flaps enter/exit pause. Past the cap we hand it to the human and resume only on a healthy arrival.
+const OVERLAY_CHURN_CAP = 5;
+const OVERLAY_CHURN_REASON = "unresolved overlay — needs you (capture resumes when a page loads again)";
+
 // Fixed pause reasons for the two paths the pure cores don't supply one for.
 const CHALLENGE_REASON_OVERLAY = "a captcha is blocking capture — solve it in the TikTok tab; capture resumes automatically";
 const FLAGGED_PAUSE_REASON =
   "TikTok returned empty pages after a refresh — the session looks flagged; try again shortly or solve any challenge in the tab";
+
+// FIX 6 — clear the PREVIOUS source's straggler paging signals. Split out of autoScroll so
+// runCaptureForSource can call it BEFORE navigateToSource (arming the run) instead of after the nav
+// sleep, where it would wipe a first page that arrived during the nav window.
+function resetRunSignals() {
+  lastHasMore = null;
+  lastCursor = null;
+  lastTransport = null;
+  lastItemsLen = 0;
+}
+
+// Arm a supervisor run's signals+baselines BEFORE navigating to the source. Clears the previous
+// source's stragglers, then baselines the arrival counters to NOW — so any page that lands during the
+// ~1500ms nav window counts as this run's arrival (it's above the baseline) rather than being reset
+// away. autoScroll sees `runSignalsArmed` and skips its own reset so those fresh signals survive.
+function armRunSignals() {
+  resetRunSignals();
+  runArrivalsBaseline = pageArrivals;
+  runHealthyBaseline = healthyArrivals;
+  runSignalsArmed = true;
+}
 
 let scrolling = false;
 // autoScroll drives ONE source to completion. `source` (Task 5) tags the run for carry-forward (2)'s
@@ -401,11 +512,22 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   // source (the exact path Task 5's supervisor drives) would read stale hasMore:false + a
   // pre-existing count as an instant `done` at zero pages — the very false-completion this task
   // exists to kill.
-  lastHasMore = null;
-  lastCursor = null;
-  lastTransport = null;
-  let arrivalsSeen = pageArrivals;
-  const startHealthy = healthyArrivals; // baseline for the paused-run auto-resume watch
+  //
+  // FIX 6: a supervisor run already did this reset + baseline in runCaptureForSource BEFORE the nav
+  // window (runSignalsArmed), so a first/only page that arrived during navigateToSource's sleep is
+  // preserved (it sits above the pre-nav baseline). We must NOT re-wipe it here. A manual/un-armed run
+  // resets + baselines now, as before. Either way the ORIGINAL intent holds — the previous source's
+  // stale hasMore:false is cleared (armRunSignals/resetRunSignals) and the arrival filter
+  // (arrivalDrivesRun) blocks any foreign straggler from injecting into this run.
+  if (runSignalsArmed) {
+    runSignalsArmed = false; // consume the pre-nav arm; signals + baselines are already set
+  } else {
+    resetRunSignals();
+    runArrivalsBaseline = pageArrivals;
+    runHealthyBaseline = healthyArrivals;
+  }
+  let arrivalsSeen = runArrivalsBaseline;
+  let healthyArrivalsSeen = runHealthyBaseline; // FIX 3: mirror arrivalsSeen for the HEALTHY-only arrival gate
   // Baseline against the CURRENT persisted total: a pre-existing count is not growth.
   const { count: initialCount = 0 } = await chrome.storage.local.get("count");
   let prevCount = initialCount;
@@ -455,6 +577,11 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   evictGrid = null;
   evictedInGrid = 0;
   let evictedTotal = 0;
+  // FIX 4a — overlay-action churn accounting (run-local). `overlayChurn` counts consecutive iterations
+  // that ACT on the same unresolved overlay kind; reset to 0 on a healthy arrival OR when the overlay
+  // genuinely clears. Past OVERLAY_CHURN_CAP → one sticky pause.
+  let overlayChurn = 0;
+  let lastOverlaySig = null;
 
   // Enter a user-visible, resumable PAUSE (CHAL-UX): freeze the giveup ladder (we stop feeding the
   // reducer while paused), notify the SW (chrome notification + popup reason), and watch for recovery.
@@ -499,54 +626,106 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     const overlay = await gatherOverlayFacts(scroller);
     const verdict = classifyOverlay(overlay);
     const oa = verdict.action;
-    if (oa.kind === "snooze") {
-      const clicked = clickByLabel(overlay.el, oa.buttonLabel);
-      snoozeCount++;
-      console.log(`[commonplace] screen-time reminder — snoozed via "${oa.buttonLabel}" (${clicked ? "clicked" : "no button found"}); snooze #${snoozeCount}`);
-      await sleep(1000); // let the modal dismiss; never rapid-click
-      continue;
-    }
-    if (oa.kind === "dismiss") {
-      const clicked = clickByLabel(overlay.el, oa.buttonLabel);
-      console.log(`[commonplace] benign overlay (${verdict.overlay}) — dismissed via "${oa.buttonLabel}" (${clicked ? "clicked" : "no button found"})`);
-      await sleep(1000);
-      continue;
-    }
-    if (oa.kind === "challenge") {
-      await enterPause("challenge", CHALLENGE_REASON_OVERLAY, { overlayTriggered: true });
-      continue;
-    }
-    if (oa.kind === "pause_notify") {
-      await enterPause("overlay", oa.reason, { overlayTriggered: true });
-      continue;
+    if (oa.kind !== "none") {
+      // FIX 4a — churn accounting. Acting on the SAME overlay kind again means our last action didn't
+      // clear it; count that. A different kind (or the first sighting) resets the count to 1.
+      if (verdict.overlay === lastOverlaySig) overlayChurn++;
+      else {
+        overlayChurn = 1;
+        lastOverlaySig = verdict.overlay;
+      }
+      if (overlayChurn > OVERLAY_CHURN_CAP) {
+        // Bounded out: our snooze/dismiss/challenge/pause action keeps not resolving this overlay (a
+        // dead click target, or a captcha-container false-positive that flaps). Stop acting and enter
+        // ONE sticky pause that resumes ONLY on a healthy arrival (no overlayTriggered — the flapping
+        // overlay signal must not un-pause it).
+        console.warn(`[commonplace] overlay churn cap hit (${verdict.overlay}, ${overlayChurn}×) — sticky pause until a page returns`);
+        await enterPause("overlay", OVERLAY_CHURN_REASON);
+        overlayChurn = 0;
+        lastOverlaySig = null;
+        continue;
+      }
+      if (oa.kind === "snooze") {
+        const clicked = clickByLabel(overlay.el, oa.buttonLabel);
+        snoozeCount++;
+        console.log(`[commonplace] screen-time reminder — snoozed via "${oa.buttonLabel}" (${clicked ? "clicked" : "no button found"}); snooze #${snoozeCount}`);
+        await sleep(1000); // let the modal dismiss; never rapid-click
+        continue;
+      }
+      if (oa.kind === "dismiss") {
+        const clicked = clickByLabel(overlay.el, oa.buttonLabel);
+        console.log(`[commonplace] benign overlay (${verdict.overlay}) — dismissed via "${oa.buttonLabel}" (${clicked ? "clicked" : "no button found"})`);
+        await sleep(1000);
+        continue;
+      }
+      if (oa.kind === "challenge") {
+        await enterPause("challenge", CHALLENGE_REASON_OVERLAY, { overlayTriggered: true });
+        continue;
+      }
+      if (oa.kind === "pause_notify") {
+        await enterPause("overlay", oa.reason, { overlayTriggered: true });
+        continue;
+      }
+    } else {
+      // No actionable overlay this cycle → the overlay genuinely cleared; reset churn accounting.
+      overlayChurn = 0;
+      lastOverlaySig = null;
     }
 
     // ── 2. EVICT the oldest tiles down to the live window (§2.3 memory fix). Network-sourced capture
     //    means this can never lose data.
     evictedTotal += pruneGrid();
 
-    // ── 3. MOTION DECISION — the pure scrollMotion reducer picks the physical command.
+    // ── 3. MOTION DECISION — drive off HEALTHY arrivals only (FIX 3). An error/challenge/empty stream
+    //    still bumps pageArrivals, but it must NOT reset the motion stall ladder — only a transport:"ok"
+    //    page is real progress. `arrived` (any arrival) is still tracked for the recovery classifier.
     const arrived = pageArrivals > arrivalsSeen;
     arrivalsSeen = pageArrivals;
+    const healthyArrived = healthyArrivals > healthyArrivalsSeen;
+    healthyArrivalsSeen = healthyArrivals;
     const mStep = stepMotion(
       motionState,
-      { now: Date.now(), arrivedSinceLast: arrived, requestsIssued: lastRequestsIssued, dwellElapsedMs },
+      { now: Date.now(), arrivedSinceLast: healthyArrived, requestsIssued: lastRequestsIssued, dwellElapsedMs },
       { rng: Math.random },
     );
     motionState = mStep.state;
     const command = mStep.command;
 
-    // ── 4. FEED scrollState (the completion reducer) — only on ARRIVAL or a CONFIRMED stall/backoff.
+    // ── 4. RECOVERY SIGNAL — classify the transport BEFORE feeding scrollState, so a recovery-owned
+    //    non-healthy arrival (challenge / empty_ok / offline) can SUPPRESS the giveup-ratcheting tick
+    //    below. A persistent http_error / api_error carries NO recovery signal, so it rides the motion
+    //    stall→backoff→tick→giveup path to an honest incomplete. This is what stops a challenge arrival
+    //    at stall=7 from flipping scrollState to (absorbing) giveup before the pause can even run.
+    let recSignal = null;
+    if (navigator.onLine === false) recSignal = "offline";
+    else if (healthyArrived) recSignal = "healthy_arrival"; // resets the recovery streak
+    else if (arrived) {
+      if (lastTransport === "empty_ok") recSignal = "empty_ok";
+      else if (lastTransport === "challenge") recSignal = "challenge";
+      else if (lastTransport === "offline") recSignal = "offline";
+      // http_error / api_error → no recovery signal; the motion stall→backoff→giveup path owns them.
+    }
+
+    // ── 5. FEED scrollState (the completion reducer). page_captured ONLY on a HEALTHY arrival (with the
+    //    isTerminalPage transport gate); otherwise a `tick` on a CONFIRMED stall/backoff — but NOT when
+    //    a recovery signal owns this cycle (a challenge/empty/offline arrival must never touch the
+    //    giveup ladder; the recovery pause below handles it). Silence stalls and a persistent
+    //    http_error (recSignal == null) still tick, so genuine backpressure still reaches an honest giveup.
     const { count = 0 } = await chrome.storage.local.get("count");
     let action = null;
-    if (arrived) {
+    if (healthyArrived) {
       // `done` fires ONLY on a genuine terminal per a HEALTHY transport (isTerminalPage). A hasMore:false
-      // riding a challenge/empty transport is NOT done — the transport gate inside isTerminalPage rejects it.
-      const terminal = isTerminalPage({ items: [], hasMore: lastHasMore ?? true, cursor: lastCursor }, lastTransport ?? "ok");
+      // riding a challenge/empty transport is NOT done — the transport gate inside isTerminalPage rejects
+      // it. FIX 5: pass the REAL page item count so the `cursor:"-1" && items.length===0` sentinel keeps
+      // its "empty page only" requirement (an empty Array of length lastItemsLen), never vacuously done.
+      const terminal = isTerminalPage(
+        { items: new Array(lastItemsLen), hasMore: lastHasMore ?? true, cursor: lastCursor },
+        lastTransport ?? "ok",
+      );
       const stepped = scrollStep(st, { kind: "page_captured", newCount: count, hasMore: terminal ? false : true, cursor: lastCursor }, deps);
       st = stepped.state;
       action = stepped.action;
-    } else if (command.kind === "stall" || command.kind === "backoff") {
+    } else if ((command.kind === "stall" || command.kind === "backoff") && recSignal == null) {
       // scrollMotion exhausted its lazy-load ladder (confirmed stall) or diagnosed server backpressure
       // (a request fired, nothing came back) → NOW hand scrollState a `tick`. A `down`/`retrigger` with
       // no arrival does NOT step scrollState — motion is still trying, no stall accrues (the SCROLL-01 fix).
@@ -555,23 +734,29 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       action = stepped.action;
     }
     prevCount = Math.max(prevCount, count);
-
-    // ── 5. SESSION-RECOVERY on the transport signal (independent of scrollState). A pause here freezes
-    //    the giveup ladder and takes precedence over any scrollState wait/giveup this cycle.
-    let recSignal = null;
-    if (navigator.onLine === false) recSignal = "offline";
-    else if (arrived) {
-      if (lastTransport === "ok") recSignal = "healthy_arrival";
-      else if (lastTransport === "empty_ok") recSignal = "empty_ok";
-      else if (lastTransport === "challenge") recSignal = "challenge";
-      else if (lastTransport === "offline") recSignal = "offline";
-      // http_error / api_error carry no recovery signal — scrollState's backoff→giveup owns them.
+    // FIX 4a: a healthy page proves whatever was blocking is gone — reset overlay-churn accounting.
+    if (healthyArrived) {
+      overlayChurn = 0;
+      lastOverlaySig = null;
     }
+
+    // ── 6. APPLY SESSION-RECOVERY (recSignal computed in step 4). A pause here freezes the giveup
+    //    ladder and takes precedence over any scrollState wait/giveup this cycle.
     if (recSignal) {
       const r = stepRecovery(rec, recSignal, { now: Date.now() });
       rec = r.state;
       const rc = r.command;
       if (rc.kind === "reload") {
+        // FIX 7 — the auto-`reload` recovery rung is SUPERVISOR-ONLY. A manual (Alt+Shift+A, source:null)
+        // run has no persisted `current` checkpoint and no supervisor to re-drive it after a
+        // location.reload(), so a bare reload would make the run vanish silently and could reload-loop
+        // every retry. Instead, report an HONEST reported-incomplete and end the run.
+        if (!source) {
+          console.warn("[commonplace] flagged session on a MANUAL run — not reloading; reporting incomplete (reload + retry yourself)");
+          st = { ...st, status: "giveup", reason: "flagged session — reload the page and retry" };
+          running = false;
+          break; // fall through to scroll_done with giveup + reason
+        }
         if (reloadedThisRun) {
           // Already spent this Sync attempt's one reload (across a prior page-load) and it's still
           // empty → escalate to the challenge pause rather than reload-loop a flagged session.
@@ -579,7 +764,7 @@ async function autoScroll({ source = null, resuming = false } = {}) {
           continue;
         }
         reloadedThisRun = true;
-        if (source) await chrome.storage.local.set({ captureReloadedSource: source });
+        await chrome.storage.local.set({ captureReloadedSource: source });
         console.warn("[commonplace] flagged session (empty pages after a refresh) — reloading ONCE to recover (the founder's manual fix, automated)");
         location.reload(); // page navigates away; the supervisor's `current` checkpoint re-drives this run after reload
         return;
@@ -592,7 +777,7 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       // rc.kind === "continue": nothing to do.
     }
 
-    // ── 6. ACT on the scrollState completion action (after recovery — a pause already `continue`d).
+    // ── 7. ACT on the scrollState completion action (after recovery — a pause already `continue`d).
     if (action) {
       if (action.kind === "done") {
         running = false;
@@ -631,14 +816,16 @@ async function autoScroll({ source = null, resuming = false } = {}) {
 
     if (!running) break; // done / giveup — skip motion + dwell, fall through to scroll_done
 
-    // ── 7. REALIZE the physical motion (nothing on a conceded stall / backoff — the wait paces it).
+    // ── 8. REALIZE the physical motion (nothing on a conceded stall / backoff — the wait paces it).
+    //    Both wheelBy and doRetrigger route through scrollTargetBy, so a null/document scroller still
+    //    moves (FIX 1) — the belt that kept capture working when the inner-scroller heuristic missed.
     if (command.kind === "down") {
       wheelBy(scroller, command.px);
     } else if (command.kind === "retrigger") {
       await doRetrigger(scroller, maxSafeUpPx(scroller, command.upPx));
     }
 
-    // ── 8. DWELL / WAIT. On a scrollState `wait` (backoff) sleep exactly that; otherwise wait up to the
+    // ── 9. DWELL / WAIT. On a scrollState `wait` (backoff) sleep exactly that; otherwise wait up to the
     //    human dwell for a new arrival, returning early once content lands. The ACTUAL elapsed is fed
     //    to stepMotion next cycle as dwellElapsedMs.
     if (waiting) {
@@ -789,6 +976,12 @@ async function runCaptureForSource(source, resuming) {
   captureRunActive = true;
   try {
     activeRunSource = source ?? null; // arm the filter BEFORE nav so the first arrival is already gated
+    // FIX 6: reset the previous source's stragglers AND baseline the arrival counters NOW, before the
+    // nav window — so a first/only page that lands during navigateToSource's sleep is preserved as this
+    // run's arrival (autoScroll then skips its own reset via runSignalsArmed). The arrival filter
+    // (arrivalDrivesRun, source-gated) still blocks a foreign straggler, so this can't read the
+    // previous source's stale hasMore:false.
+    armRunSignals();
     const navigated = await navigateToSource(source);
     // Fix round 2 (#1, leg a): if a supervisor-driven run can't reach the source's sub-tab AND we're
     // not even on a profile page (e.g. an alarm resumed onto the FYP or a video the founder is
@@ -809,6 +1002,7 @@ async function runCaptureForSource(source, resuming) {
         source,
       });
       activeRunSource = null;
+      runSignalsArmed = false; // this run bailed before autoScroll — release the arm we set above
       return;
     }
     await autoScroll({ source, resuming });

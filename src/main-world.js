@@ -100,27 +100,32 @@ import { parseItemListEnvelope, classifyTransport } from "./lib/capture/intercep
   };
   XMLHttpRequest.prototype.send = function (...a) {
     if (this.__atticUrl && TARGET.test(this.__atticUrl)) bumpRequestIssued(); // INITIATED
-    this.addEventListener("load", function () {
-      try {
-        if (this.__atticUrl && TARGET.test(this.__atticUrl)) {
-          const text = this.responseText || "";
-          let contentType = "";
-          try {
-            contentType = this.getResponseHeader("content-type") || "";
-          } catch (_) {}
-          const transport = classifyTransport({
-            ok: this.status >= 200 && this.status < 300,
-            status: this.status,
-            contentType,
-            bodyText: text,
-            online: navigator.onLine,
-          });
-          emit(this.__atticUrl, transport, text);
-        }
-      } catch (_) {}
-    });
+    // Bind the `load` listener ONCE per XHR object. A reused XHR (open→send more than once) would
+    // otherwise attach a fresh listener on every send and double-emit each response; a single
+    // listener re-reads `this.__atticUrl`/`this.status` at fire time, so it stays correct across
+    // reuse (open() refreshes __atticUrl) while emitting exactly once per completed request.
+    if (!this.__atticBound) {
+      this.__atticBound = true;
+      this.addEventListener("load", function () {
+        try {
+          if (this.__atticUrl && TARGET.test(this.__atticUrl)) {
+            const text = this.responseText || "";
+            let contentType = "";
+            try {
+              contentType = this.getResponseHeader("content-type") || "";
+            } catch (_) {}
+            const transport = classifyTransport({
+              ok: this.status >= 200 && this.status < 300,
+              status: this.status,
+              contentType,
+              bodyText: text,
+              online: navigator.onLine,
+            });
+            emit(this.__atticUrl, transport, text);
+          }
+        } catch (_) {}
+      });
+    }
     return origSend.apply(this, a);
   };
-
-  console.log("[attic-spike] MAIN-world interceptor installed");
 })();

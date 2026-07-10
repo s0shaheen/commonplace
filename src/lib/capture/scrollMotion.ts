@@ -20,7 +20,17 @@
 // when an `item_list` request is *initiated*. `lastRequestCount` snapshots that count at the last
 // ARRIVAL; a later no-arrival step with `requestsIssued > lastRequestCount` means a request went
 // out and came back empty (backpressure), while `requestsIssued === lastRequestCount` means no
-// request even fired (self-inflicted — retrigger can fix it).
+// request even fired (self-inflicted — the down/retrigger ladder can fix it).
+//
+// THE NO-ARRIVAL LADDER (review fix — the "under-travel" bug). A no-arrival, no-new-request cycle
+// has TWO distinct causes that the old design conflated into a single `retrigger`:
+//   1. the sentinel simply hasn't been REACHED yet — the ordinary case: keep travelling DOWN (plain
+//      `down`, up to MAX_DOWN_STEPS) until it enters the viewport and fires, then a page arrives.
+//   2. the sentinel WAS reached and already fired once but won't re-fire (edge-triggered IO that
+//      never saw a leave→re-enter) — a `retrigger` (up-then-down) jogs it, up to MAX_RETRIGGERS.
+// Issuing ONLY retriggers (net ~200-420px each) never travels far enough to reach a not-yet-hit
+// sentinel, so after MAX_RETRIGGERS the run stalled WITHOUT enough travel to even reach the next
+// page. The ladder is therefore: down (reach it) → retrigger (re-fire it) → stall.
 //
 // PURE: `rng` is injected (never drawn from a global RNG), `now` is passed in (never read from a
 // global clock), and there is NO DOM access — the glue owns wheel dispatch, up-distance clamping,
@@ -39,6 +49,10 @@ export const DOWN_PX_MAX = 900;
 export const UP_PX_MIN = 300;
 export const UP_PX_MAX = 600;
 
+/** Plain-down steps to travel (to REACH a not-yet-hit sentinel) per no-arrival episode BEFORE we
+ *  fall through to re-triggering an already-fired one. Reset to 0 on arrival. */
+export const MAX_DOWN_STEPS = 4;
+
 /** Self-inflicted-stall retriggers to attempt per no-arrival episode before conceding a `stall`. */
 export const MAX_RETRIGGERS = 3;
 
@@ -48,6 +62,8 @@ export interface MotionState {
   phase: MotionPhase;
   /** Consecutive step() calls with no new arrival. Reset to 0 on arrival. */
   noArrivalStreak: number;
+  /** Plain-down steps issued in the CURRENT no-arrival episode (to reach the sentinel). Reset on arrival. */
+  downSteps: number;
   /** Retriggers tried in the CURRENT no-arrival episode. Reset to 0 on arrival. */
   retriggerAttempts: number;
   /** `requestsIssued` snapshot at the last ARRIVAL — the discriminator baseline (see file header). */
@@ -91,6 +107,7 @@ export function initialMotionState(now: number): MotionState {
   return {
     phase: "stepping",
     noArrivalStreak: 0,
+    downSteps: 0,
     retriggerAttempts: 0,
     lastRequestCount: 0,
     updatedAt: now,
@@ -108,13 +125,15 @@ export function stepMotion(
 ): { state: MotionState; command: MotionCommand } {
   const { now, arrivedSinceLast, requestsIssued } = inputs;
 
-  // 1. Arrival → progress. Reset the episode (streak + retriggers), keep stepping DOWN, and snapshot
-  //    the request baseline so the next no-arrival step can tell "a request fired" from "none did".
+  // 1. Arrival → progress. Reset the episode (streak + downSteps + retriggers), keep stepping DOWN,
+  //    and snapshot the request baseline so the next no-arrival step can tell "a request fired" from
+  //    "none did".
   if (arrivedSinceLast) {
     return {
       state: {
         phase: "stepping",
         noArrivalStreak: 0,
+        downSteps: 0,
         retriggerAttempts: 0,
         lastRequestCount: requestsIssued,
         updatedAt: now,
@@ -129,7 +148,8 @@ export function stepMotion(
   // 2. A request WAS initiated since the last arrival but nothing came back → genuine server
   //    backpressure (empty page / 429 / throttle). Retriggering can't fix a server, so `backoff`.
   //    `lastRequestCount` is deliberately NOT advanced here: the outstanding request stays
-  //    unanswered, so subsequent steps keep reading as backpressure (never flip to retrigger).
+  //    unanswered, so subsequent steps keep reading as backpressure (never flip to the down/retrigger
+  //    ladder). downSteps is untouched — a request fired, so this is not a self-inflicted no-travel.
   if (requestsIssued > state.lastRequestCount) {
     return {
       state: { ...state, phase: "stalled", noArrivalStreak, updatedAt: now },
@@ -137,9 +157,25 @@ export function stepMotion(
     };
   }
 
-  // 3. No arrival AND no request even fired (requestsIssued === lastRequestCount) → self-inflicted
-  //    lazy-load stall: our motion didn't re-arm the sentinel. Try an up-then-down retrigger until
-  //    the budget is spent, then concede a confirmed `stall` for `scrollState` to bound as a tick.
+  // 3. No arrival AND no request even fired (requestsIssued === lastRequestCount) → self-inflicted:
+  //    our motion neither reached a new sentinel nor re-armed the last one. Ladder (see file header):
+  //    (a) keep travelling DOWN — the ordinary case is a sentinel we simply haven't REACHED yet;
+  //        plain-down actually advances toward it (a retrigger's net ~200-420px does not).
+  if (state.downSteps < MAX_DOWN_STEPS) {
+    return {
+      state: {
+        ...state,
+        phase: "stepping",
+        noArrivalStreak,
+        downSteps: state.downSteps + 1,
+        updatedAt: now,
+      },
+      command: { kind: "down", px: jitterPx(deps.rng(), DOWN_PX_MIN, DOWN_PX_MAX) },
+    };
+  }
+
+  //    (b) travelled the whole down budget with no page ⇒ the sentinel likely already FIRED and won't
+  //        re-fire; jog it with an up-then-down retrigger until that budget is spent too.
   if (state.retriggerAttempts < MAX_RETRIGGERS) {
     return {
       state: {
@@ -153,6 +189,7 @@ export function stepMotion(
     };
   }
 
+  //    (c) both budgets spent ⇒ a confirmed `stall` for `scrollState` to bound as a tick.
   return {
     state: { ...state, phase: "stalled", noArrivalStreak, updatedAt: now },
     command: { kind: "stall" },

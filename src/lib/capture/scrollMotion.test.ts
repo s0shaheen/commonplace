@@ -10,6 +10,7 @@ import {
   DOWN_PX_MAX,
   UP_PX_MIN,
   UP_PX_MAX,
+  MAX_DOWN_STEPS,
   MAX_RETRIGGERS,
   type MotionState,
   type MotionInputs,
@@ -30,11 +31,12 @@ function inputs(over: Partial<MotionInputs> = {}): MotionInputs {
 }
 
 describe("motion constants (pinned so review can check the researched bands)", () => {
-  it("pins the down/up bands and the retrigger budget", () => {
+  it("pins the down/up bands and the down/retrigger budgets", () => {
     expect(DOWN_PX_MIN).toBe(400);
     expect(DOWN_PX_MAX).toBe(900);
     expect(UP_PX_MIN).toBe(300);
     expect(UP_PX_MAX).toBe(600);
+    expect(MAX_DOWN_STEPS).toBe(4);
     expect(MAX_RETRIGGERS).toBe(3);
   });
 });
@@ -44,6 +46,7 @@ describe("initialMotionState", () => {
     expect(initialMotionState(4242)).toEqual({
       phase: "stepping",
       noArrivalStreak: 0,
+      downSteps: 0,
       retriggerAttempts: 0,
       lastRequestCount: 0,
       updatedAt: 4242,
@@ -57,6 +60,7 @@ describe("stepMotion — arrival branch (progress)", () => {
     const state: MotionState = {
       phase: "retriggering",
       noArrivalStreak: 5,
+      downSteps: 3,
       retriggerAttempts: 2,
       lastRequestCount: 3,
       updatedAt: 0,
@@ -72,6 +76,7 @@ describe("stepMotion — arrival branch (progress)", () => {
     expect(next).toEqual({
       phase: "stepping",
       noArrivalStreak: 0,
+      downSteps: 0, // reset on arrival
       retriggerAttempts: 0,
       lastRequestCount: 7, // snapshotted from requestsIssued
       updatedAt: 2000,
@@ -100,19 +105,36 @@ describe("PACE-03 — the down delta is genuine full-range jitter, never a fixed
   });
 });
 
-describe("stepMotion — self-inflicted stall (no arrival, no new request) ⇒ retrigger×N then stall", () => {
-  it("emits exactly MAX_RETRIGGERS retriggers then a stall; streak climbs; attempts increment", () => {
+describe("stepMotion — self-inflicted stall (no arrival, no new request) ⇒ down×N → retrigger×N → stall", () => {
+  it("emits MAX_DOWN_STEPS downs, then MAX_RETRIGGERS retriggers, then a stall; streak climbs monotonically", () => {
     // After an arrival at requestsIssued=5, lastRequestCount=5. requestsIssued stays 5 (no request
-    // fires) across the whole no-arrival episode ⇒ self-inflicted branch every step.
+    // fires) across the whole no-arrival episode ⇒ self-inflicted branch every step. The ladder now
+    // travels DOWN first (to REACH a not-yet-hit sentinel) before it retriggers (to re-fire a fired one).
     let state: MotionState = {
       phase: "stepping",
       noArrivalStreak: 0,
+      downSteps: 0,
       retriggerAttempts: 0,
       lastRequestCount: 5,
       updatedAt: 0,
     };
     const staticInputs = inputs({ arrivedSinceLast: false, requestsIssued: 5 });
 
+    // Rung (a): plain-down travel, up to MAX_DOWN_STEPS. Each down draws rng from the DOWN band.
+    for (let n = 1; n <= MAX_DOWN_STEPS; n++) {
+      const { state: next, command } = stepMotion(state, staticInputs, { rng: seq([0.5]) });
+      expect(command.kind).toBe("down");
+      const px = (command as { px: number }).px;
+      expect(px).toBeGreaterThanOrEqual(DOWN_PX_MIN);
+      expect(px).toBeLessThanOrEqual(DOWN_PX_MAX);
+      expect(next.phase).toBe("stepping");
+      expect(next.downSteps).toBe(n);
+      expect(next.retriggerAttempts).toBe(0); // retriggers untouched until the down budget is spent
+      expect(next.noArrivalStreak).toBe(n);
+      state = next;
+    }
+
+    // Rung (b): down budget spent ⇒ retrigger, up to MAX_RETRIGGERS. Each draws rng from the UP band.
     for (let n = 1; n <= MAX_RETRIGGERS; n++) {
       const { state: next, command } = stepMotion(state, staticInputs, { rng: seq([0.5]) });
       expect(command.kind).toBe("retrigger");
@@ -120,23 +142,26 @@ describe("stepMotion — self-inflicted stall (no arrival, no new request) ⇒ r
       expect(upPx).toBeGreaterThanOrEqual(UP_PX_MIN);
       expect(upPx).toBeLessThanOrEqual(UP_PX_MAX); // never larger than UP_PX_MAX (glue clamps down further)
       expect(next.phase).toBe("retriggering");
+      expect(next.downSteps).toBe(MAX_DOWN_STEPS); // frozen at the cap
       expect(next.retriggerAttempts).toBe(n);
-      expect(next.noArrivalStreak).toBe(n);
+      expect(next.noArrivalStreak).toBe(MAX_DOWN_STEPS + n);
       state = next;
     }
 
-    // Budget spent ⇒ the exact boundary: a confirmed stall (no rng needed on this branch).
+    // Rung (c): both budgets spent ⇒ the exact boundary: a confirmed stall (no rng on this branch).
     const { state: after, command } = stepMotion(state, staticInputs, { rng: seq([]) });
     expect(command).toEqual({ kind: "stall" });
     expect(after.phase).toBe("stalled");
+    expect(after.downSteps).toBe(MAX_DOWN_STEPS); // frozen, not incremented past the cap
     expect(after.retriggerAttempts).toBe(MAX_RETRIGGERS); // frozen, not incremented past the cap
-    expect(after.noArrivalStreak).toBe(MAX_RETRIGGERS + 1);
+    expect(after.noArrivalStreak).toBe(MAX_DOWN_STEPS + MAX_RETRIGGERS + 1);
   });
 
-  it("upPx is band-clamped at rng=1 (never exceeds UP_PX_MAX)", () => {
+  it("first no-arrival step with the down budget spent ⇒ retrigger, band-clamped at rng=1 (never exceeds UP_PX_MAX)", () => {
     const state: MotionState = {
       phase: "stepping",
       noArrivalStreak: 0,
+      downSteps: MAX_DOWN_STEPS, // down budget already spent ⇒ next self-inflicted step retriggers
       retriggerAttempts: 0,
       lastRequestCount: 5,
       updatedAt: 0,
@@ -144,12 +169,28 @@ describe("stepMotion — self-inflicted stall (no arrival, no new request) ⇒ r
     const { command } = stepMotion(state, inputs({ requestsIssued: 5 }), { rng: seq([1]) });
     expect(command).toEqual({ kind: "retrigger", upPx: UP_PX_MAX });
   });
+
+  it("first no-arrival step of a fresh episode ⇒ a plain DOWN (reach the sentinel), band-clamped", () => {
+    const state: MotionState = {
+      phase: "stepping",
+      noArrivalStreak: 0,
+      downSteps: 0,
+      retriggerAttempts: 0,
+      lastRequestCount: 5,
+      updatedAt: 0,
+    };
+    const { command } = stepMotion(state, inputs({ requestsIssued: 5 }), { rng: seq([1]) });
+    expect(command).toEqual({ kind: "down", px: DOWN_PX_MAX });
+  });
 });
 
 describe("stepMotion — the requestsIssued discriminator (both directions)", () => {
+  // downSteps at the cap so the NON-backoff (self-inflicted) branch resolves to `retrigger` — this
+  // pins the discriminator itself (backoff vs not-backoff), independent of the down-travel rung.
   const base: MotionState = {
     phase: "stepping",
     noArrivalStreak: 0,
+    downSteps: MAX_DOWN_STEPS,
     retriggerAttempts: 0,
     lastRequestCount: 5,
     updatedAt: 0,
@@ -165,6 +206,7 @@ describe("stepMotion — the requestsIssued discriminator (both directions)", ()
     expect(next.phase).toBe("stalled");
     expect(next.noArrivalStreak).toBe(1);
     expect(next.retriggerAttempts).toBe(0); // untouched — a retrigger was never attempted
+    expect(next.downSteps).toBe(MAX_DOWN_STEPS); // untouched — a request fired, not self-inflicted travel
     expect(next.lastRequestCount).toBe(5); // NOT advanced — the request is still outstanding
     expect(next.updatedAt).toBe(3000);
   });
@@ -186,6 +228,7 @@ describe("stepMotion — determinism & purity", () => {
     const state: MotionState = {
       phase: "retriggering",
       noArrivalStreak: 2,
+      downSteps: MAX_DOWN_STEPS, // down budget spent ⇒ this no-arrival step draws rng for a retrigger
       retriggerAttempts: 1,
       lastRequestCount: 4,
       updatedAt: 100,

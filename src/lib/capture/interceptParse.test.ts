@@ -150,6 +150,12 @@ describe("classifyTransport — typed transport signal (INJ-02 / COMPL-01 / SESS
     expect(classifyTransport(ok({ ok: false, status: 302, bodyText: "" }))).toBe("challenge");
   });
 
+  it("304 Not Modified → http_error, NOT challenge (a cache revalidation is not an auth wall)", () => {
+    // A 304 is a conditional-GET revalidation with no fresh body — never a captcha/redirect wall and
+    // never a false "ok" with no data. It rides the glue's transient http_error retry/stall path.
+    expect(classifyTransport(ok({ ok: false, status: 304, bodyText: "" }))).toBe("http_error");
+  });
+
   it("429 / 5xx / other non-2xx → http_error (glue decides retry vs wait)", () => {
     expect(classifyTransport(ok({ ok: false, status: 429, bodyText: "" }))).toBe("http_error");
     expect(classifyTransport(ok({ ok: false, status: 503, bodyText: "" }))).toBe("http_error");
