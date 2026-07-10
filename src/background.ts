@@ -16,9 +16,10 @@ import type { CapturedItem } from "./lib/types.js";
 
 // Decoupled poster pass (Task 4): posters are NO LONGER fetched inline during capture — that inline
 // fetch was a §2.3 crash vector (3k image fetches + Blob decodes contending with the live scroll).
-// They land in a throttled, resumable post-enumeration pass instead: 3 in flight, starts spaced
-// ≥200ms (~5 req/s — posters are same-CDN as the page, so we stay polite), pulled 200 at a time.
-const POSTER_CONCURRENCY = 3;
+// They land in a throttled, resumable post-enumeration pass instead — HONESTLY SERIAL: one fetch at
+// a time via the shared rate limiter (createRateLimiter chains each call on the previous call's
+// completion), starts spaced ≥200ms. Throughput ≈ 1/max(200ms, fetch latency) — a 3k backlog clears
+// in ~12–15 min, well inside the hours-scale cover-URL expiry — and serial is politer to the CDN.
 const POSTER_INTERVAL_MS = 200;
 const POSTER_BATCH = 200;
 const POSTER_FAILURES_KEY = "posterPassFailures";
@@ -228,10 +229,13 @@ async function runPosterPassNow(): Promise<void> {
       schedule: limit,
       log: (m) => console.log(`[commonplace] ${m}`),
       batchSize: POSTER_BATCH,
-      concurrency: POSTER_CONCURRENCY,
     });
     if (res.stored || res.failed) {
-      console.log(`[commonplace] poster pass finished — stored ${res.stored}, failed ${res.failed}`);
+      // Per-pass counts (this pass's news); the all-time permanent-failure total rides along.
+      console.log(
+        `[commonplace] poster pass finished — stored ${res.stored}, newly failed ${res.failed}` +
+          (res.failedTotal ? ` (${res.failedTotal} failed all-time)` : ""),
+      );
     }
   } catch (e) {
     console.log("[commonplace] poster pass error:", (e as Error).message);

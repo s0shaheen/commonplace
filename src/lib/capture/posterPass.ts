@@ -103,22 +103,34 @@ export interface PosterPassDeps {
   /** Progress sink (`posters: X/Y (Z failed)`), called once per batch. */
   log(msg: string): void;
   batchSize: number;
-  concurrency: number;
+}
+
+export interface PosterPassResult {
+  /** Posters stored by THIS pass. */
+  stored: number;
+  /** Items that crossed the permanent-failure ceiling during THIS pass. */
+  failed: number;
+  /** All-time permanently-failed count (includes prior passes) — history, not this pass's news. */
+  failedTotal: number;
 }
 
 /**
- * Drain the poster pass in `batchSize` chunks until no work remains. Each batch runs a bounded
- * worker pool (`concurrency`) whose store calls route through `schedule` (the rate limiter serializes
- * STARTS; the pool bounds in-flight blob memory — the same shape resolvers use in offscreen.ts).
+ * Drain the poster pass in `batchSize` chunks until no work remains. HONESTLY SERIAL: one poster at
+ * a time — `createRateLimiter` chains each scheduled call on the previous call's COMPLETION, so a
+ * shared limiter admits exactly one in-flight fetch no matter how many callers race it (pinned by a
+ * test against the real limiter). Throughput ≈ 1/max(interval, fetch latency); at ~200 ms spacing a
+ * 3k backlog clears in ~12–15 min, well inside the hours-scale cover-URL expiry — and serial is
+ * politer to the CDN than a burst pool. At most ONE poster blob is in memory at a time.
  *
  * Resumability: a successful `storePoster` persists the poster (and record.posterRef) as its own
  * write, so a mid-pass SW death loses only the CURRENT batch's un-persisted failure counts (a killed
  * attempt is not a real failed attempt, exactly like reviveJobs preserving attempts) — never a stored
  * poster. The next invocation (scroll_done or the revival alarm) re-selects the remaining work.
  */
-export async function runPosterPass(deps: PosterPassDeps): Promise<{ stored: number; failed: number }> {
+export async function runPosterPass(deps: PosterPassDeps): Promise<PosterPassResult> {
   let failures = await deps.getFailures();
   let stored = 0;
+  let newlyFailed = 0;
 
   for (;;) {
     const candidates = await deps.listCandidates();
@@ -126,28 +138,17 @@ export async function runPosterPass(deps: PosterPassDeps): Promise<{ stored: num
     if (work.length === 0) break;
 
     const coverById = new Map(candidates.map((c) => [c.id, c.cover] as const));
-    const outcomes: { id: string; ok: boolean }[] = [];
-    let next = 0;
-
-    const worker = async (): Promise<void> => {
-      while (next < work.length) {
-        const id = work[next++]!;
-        const cover = coverById.get(id) ?? null;
-        if (!cover) {
-          outcomes.push({ id, ok: false });
-          continue;
-        }
-        const r = await deps.schedule(() => deps.storePoster(id, cover));
-        outcomes.push({ id, ok: r.ok });
+    for (const id of work) {
+      // selectPosterWork only emits ids whose candidate has a cover URL.
+      const cover = coverById.get(id)!;
+      const r = await deps.schedule(() => deps.storePoster(id, cover));
+      if (r.ok) {
+        failures = recordSuccess(failures, id);
+        stored++;
+      } else {
+        failures = recordFailure(failures, id);
+        if (isPermanentlyFailed(id, failures)) newlyFailed++;
       }
-    };
-    await Promise.all(Array.from({ length: Math.min(deps.concurrency, work.length) }, () => worker()));
-
-    // Fold outcomes into failures sequentially (pure transitions) AFTER the pool drains — no
-    // lost-update race between concurrent workers on the shared failure map.
-    for (const o of outcomes) {
-      failures = o.ok ? recordSuccess(failures, o.id) : recordFailure(failures, o.id);
-      if (o.ok) stored++;
     }
     await deps.setFailures(failures);
 
@@ -158,5 +159,5 @@ export async function runPosterPass(deps: PosterPassDeps): Promise<{ stored: num
   }
 
   const final = posterProgress(await deps.listCandidates(), failures);
-  return { stored, failed: final.failed };
+  return { stored, failed: newlyFailed, failedTotal: final.failed };
 }

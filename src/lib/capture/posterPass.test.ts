@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { createRateLimiter } from "../rateLimiter.js";
 import {
   MAX_POSTER_ATTEMPTS,
   isPermanentlyFailed,
@@ -82,7 +83,7 @@ describe("posterProgress", () => {
 function harness(
   initial: PosterCandidate[],
   fetchResult: (id: string) => boolean,
-  opts?: { batchSize?: number; concurrency?: number },
+  opts?: { batchSize?: number },
 ) {
   const table = new Map(initial.map((c) => [c.id, { ...c }]));
   let failuresStore: PosterFailures = {};
@@ -115,7 +116,6 @@ function harness(
     },
     log: (m) => logs.push(m),
     batchSize: opts?.batchSize ?? 100,
-    concurrency: opts?.concurrency ?? 3,
   };
   return { deps, table, get failures() { return failuresStore; }, scheduleCalls, storeCalls, logs, get maxInFlight() { return maxInFlight; } };
 }
@@ -149,18 +149,29 @@ describe("runPosterPass", () => {
     const h = harness(recs, (id) => id !== "dead"); // "dead" always fails
     const res = await runPosterPass(h.deps);
     expect(res.stored).toBe(1); // "ok" succeeded
-    expect(res.failed).toBe(1); // "dead" gave up
+    expect(res.failed).toBe(1); // "dead" crossed the ceiling THIS pass
+    expect(res.failedTotal).toBe(1);
     // exactly MAX attempts on the dead URL, then excluded → the pass still terminates
     expect(h.storeCalls.filter((id) => id === "dead").length).toBe(MAX_POSTER_ATTEMPTS);
     expect(isPermanentlyFailed("dead", h.failures)).toBe(true);
+
+    // Per-pass semantics: a LATER pass finds no work and reports failed 0 — the historical
+    // permanent failure lives in failedTotal, not in this pass's news.
+    const res2 = await runPosterPass(h.deps);
+    expect(res2.stored).toBe(0);
+    expect(res2.failed).toBe(0);
+    expect(res2.failedTotal).toBe(1);
   });
 
-  it("respects the concurrency bound", async () => {
-    const recs = Array.from({ length: 12 }, (_, i) => cand(`i-${i}`, `u/${i}`));
-    const h = harness(recs, () => true, { concurrency: 3, batchSize: 100 });
+  it("is honestly serial: the REAL shared rate limiter admits one storePoster at a time", async () => {
+    // Pin the production wiring: createRateLimiter chains each scheduled call on the previous
+    // call's COMPLETION, so a shared limiter is a serializer — effective concurrency is 1.
+    const recs = Array.from({ length: 9 }, (_, i) => cand(`i-${i}`, `u/${i}`));
+    const h = harness(recs, () => true);
+    h.deps.schedule = createRateLimiter(1); // real limiter (tiny interval to keep the test fast)
     await runPosterPass(h.deps);
-    expect(h.maxInFlight).toBeLessThanOrEqual(3);
-    expect(h.maxInFlight).toBe(3); // and it actually parallelizes to the bound
+    expect(h.storeCalls.length).toBe(9); // all work still done
+    expect(h.maxInFlight).toBe(1); // ...but strictly one at a time
   });
 
   it("logs progress as posters: X/Y (Z failed) per batch", async () => {
