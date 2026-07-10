@@ -1,17 +1,27 @@
 // Service worker (MV3, type:module). Capture intake now writes THROUGH the IndexedDB library
-// store (`commonplace`) — the canonical home for items, eager posters, jobs and the grounding
-// cache. The legacy `chrome.storage.local` `items` array is retired; a one-shot startup migration
-// imports any existing array into the store then deletes the key. Only the scalar `count` is still
-// mirrored to chrome.storage.local — that is the content script's scroll-idle contract.
+// store (`commonplace`) — the canonical home for items, posters, jobs and the grounding cache. The
+// legacy `chrome.storage.local` `items` array is retired; a one-shot startup migration imports any
+// existing array into the store then deletes the key. Only the scalar `count` is still mirrored to
+// chrome.storage.local — that is the content script's scroll-idle contract.
 //
-// Eager posters: TikTok cover URLs are signed and expire in hours, so on every capture batch we
-// fetch each new item's cover bytes immediately (bounded to 3 concurrent, skipping items we
-// already have, non-fatal on failure). Capturing the poster at save-time is the whole point.
+// Posters, DECOUPLED (Task 4): capture intake is metadata-only and fast — it holds ZERO media Blobs.
+// TikTok cover URLs are signed and expire in hours, so posters are fetched in a throttled, resumable
+// pass kicked the instant a source finishes enumerating (scroll_done) and resumed on the revival
+// alarm — never inline with the live scroll (that contention was a §2.3 renderer-crash vector).
 
 import { openStore, type CpStore } from "./lib/store.js";
+import { createRateLimiter } from "./lib/rateLimiter.js";
+import { runPosterPass, selectPosterWork, type PosterFailures } from "./lib/capture/posterPass.js";
 import type { CapturedItem } from "./lib/types.js";
 
-const MAX_POSTER_CONCURRENCY = 3;
+// Decoupled poster pass (Task 4): posters are NO LONGER fetched inline during capture — that inline
+// fetch was a §2.3 crash vector (3k image fetches + Blob decodes contending with the live scroll).
+// They land in a throttled, resumable post-enumeration pass instead: 3 in flight, starts spaced
+// ≥200ms (~5 req/s — posters are same-CDN as the page, so we stay polite), pulled 200 at a time.
+const POSTER_CONCURRENCY = 3;
+const POSTER_INTERVAL_MS = 200;
+const POSTER_BATCH = 200;
+const POSTER_FAILURES_KEY = "posterPassFailures";
 
 // Single lazily-opened store handle, reused across messages within this SW lifetime.
 let storePromise: Promise<CpStore> | null = null;
@@ -138,16 +148,23 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 async function onReviveAlarm(): Promise<void> {
-  const jobs = await (await store()).getJobs();
+  const s = await store();
+  const jobs = await s.getJobs();
   // "Unfinished" = pending OR mid-flight (analyzing/grounding left behind by a killed run). If any
   // exist, wake the engine; runEngine's reviveJobs recovers the mid-flight ones before draining.
   const unfinished = jobs.some(
     (j) => j.status === "pending" || j.status === "analyzing" || j.status === "grounding",
   );
   if (unfinished) await startQueue();
+
+  // Same spine resumes an interrupted poster pass: if a SW death left posters un-fetched, restart it.
+  // Reusing this alarm (rather than a parallel timer) keeps ONE revival mechanism; the pass is
+  // idempotent (stored posters short-circuit) so a redundant wake is cheap.
+  if (await posterWorkRemains(s)) void runPosterPassNow();
 }
 
-// Capture intake: store already-normalized items → refresh `count` → eagerly grab posters.
+// Capture intake: METADATA-ONLY and fast. Store already-normalized items → refresh `count`. NO media
+// fetches, NO Blobs — posters are decoupled into the post-enumeration pass (kicked on scroll_done).
 async function handleItemList(msg: ItemListMsg): Promise<void> {
   // Items arrive pre-normalized AND source-tagged (sources:[source]) from the main world's
   // parseItemListEnvelope → extractItems(json, source) — identical shape/tags to the old SW-side
@@ -165,40 +182,79 @@ async function handleItemList(msg: ItemListMsg): Promise<void> {
   const count = await s.count();
   await chrome.storage.local.set({ count }); // content.js scroll-idle contract
   console.log(`[commonplace] +${added} from ${msg.source || "?"} (merged ${merged}), total ${count}`);
-
-  const stored = await storePosters(s, incoming);
-  console.log(`[commonplace] posters stored: ${stored}`);
 }
 
-// Bounded eager poster fetch: at most MAX_POSTER_CONCURRENCY in flight, skip items we already have,
-// non-fatal on any failure (signed cover URLs expire — a miss just means no cached poster).
-async function storePosters(s: CpStore, items: CapturedItem[]): Promise<number> {
-  const targets = items.filter((it) => it.cover);
-  let stored = 0;
-  let next = 0;
-  async function worker(): Promise<void> {
-    while (next < targets.length) {
-      const it = targets[next++]!;
-      try {
-        if (await s.getPoster(it.id)) continue; // already captured
-        const res = await fetch(it.cover!);
-        if (!res.ok) {
-          console.log(`[commonplace] poster fetch ${res.status} for ${it.id}`);
-          continue;
-        }
-        await s.putPoster(it.id, await res.blob());
-        stored++;
-      } catch (e) {
-        console.log(`[commonplace] poster fetch failed for ${it.id}:`, (e as Error).message);
-      }
+// ── Decoupled poster pass ────────────────────────────────────────────────────────────
+// Runs in the SW (not offscreen): a pure fetch→Blob→putPoster needs no DOM — the offscreen doc's
+// reason to exist (DOM keyframes + long-lived credentialed fetch) doesn't apply here. Running it in
+// the SW keeps the scroll_done trigger zero-hop (starts immediately, beating cover-URL expiry) and
+// reuses the SW's existing `cp_queue_revive` alarm as the one resumability spine. The work-selection
+// + bounded-retry state machine is the tested pure module (posterPass.ts); this is thin glue.
+
+let posterPassRunning = false; // one pass at a time per SW lifetime (mirrors offscreen's `running`)
+
+// Fetch + store ONE poster. ok:false is a non-fatal failed attempt — signed cover URLs expire, so a
+// miss is just a miss (log and move on). Idempotent: an already-stored poster short-circuits.
+async function storeOnePoster(s: CpStore, id: string, coverUrl: string): Promise<{ ok: boolean }> {
+  try {
+    if (await s.getPoster(id)) return { ok: true }; // already captured
+    const res = await fetch(coverUrl);
+    if (!res.ok) {
+      console.log(`[commonplace] poster fetch ${res.status} for ${id}`);
+      return { ok: false };
     }
+    await s.putPoster(id, await res.blob());
+    return { ok: true };
+  } catch (e) {
+    console.log(`[commonplace] poster fetch failed for ${id}:`, (e as Error).message);
+    return { ok: false };
   }
-  const workers = Array.from({ length: Math.min(MAX_POSTER_CONCURRENCY, targets.length) }, () => worker());
-  await Promise.all(workers);
-  return stored;
+}
+
+// Drive the resumable pass, wiring the store + a fresh rate limiter into the pure orchestrator. Guarded
+// so a scroll_done and a revival alarm can't double-drive within one SW lifetime.
+async function runPosterPassNow(): Promise<void> {
+  if (posterPassRunning) return;
+  posterPassRunning = true;
+  try {
+    const s = await store();
+    const limit = createRateLimiter(POSTER_INTERVAL_MS);
+    const res = await runPosterPass({
+      listCandidates: async () =>
+        (await s.allRecords()).map((r) => ({ id: r.id, cover: r.item.cover, hasPoster: !!r.posterRef })),
+      getFailures: async () => (await s.getMeta<PosterFailures>(POSTER_FAILURES_KEY)) ?? {},
+      setFailures: (f) => s.setMeta(POSTER_FAILURES_KEY, f),
+      storePoster: (id, cover) => storeOnePoster(s, id, cover),
+      schedule: limit,
+      log: (m) => console.log(`[commonplace] ${m}`),
+      batchSize: POSTER_BATCH,
+      concurrency: POSTER_CONCURRENCY,
+    });
+    if (res.stored || res.failed) {
+      console.log(`[commonplace] poster pass finished — stored ${res.stored}, failed ${res.failed}`);
+    }
+  } catch (e) {
+    console.log("[commonplace] poster pass error:", (e as Error).message);
+  } finally {
+    posterPassRunning = false;
+  }
+}
+
+// Any item with a cover URL and no poster yet (and not permanently failed) = unfinished poster work.
+async function posterWorkRemains(s: CpStore): Promise<boolean> {
+  const [recs, failures] = await Promise.all([
+    s.allRecords(),
+    s.getMeta<PosterFailures>(POSTER_FAILURES_KEY),
+  ]);
+  const candidates = recs.map((r) => ({ id: r.id, cover: r.item.cover, hasPoster: !!r.posterRef }));
+  return selectPosterWork(candidates, failures ?? {}, 1).length > 0;
 }
 
 async function handleScrollDone(msg: ScrollDoneMsg): Promise<void> {
+  // A source finished enumerating (done OR giveup — partial capture still deserves posters). Kick the
+  // decoupled poster pass NOW, before cover URLs expire. Fire-and-forget; never fails the export.
+  void runPosterPassNow();
+
   const recs = await (await store()).allRecords();
   if (msg.status === "giveup") {
     // Review fix: a giveup must not masquerade as success at this layer either. We STILL export —
