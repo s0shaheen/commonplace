@@ -1,0 +1,47 @@
+// Pure capture telemetry. No Date.now/Math.random/performance/document reads in here — the
+// caller (content.js glue) injects `now`, `performance.memory`, and a DOM-node count, mirroring
+// queue.ts's injected-I/O style so this stays a deterministic unit test rather than a vibe.
+//
+// Chrome only exposes `performance.memory` under some flags (and never off-Chromium), so
+// heapUsedMB is null-safe by design: absent heap object OR absent field → null, never a throw.
+
+export interface CaptureSample {
+  ts: number;
+  capturedCount: number;
+  domNodes: number;
+  heapUsedMB: number | null;
+}
+
+const BYTES_PER_MB = 1024 * 1024;
+
+export function sampleMemory(input: {
+  now: number;
+  capturedCount: number;
+  domNodes: number;
+  heap?: { usedJSHeapSize?: number } | undefined;
+}): CaptureSample {
+  const bytes = input.heap?.usedJSHeapSize;
+  const heapUsedMB = typeof bytes === "number" ? Math.round(bytes / BYTES_PER_MB) : null;
+  return {
+    ts: input.now,
+    capturedCount: input.capturedCount,
+    domNodes: input.domNodes,
+    heapUsedMB,
+  };
+}
+
+/**
+ * A compact single-line HUD render, e.g.:
+ *   "⛏ 1240 · likes · more:yes · heap 512MB · dom 8300 · scrolling"
+ * Deterministic for a given (sample, extra) pair — no clock formatting, so it's directly testable.
+ */
+export function formatHudLine(
+  s: CaptureSample,
+  extra: { source?: string | null; hasMore?: boolean | null; state?: string },
+): string {
+  const source = extra.source ?? "—";
+  const more = extra.hasMore === true ? "yes" : extra.hasMore === false ? "no" : "—";
+  const heap = s.heapUsedMB === null ? "heap —" : `heap ${s.heapUsedMB}MB`;
+  const state = extra.state ? ` · ${extra.state}` : "";
+  return `⛏ ${s.capturedCount} · ${source} · more:${more} · ${heap} · dom ${s.domNodes}${state}`;
+}

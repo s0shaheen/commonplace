@@ -2,9 +2,16 @@
 // drives auto-scroll (Alt+Shift+A), open-schema export (Alt+Shift+S), starts the extraction queue
 // (Alt+Shift+E), and logs queue status to the SW console (Alt+Shift+Q).
 
+import { sampleMemory, formatHudLine } from "./lib/capture/instrument.js";
+
+let lastSource = null;
+let lastHasMore = null;
+
 window.addEventListener("message", (e) => {
   if (e.source !== window || !e.data || e.data.__attic !== true) return;
   if (e.data.kind === "item_list") {
+    lastSource = e.data.source ?? lastSource;
+    // hasMore isn't forwarded by main-world.js yet (Task 1) — stays null until then.
     chrome.runtime.sendMessage({ kind: "item_list", url: e.data.url, source: e.data.source, json: e.data.json });
   }
 });
@@ -89,6 +96,42 @@ function ensureCV() {
   return true;
 }
 
+// ── Capture HUD ────────────────────────────────────────────────────────────────
+// A tiny, unobtrusive on-page readout of the pure `instrument.ts` telemetry — bottom-right,
+// click-through (pointer-events:none), its own id so it's trivial to find/remove. Task 0 only
+// surfaces numbers here; it does NOT change scroll/capture decision logic.
+const HUD_ID = "attic-capture-hud";
+
+function ensureHud() {
+  let el = document.getElementById(HUD_ID);
+  if (el) return el;
+  el = document.createElement("div");
+  el.id = HUD_ID;
+  el.style.cssText = [
+    "position:fixed",
+    "right:8px",
+    "bottom:8px",
+    "z-index:2147483647",
+    "pointer-events:none",
+    "background:rgba(0,0,0,0.72)",
+    "color:#7CFC90",
+    "font:11px/1.4 ui-monospace,monospace",
+    "padding:4px 8px",
+    "border-radius:4px",
+    "white-space:pre",
+  ].join(";");
+  document.documentElement.appendChild(el); // outside TikTok's #app → React never reconciles it
+  return el;
+}
+
+function updateHud(line) {
+  ensureHud().textContent = line;
+}
+
+function removeHud() {
+  document.getElementById(HUD_ID)?.remove();
+}
+
 function nudgeToBottom() {
   // Drive the last loaded item into view — scrolls all ancestor containers as needed (virtualization-safe).
   const links = document.querySelectorAll('a[href*="/video/"], a[href*="/photo/"]');
@@ -107,6 +150,7 @@ async function autoScroll() {
   let stable = 0;
   let prev = -1;
   const MAX = 15; // ~15 idle polls (~45s of no new items) before giving up — patient
+  let lastSampleLogTs = 0; // console.log a CaptureSample roughly every ~5s while scrolling
   while (stable < MAX) {
     ensureCV();
     const domCount = nudgeToBottom();
@@ -116,10 +160,27 @@ async function autoScroll() {
       stable = 0;
       prev = count;
     } else stable++;
+
+    // Telemetry: real Date.now()/performance.memory/document reads happen ONLY here (glue) —
+    // the pure sampleMemory/formatHudLine in lib/capture/instrument.js take everything injected.
+    const sample = sampleMemory({
+      now: Date.now(),
+      capturedCount: count,
+      domNodes: document.getElementsByTagName("*").length,
+      heap: performance.memory,
+    });
+    const state = stable > 0 ? `idle ${stable}/${MAX}` : "scrolling";
+    updateHud(formatHudLine(sample, { source: lastSource, hasMore: lastHasMore, state }));
+    if (sample.ts - lastSampleLogTs >= 5000) {
+      lastSampleLogTs = sample.ts;
+      console.log("[commonplace] capture sample", sample);
+    }
+
     console.log(`[attic-spike] scrolling… captured ${count} (idle ${stable}/${MAX}, DOM ${domCount})`);
   }
   scrolling = false;
   killCV(); // restore the page to its natural state now capture is done
+  removeHud();
   chrome.runtime.sendMessage({ kind: "scroll_done" });
   console.log(`[attic-spike] auto-scroll complete — ${prev} captured`);
 }

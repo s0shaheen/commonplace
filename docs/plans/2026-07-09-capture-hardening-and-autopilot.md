@@ -175,6 +175,9 @@ Passive network interception (no request forging → no doc_id-rotation tax, str
 
 **Sequencing:** T0 → T1 → T2 → T3 (each builds on the prior scroll surface) · T4 parallel-safe after T0 · T5 depends on T1–T3 · T6 last (needs a founder session). Files: all pure modules under `src/lib/capture/*.ts` with `*.test.ts`; glue in `src/content.js`, `src/main-world.js`, `src/background.ts`, `src/offscreen.ts`, `src/popup.*` (new Sync UI), `src/options.*` (autonomous toggle), `manifest.json` (`tabs` permission for autonomous mode + popup).
 
+## Task-0 baseline (to fill at Task 6)
+Task 0 shipped the instrument (`src/lib/capture/instrument.ts`) + HUD/console-sample glue in `content.js`; it does not itself capture the crash curve (no founder session this task — §6 Fork 2). At Task 6's live proof run, record here: today's-code memory-vs-count curve (pre-hardening baseline) vs. the rebuilt driver's curve on the same/comparable source, so the "flat heap/DOM at scale" claim in §2.3/Task 3 is a measured before/after, not a hypothesis.
+
 ## 7. Sequencing + spec impact
 - This slots as a **capture-hardening phase ahead of Phase 2** (the pilot depends on a real corpus this produces) and runs parallel to Phase 4. It does **not** touch the frozen schema, the engine, or the analysis queue — only the capture driver + a new supervisor.
 - On resolution of §6, this plan updates **SPEC §7** (the capture contract: `hasMore`-completion, human-cadence, DOM-eviction, decoupled media, the Sync supervisor) and appends the roadmap status log + a decision-log entry.
