@@ -24,7 +24,29 @@ What SPEC v5 settles (evidence: `2026-07-06-refounding-research.md`, 7 Fable res
 
 ## Next move: BUILD — Block 0 (in motion since 2026-07-06 evening)
 
-## ▶▶▶▶ CURRENT (2026-07-13): TRUE ROOT CAUSE FOUND + FIXED — trusted-scroll is the moat; needs live verify
+## ▶▶▶▶▶ CURRENT (2026-07-13, end of session): CAPTURE MOAT WORKS + FULLY HARDENED + PRODUCTIZED — next = live triage of a full run via the NEW diagnostics stream
+
+**One line:** the trusted-scroll capture is LIVE-PROVEN and now self-sufficient, interruption-proof, background-capable, trustworthy, with a real UI — AND we just built a dev-only diagnostics stream so a session can triage live runs by reading a file (no more claude-in-chrome, which fights the extension's debugger). Immediate next step is a live full-run test watched via that stream.
+
+**SHIPPED THIS SESSION (all committed, ~36c671a..2671504, 519 vitest green, tsc/build/audit clean):**
+- **Moat (140f4c7):** trusted wheel via `chrome.debugger` Input.dispatchMouseEvent — the fix for "programmatic scroll is a NO-OP on TikTok" (window.scrollBy/scrollTop/scrollIntoView/synthetic-wheel all 0px; only trusted input scrolls). LIVE-PROVEN: captured 5000+ of the founder's real library.
+- **Scroll motion (b005765):** `scrollWatch.ts` network-driven continuous-down (killed the geometry up-jiggle); **(335633b)** fast network-gated up-nudge on genuine stall (~1.8s), banner-close→resumable-pause, mid-run page-clear→reload recovery, favorites "N of ~M · ~K unavailable".
+- **Autonomous + resilient (f6d9059 Wave1, 86d245e Wave2):** ownIdentity nav-to-profile-from-anywhere; notify-and-resume (cp_paused, crash-safe); anti-block (wheelJitter + banGuard halt); watchdog; source-selection; completeness accounting; single-driver lease; run deadline; storage persist; real popup dashboard + settings.
+- **Background capture (6c87cdc):** `Emulation.setFocusEmulationEnabled` + `Page.setWebLifecycleState` on the already-held debugger → runs backgrounded/minimized (what Playwright does). config.captureBackground default true; hidden-pause is now a fallback. Tab must stay OPEN.
+- **DYD import lane (570e40f):** parse TikTok data-export JSON → library (2nd lane; options-page file picker).
+- **Dev diagnostics stream (2671504):** THE triage tool — see below.
+
+**▶▶ RESUME WORKFLOW — HOW TO TRIAGE (critical, new):** Do NOT use claude-in-chrome to observe a live capture — its JS/network tools attach chrome.debugger to the tab and BREAK the extension's own debugger-driven scroll (verified). Instead: the dev-only diagnostics stream (gated `__DEV_DIAG__`, stripped from prod, audit-enforced) posts state/logs/events/errors/screenshots to `http://localhost:9013/diag` → **read `.dev-diag/run-*.jsonl` + `.dev-diag/shots/` directly with Bash/Read.** Screenshots (safe, no conflict) via claude-in-chrome are OK; JS/network/scroll via claude-in-chrome are NOT.
+
+**LIVE ENV at handoff:** dev server running DETACHED (nohup, pid ~10789, `node scripts/dev.mjs`) → `:9012` hot-reload + `:9013` diag sink, writing `.dev-diag/run-1783972867670.jsonl`. **May have been reaped** — if `nc -z localhost 9013` is down, restart it (best in the founder's OWN terminal: `npm run dev`; background Bash jobs get killed here). dist = current dev build (focus-emulation + diag). Founder's MAIN Chrome has the extension loaded + logged into TikTok @bhaihours; needs a `chrome://extensions` ↻ reload to pick up the latest dev dist.
+
+**▶ IMMEDIATE NEXT STEP:** founder reloads the extension (↻) + clicks Sync → a fresh session reads `.dev-diag/run-*.jsonl` live to confirm: autonomous nav (Videos→Favorites already seen working), continuous scroll + fast retrigger, background capture (background/minimize the tab → count keeps climbing = the focus-emulation win), notify/resume on the break-popup+passcode, and **the ~6k page-clear cause** (unknown: flagged-empty vs rate-limit vs memory — catch it in the stream). Then: build the **collections import lane** (task #17 — favorites splits into "Posts 1564" flat + "Collections 44" separate; the flat collect/item_list has NO collection field per recon; need to enumerate collection endpoints live — discover during the run).
+
+**Founder feedback captured:** favorites tab shows "Posts 1564" (the declared count for progress/duds) + "Collections 44" (separate). Wants collections imported. Background-tab "must stay on the tab" was unacceptable → solved via focus emulation. Triage via claude-in-chrome too slow + breaks capture → solved via the diagnostics stream.
+
+---
+
+## ▶▶▶▶ (superseded) 2026-07-13: TRUE ROOT CAUSE FOUND + FIXED — trusted-scroll is the moat; needs live verify
 
 **The real bug, live-confirmed on the founder's logged-in TikTok (via claude-in-chrome):** TikTok's profile grid ignores ALL programmatic scrolling — `window.scrollBy`, `scrollTop=`, `scrollIntoView`, AND synthetic `WheelEvent` all move it **0px**. Only a REAL TRUSTED wheel scrolls it (a trusted wheel flew the grid 32→110 tiles in ~5s, smooth). This is why capture always "had to be pushed along by hand" — the extension physically could not move TikTok. All the pacing + continuous-scroll work was polishing a scroll that never landed. (Full story: memory `scroll-must-be-continuous-fast.md`.)
 
