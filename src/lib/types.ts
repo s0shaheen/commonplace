@@ -29,6 +29,12 @@ export interface CapturedItem {
     shares: number | null;
     collects: number | null;
   };
+  // OPTIONAL capture metadata — like `sources`, NOT part of the frozen extractor-output schema.
+  // The moment a video was LIKED/FAVORITED by the user, as an ISO-8601 string. The live-scroll lane
+  // cannot see this (the item_list API returns no per-save timestamp), so it is unset there. The
+  // Download-your-data (DYD) import lane DOES carry it (the export's per-entry `Date`), so it is set
+  // only for imported items. Distinct from `createTime` (when the VIDEO was posted, epoch seconds).
+  savedAt?: string;
 }
 
 // ── The frozen extractor contract (rc.6) ─────────────────────────────────────────

@@ -214,6 +214,13 @@ interface ScrollDoneMsg {
   cursor?: string | null;
   source?: string | null; // Task 5: the source this run drove (null = manual Alt+Shift+A) — advances the supervisor
 }
+// DYD import lane (SECOND capture lane, additive): the options page parsed a TikTok "Download your
+// data" export off the SW thread (via parseTikTokDyd) and sends the already-normalized, source-tagged
+// CapturedItems here. Mirrors ItemListMsg — the SW just upserts + refreshes count, no scraping.
+interface ImportDydMsg { kind: "import_dyd"; items: CapturedItem[] }
+type ImportDydResult =
+  | { ok: true; added: number; merged: number; total: number }
+  | { ok: false; error: string };
 interface SyncStartMsg { kind: "sync_start" } // popup Sync button → begin/continue the source sequence
 interface SyncStatusMsg { kind: "sync_status" } // popup poll → responds with live supervisor + capture status
 // CHAL-UX / OVLY-01: content.js raised a resumable pause (captcha/overlay/flagged/offline). Notify the
@@ -236,6 +243,7 @@ interface QueueBlockedMsg { kind: "queue_blocked"; reason: string }
 interface ExportOpenSchemaMsg { kind: "export_open_schema" }
 type Msg =
   | ItemListMsg
+  | ImportDydMsg
   | ScrollDoneMsg
   | ExportEnrichedMsg
   | DownloadTestMsg
@@ -445,6 +453,11 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.runtime.onMessage.addListener((msg: Msg, sender, sendResponse) => {
   if (msg.kind === "item_list") {
     void handleItemList(msg);
+  } else if (msg.kind === "import_dyd") {
+    // DYD import — respond async (channel kept open by `return true` below) so the options page can
+    // show a result line. Mirrors the sync_status response pattern.
+    void handleImportDyd(msg).then(sendResponse);
+    return true;
   } else if (msg.kind === "scroll_done") {
     void handleScrollDone(msg);
   } else if (msg.kind === "sync_start") {
@@ -616,6 +629,36 @@ async function handleItemList(msg: ItemListMsg): Promise<void> {
     // A swallowed write must halt, not present as done (invariant 4). QuotaExceeded → "storage full";
     // an unrecoverable-DB open → its own halt; both are latched + surfaced, never counted as captured.
     haltCapture(e);
+  }
+}
+
+// DYD import intake (SECOND capture lane): the options page already parsed the "Download your data"
+// export into normalized, source-tagged CapturedItems (via the pure parseTikTokDyd) and sends them
+// here. Identical landing to handleItemList — upsert (id-keyed, sources UNION-merged) + refresh the
+// count mirror — so imported items flow through the SAME analysis/grounding pipeline as scraped ones.
+// No poster pass: DYD items carry no cover URL. Returns a typed result so options can surface it.
+async function handleImportDyd(msg: ImportDydMsg): Promise<ImportDydResult> {
+  // Honor the storage-halt invariant (invariant 4): a full / unrecoverable DB must never let an
+  // import present as done. Surface it to the options page instead of silently swallowing the write.
+  if (captureHalt) return { ok: false, error: `storage ${captureHalt.reason}` };
+  const raw = msg.items ?? [];
+  // SHAPE GATE (mirrors handleItemList): items cross the runtime message boundary pre-built, so
+  // re-assert the non-empty string id an id-less item would throw inside upsertItems.
+  const incoming = raw.filter((i) => i && typeof i.id === "string" && i.id.length > 0);
+  if (incoming.length < raw.length) {
+    console.warn(`[commonplace] DYD import: dropped ${raw.length - incoming.length} malformed item(s)`);
+  }
+  try {
+    const s = await store();
+    const { added, merged } = await s.upsertItems(incoming, new Date().toISOString());
+    const count = await s.count();
+    await chrome.storage.local.set({ count }); // keep the content.js scroll-idle contract in sync
+    console.log(`[commonplace] DYD import: +${added} (merged ${merged}), total ${count}`);
+    return { ok: true, added, merged, total: count };
+  } catch (e) {
+    // A swallowed write must halt, not present as done (invariant 4). Latch + surface the reason.
+    haltCapture(e);
+    return { ok: false, error: (e as Error).message };
   }
 }
 
