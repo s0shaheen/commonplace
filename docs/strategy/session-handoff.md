@@ -24,7 +24,21 @@ What SPEC v5 settles (evidence: `2026-07-06-refounding-research.md`, 7 Fable res
 
 ## Next move: BUILD — Block 0 (in motion since 2026-07-06 evening)
 
-## ▶▶▶ CURRENT (2026-07-10 late): WAVE A CODE COMPLETE — resume at the LIVE PROOF
+## ▶▶▶▶ CURRENT (2026-07-13): TRUE ROOT CAUSE FOUND + FIXED — trusted-scroll is the moat; needs live verify
+
+**The real bug, live-confirmed on the founder's logged-in TikTok (via claude-in-chrome):** TikTok's profile grid ignores ALL programmatic scrolling — `window.scrollBy`, `scrollTop=`, `scrollIntoView`, AND synthetic `WheelEvent` all move it **0px**. Only a REAL TRUSTED wheel scrolls it (a trusted wheel flew the grid 32→110 tiles in ~5s, smooth). This is why capture always "had to be pushed along by hand" — the extension physically could not move TikTok. All the pacing + continuous-scroll work was polishing a scroll that never landed. (Full story: memory `scroll-must-be-continuous-fast.md`.)
+
+**THE FIX — BUILT + COMMITTED (140f4c7), founder-ratified as THE MOAT:** trusted wheel events via `chrome.debugger`. The SW attaches the debugger to the capture tab and runs a trusted-wheel pump (`Input.dispatchMouseEvent` mouseWheel, 30ms cadence), steered by the content-script observer's `scroll_mode` messages. All the brains stayed (scrollDrive/overlay/session-recovery/completion/preflight). Cost the founder accepted: the "Commonplace started debugging this browser" banner (`debugger` permission). Detach-safety on every exit path is load-bearing. 365 vitest green, tsc/build/audit clean.
+
+**FOUNDER RULING (2026-07-13):** trusted-scroll = the moat, pick away at it, do NOT give up, do NOT fall back to DYD. **DYD ZIP import = a 2nd lane alongside** (task queued; needs the actual TikTok export format).
+
+**▶ NEXT = LIVE VERIFY (blocked on env only):** needs a browser with BOTH our extension loaded AND a logged-in TikTok. Neither browser has both right now (main Chrome = logged in, no extension; dev browser `:9222` = extension loaded, logged OUT). Unblock: log the dev browser into TikTok, OR Load-Unpacked `dist/` into main Chrome. Then drive Sync and verify: the debugger banner appears on Sync and ALWAYS clears on run-end; the grid actually scrolls + count climbs fast/smooth; opening DevTools mid-run ends the run with a reason (not a hang). WATCH: does `hold` at the frontier stall loading? if so map hold→slow-wheel.
+
+**Also this session:** README rewritten (lowercase, dev-first, de-slopped — 3fb173c). Folder-rename (`attic-extension`→`commonplace`) has a verified safe script (run with Claude CLOSED; copy `~/.claude/projects/-Users-...-attic-extension/` to the `-commonplace` key FIRST — that copy was the missing step that orphaned history last time; then clear the `~/Dev/commonplace` collision holding the live `.dev-profile`, `mv`, `git worktree repair`). Full script was delivered to the founder in-chat.
+
+---
+
+## (superseded 2026-07-13) 2026-07-10 late: WAVE A CODE COMPLETE — resume at the LIVE PROOF
 
 **Wave A (the 4 capture criticals + overlay + session recovery) is CODE COMPLETE and committed (36c671a..5a15e71), NOT yet live-proven.** Built via the SDD loop (4 parallel Opus core implementers → Fable review each → Opus integrator → adversarial Fable whole-wave review → Opus fix wave → Fable re-review). 337 vitest green · tsc clean · build clean · AUDIT PASS. Full close-out + the LIVE-WATCH checklist are in `.superpowers/sdd/progress.md` (the "WAVE A — CODE COMPLETE" block).
 
