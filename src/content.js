@@ -894,9 +894,14 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   // tab that stops paginating pauses (or, opt-in, is foregrounded). Read the founder's foreground choice.
   let lastHealthyMs = Date.now();
   let keepForeground = false;
+  // Background CAPTURE (config.captureBackground, default ON): the SW applies focus emulation on the
+  // debugger attach so a hidden tab keeps running — so we must NOT pause merely because the tab is hidden.
+  // `!== false` mirrors the DEFAULT_CONFIG default of true (an absent key ⇒ on) and the deep-merge backfill.
+  let backgroundMode = true;
   try {
     const { cp_config } = await chrome.storage.local.get("cp_config");
     keepForeground = cp_config?.captureKeepForeground === true;
+    backgroundMode = cp_config?.captureBackground !== false;
   } catch (_) {}
   // Per-run eviction reset: start fresh so the HUD's "evicted N" is this run's tally and pruneGrid
   // re-resolves the grid from scratch (a new source/tab is a new grid element).
@@ -1123,7 +1128,10 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     //    ask the SW to bring the tab forward; else → a resumable pause that auto-resumes the moment the
     //    tab is shown again (bringing it forward re-paints + re-triggers the loader).
     if (document.hidden) {
-      const vis = assessVisibility({ hidden: true, msSinceHealthy: Date.now() - lastHealthyMs });
+      // With backgroundMode ON (the default), focus emulation keeps the hidden tab live, so assessVisibility
+      // returns "ok" and this whole block no-ops — the run keeps wheeling. Only the normal scrollWatch
+      // arrival-stall path can conclude the run. When OFF, the pause/foreground fallback below applies.
+      const vis = assessVisibility({ hidden: true, msSinceHealthy: Date.now() - lastHealthyMs, backgroundMode });
       if (vis === "hidden_stalled") {
         if (keepForeground) {
           try { chrome.runtime.sendMessage({ kind: "focus_capture_tab" }); } catch (_) {}

@@ -437,6 +437,32 @@ function dispatchWheel(tabId: number, x: number, y: number, deltaY: number): Pro
   });
 }
 
+// Background-tab capture (research-confirmed, 2026-07-13). The trusted-wheel scroll already holds
+// chrome.debugger attached to the capture tab — so, gated on config.captureBackground, we also tell Chrome
+// to treat that tab as FOCUSED/VISIBLE even when it is backgrounded or minimized:
+//   • Emulation.setFocusEmulationEnabled({enabled:true}) — document.visibilityState stays "visible",
+//     `visibilitychange` never fires, and TikTok's rendering + IntersectionObserver lazy-load are NOT
+//     throttled, so the profile grid keeps paginating unattended. This is EXACTLY what Playwright applies
+//     to every page by default (why Playwright pages "just work" backgrounded) — a standard technique.
+//   • Page.setWebLifecycleState({state:"active"}) — a belt against Chrome freezing/discarding the tab.
+// BOTH are best-effort: a failure (unsupported command / old Chrome) is swallowed exactly like dispatchWheel,
+// so it can never break the run. The emulation drops naturally when the debugger detaches, so it is RE-APPLIED
+// on every fresh attach (initial scroll_start + resume re-attach). The tab must still EXIST — backgrounded/
+// minimized is fine; a CLOSED tab is the separate DYD lane, not this.
+async function enableBackgroundEmulation(tabId: number): Promise<void> {
+  try {
+    await chrome.debugger.sendCommand({ tabId }, "Emulation.setFocusEmulationEnabled", { enabled: true });
+    console.log(`[commonplace] background emulation ON — tab ${tabId} treated as focused/visible while backgrounded (capture survives hidden)`);
+  } catch (e) {
+    console.warn(`[commonplace] Emulation.setFocusEmulationEnabled failed on tab ${tabId} (non-fatal):`, (e as Error)?.message ?? e);
+  }
+  try {
+    await chrome.debugger.sendCommand({ tabId }, "Page.setWebLifecycleState", { state: "active" });
+  } catch (e) {
+    console.warn(`[commonplace] Page.setWebLifecycleState failed on tab ${tabId} (non-fatal):`, (e as Error)?.message ?? e);
+  }
+}
+
 // The continuous wheel loop: a self-rescheduling async pump (awaits each dispatch, then schedules the next
 // after WHEEL.intervalMs — so dispatches never pile up). It reads the LATEST mode/coords the content script
 // sent, decoupling smooth motion from the observer's 250ms decision cadence. advance → wheel down · hold →
@@ -491,7 +517,11 @@ async function handleScrollStart(tabId: number | undefined, sendResponse: (r: At
     return;
   }
   // Anti-block cadence: read the founder's configured pace (default "normal") and drive the pump's jitter.
-  const speed = resolveSpeed((await loadConfig(configStorage)).captureSpeed);
+  const config = await loadConfig(configStorage);
+  const speed = resolveSpeed(config.captureSpeed);
+  // Background-tab capture (default ON): with the debugger now attached, make Chrome treat this tab as
+  // focused/visible so TikTok keeps paginating while the tab is backgrounded/minimized. Best-effort.
+  if (config.captureBackground) await enableBackgroundEmulation(tabId);
   startWheelPump(tabId, speed);
   console.log(`[commonplace] scroll driver attached + trusted-wheel loop started on tab ${tabId} (${speed} cadence)`);
   sendResponse({ ok: true });
@@ -1150,7 +1180,11 @@ async function handleSyncResume(): Promise<void> {
       await setPaused("debugger", DEBUGGER_REATTACH_FAILED_REASON);
       return;
     }
-    const speed = resolveSpeed((await loadConfig(configStorage)).captureSpeed);
+    const config = await loadConfig(configStorage);
+    const speed = resolveSpeed(config.captureSpeed);
+    // Re-apply background emulation on this fresh attach (it dropped when the debugger detached), so a
+    // reload/re-attach keeps the tab running while backgrounded. Best-effort; gated on captureBackground.
+    if (config.captureBackground) await enableBackgroundEmulation(tabId);
     startWheelPump(tabId, speed);
     console.log(`[commonplace] resume — re-attached scroll driver + restarted the trusted-wheel loop on tab ${tabId} (${speed} cadence)`);
   }

@@ -22,6 +22,19 @@ describe("assessVisibility", () => {
     expect(assessVisibility({ hidden: true, msSinceHealthy: 3000, graceMs: 5000 })).toBe("ok");
     expect(assessVisibility({ hidden: true, msSinceHealthy: 5000, graceMs: 5000 })).toBe("hidden_stalled");
   });
+
+  it("backgroundMode ON: a hidden+stalled tab is still ok (focus emulation keeps it live)", () => {
+    // With captureBackground on, the SW-held debugger has focus emulation applied, so a hidden tab keeps
+    // running — being hidden is NEVER a reason to pause. Only the normal arrival-stall path may conclude.
+    expect(assessVisibility({ hidden: true, msSinceHealthy: HIDDEN_STALL_GRACE_MS, backgroundMode: true })).toBe("ok");
+    expect(assessVisibility({ hidden: true, msSinceHealthy: 999_999, backgroundMode: true })).toBe("ok");
+  });
+
+  it("backgroundMode OFF (or absent): the pause-on-hidden fallback still fires", () => {
+    // The old safety net is preserved exactly when the founder opts out of background capture.
+    expect(assessVisibility({ hidden: true, msSinceHealthy: HIDDEN_STALL_GRACE_MS, backgroundMode: false })).toBe("hidden_stalled");
+    expect(assessVisibility({ hidden: true, msSinceHealthy: HIDDEN_STALL_GRACE_MS })).toBe("hidden_stalled");
+  });
 });
 
 describe("purity", () => {

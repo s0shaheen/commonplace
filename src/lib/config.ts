@@ -39,8 +39,19 @@ export interface CpConfig {
   // hidden-tab rendering/IntersectionObserver), false (default) = pause + notify "bring the tab forward"
   // and auto-resume when it's shown; true = the SW foregrounds the tab to keep capturing (more intrusive
   // — it steals focus — so opt-in). The SW-driven trusted-wheel WRITE survives backgrounding; TikTok's
-  // own lazy-load may not, which is what this guards.
+  // own lazy-load may not, which is what this guards. NOTE: when captureBackground is ON (the default),
+  // focus emulation keeps the hidden tab running, so this keepForeground path is effectively bypassed —
+  // it only matters if the founder turns captureBackground OFF.
   captureKeepForeground: boolean;
+  // Background CAPTURE via focus emulation (2026-07-13, research-confirmed). true (DEFAULT) = the SW, which
+  // already holds chrome.debugger attached for the trusted-wheel scroll, sends Emulation.setFocusEmulationEnabled
+  // (+ Page.setWebLifecycleState "active") so Chrome treats the driven tab as focused/visible even when it is
+  // backgrounded or minimized — document.visibilityState stays "visible", visibilitychange never fires, and
+  // TikTok never throttles its rendering/IntersectionObserver, so pagination keeps running unattended. This is
+  // exactly what Playwright applies to every page by default (a standard technique, not a hack). false = skip
+  // the emulation and fall back to the old pause-on-hidden safety net. The tab must still EXIST (backgrounded/
+  // minimized is fine; a CLOSED tab is the separate DYD import lane).
+  captureBackground: boolean;
 }
 
 /** Frozen default: every lane on. */
@@ -76,6 +87,7 @@ export const DEFAULT_CONFIG: CpConfig = {
   captureSources: DEFAULT_CAPTURE_SOURCES,
   captureSpeed: "normal",
   captureKeepForeground: false,
+  captureBackground: true,
 };
 
 /** Read the stored partial and merge it over the frozen defaults. `captureSources` is deep-merged so
