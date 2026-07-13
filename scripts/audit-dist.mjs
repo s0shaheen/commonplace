@@ -34,6 +34,7 @@ const PERMISSION_ALLOWLIST = [
   "alarms",
   "tabs", // Task 5: the capture supervisor opens/focuses/messages the TikTok tab it drives (semi-auto + autonomous)
   "notifications", // Wave A (CHAL-UX/OVLY-01): a resumable capture pause (captcha/overlay/flagged/offline) raises a chrome notification
+  "debugger", // Wave A (the moat): trusted-wheel scrolling via chrome.debugger — TikTok's profile grid ignores ALL programmatic scroll; only a real trusted wheel (Input.dispatchMouseEvent from the SW) moves it
 ];
 
 // Secret-shaped patterns. `[A-Za-z0-9_\-]` covers the base64url charset real Google keys use.

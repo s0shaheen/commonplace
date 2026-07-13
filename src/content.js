@@ -9,10 +9,11 @@ import { arrivalDrivesRun } from "./lib/capture/supervisor.js";
 import { classifyOverlay } from "./lib/capture/overlayClassifier.js";
 import { assessPreflight } from "./lib/capture/preflight.js";
 import { stepRecovery, initialRecoveryState } from "./lib/capture/sessionRecovery.js";
-import { clampUpPx } from "./lib/capture/scrollGeom.js";
-// The re-founded motion: ONE continuous, self-pacing rAF scroll. scrollDrive.ts owns the geometry-driven
-// MODE + completion decision; the discrete step-then-dwell machine (scrollMotion/pacing/scrollState in
-// the hot path, plus the requestsIssued→backoff discriminator) is gone from the scroll loop.
+// The re-founded motion: the geometry-driven MODE + completion decision lives in scrollDrive.ts; the
+// physical scroll WRITE lives in the SERVICE WORKER as trusted wheels (chrome.debugger) — TikTok's profile
+// grid ignores ALL programmatic scrolling (window.scrollBy/scrollTop=/scrollIntoView/synthetic WheelEvent
+// all move it ZERO px; only a real trusted wheel scrolls it). The discrete step-then-dwell machine
+// (scrollMotion/pacing/scrollState in the hot path, plus the requestsIssued→backoff discriminator) is gone.
 import { initialDriveState, stepDrive, MAX_STUCK_RETRIGGERS } from "./lib/capture/scrollDrive.js";
 
 let lastSource = null;
@@ -265,45 +266,40 @@ function removeHud() {
   document.getElementById(HUD_ID)?.remove();
 }
 
-// ── Physical motion glue (§6.1, re-founded: ONE continuous self-pacing scroll) ────────────────────
-// scrollDrive.ts decides the MODE (advance / hold / retrigger / done / exhausted) from geometry + growth;
-// these realize it against the DOM. The motion is a requestAnimationFrame loop that advances a small
-// fixed STEP_FAST_PX toward the loaded bottom every frame but NEVER past it — the frontier clamp IS the
-// pacing (fast while loaded content is ahead, a brief natural wait at the frontier while the next page
-// loads). NEVER a teleport (`scrollTop = scrollHeight`) — that never makes TikTok's edge-triggered
-// IntersectionObserver sentinel leave→re-enter, and is the #1 anti-bot tell. A stuck loader is jogged
-// with a small up-nudge (retrigger) so the driver re-advances down and the sentinel re-fires.
-
-/** Per-frame advance (px). Small enough to read as smooth continuous motion, not a jump; the frontier
- *  clamp caps the EFFECTIVE speed to the page-load rate, so this can be brisk. ~60px/frame at ~60fps is
- *  a fast-but-human touchpad drag. (Live-tunable: raise for faster travel, lower for smoother.) */
-const STEP_FAST_PX = 60;
+// ── Physical motion glue (§6.1, re-founded again 2026-07-13: TRUSTED WHEELS via chrome.debugger) ────
+// LIVE ROOT CAUSE (2026-07-13): TikTok's profile grid ignores ALL programmatic scrolling — window.scrollBy,
+// document.scrollingElement.scrollTop=, element.scrollIntoView, and even a synthetic WheelEvent move it ZERO
+// pixels. Only a REAL TRUSTED wheel scrolls it (a trusted wheel flew the grid 32→110 tiles in ~5s). Content
+// scripts cannot send trusted events, so the physical scroll WRITE moved to the SERVICE WORKER, which
+// dispatches trusted wheels via chrome.debugger + Input.dispatchMouseEvent. This module keeps only the
+// GEOMETRY READS (window.scrollY / scrollHeight DO reflect trusted-wheel scrolling — reads work; only the
+// WRITE needed a trusted event) and the thin messaging that tells the SW which way to wheel each observer
+// tick; scrollDrive.ts still owns the MODE decision.
 
 /** The observer cadence (ms): the slow intelligence loop (overlay guard, eviction, growth tracking,
- *  session recovery, the stepDrive verdict). The fast motion is the rAF driver; this is the brain. */
+ *  session recovery, the stepDrive verdict). The SW's trusted-wheel loop owns the fast, smooth motion —
+ *  this is the brain, re-deciding the mode the SW should wheel in every OBSERVER_MS. */
 const OBSERVER_MS = 250;
 
-/** The retrigger up-nudge (px): a small hop up so the driver's next down-advance re-crosses the sentinel
- *  (leave→re-enter) and re-fires the loader. Clamped by maxSafeUpPx so it never enters evicted space. */
-const RETRIGGER_UP_PX = 200;
-
 /** A REAL server rate/error signal (transport "http_error" = 429/5xx) gets a MODEST fixed slowdown —
- *  pause the driver a few seconds then resume — NOT the old 2s→60s exponential. Persistent http_error
+ *  hold the wheel loop a few seconds then resume — NOT the old 2s→60s exponential. Persistent http_error
  *  past HTTP_ERROR_GIVEUP consecutive arrivals ends the run as an honest reported-incomplete. */
 const HTTP_ERROR_SLOWDOWN_MIN_MS = 3000;
 const HTTP_ERROR_SLOWDOWN_MAX_MS = 5000;
 const HTTP_ERROR_GIVEUP = 6;
 const HTTP_ERROR_REASON = "TikTok returned repeated server errors (429/5xx); more may remain";
 
-// Resolve the DOM element to dispatch WheelEvents at: the inner scroller if we have one, else the
-// document scrolling root (so wheel listeners / IO polyfills on a document-scrolled page still see it).
+// Resolve the DOM element to dispatch a PROBE WheelEvent at (used ONLY by the overlay input-swallow probe —
+// the REAL scroll is trusted wheels from the SW): the inner scroller if we have one, else the document root.
 function wheelTarget(scroller) {
   return scroller || document.scrollingElement || document.documentElement || document.body;
 }
 
 // The effective scroll target's geometry (inner scroller's if we have one, else the document/window).
-// The rAF driver and stepDrive read scrollTop/scrollHeight/clientHeight + the frontier through this so
-// it stays correct whether we're on an inner or a document scroller (FIX 1).
+// stepDrive + growth tracking read scrollTop/scrollHeight/clientHeight + the frontier through this so it
+// stays correct whether we're on an inner or a document scroller (FIX 1). On TikTok getScroller() is null
+// (its test-scroll is a no-op), so this reads the window/document — whose scrollY/scrollHeight correctly
+// reflect the SW's trusted-wheel scrolling.
 function scrollerMetrics(scroller) {
   if (scroller) {
     return { scrollTop: scroller.scrollTop, scrollHeight: scroller.scrollHeight, clientHeight: scroller.clientHeight };
@@ -316,55 +312,53 @@ function scrollerMetrics(scroller) {
   };
 }
 
-// The loaded bottom of the effective scroll target (scrollHeight − clientHeight, never negative).
-function maxScroll(scroller) {
-  const m = scrollerMetrics(scroller);
-  return Math.max(0, m.scrollHeight - m.clientHeight);
+// ── Trusted-wheel driver messaging (the moat) ──────────────────────────────────────────────────────
+// The SW holds the chrome.debugger attach and runs a continuous trusted-wheel loop; content.js just tells
+// it the aim point + the current mode. The observer maps scrollDrive's verdict → these messages each tick.
+
+/** Set by the content message handler when the SW reports its debugger detached (banner Cancel / DevTools
+ *  opened / attach failed). The observer ends the run honestly on its next tick — a reported incomplete,
+ *  never a hang and never a false done. Reset at the start of each run. */
+let scrollDriverDetached = false;
+let scrollDriverDetachReason = null;
+
+// The point to aim the trusted wheel at: horizontal center, biased low over the grid so the wheel lands on
+// tiles (not a sticky header/toolbar). The document/window is the scroller on TikTok, so any on-content
+// point scrolls it; the bias just keeps us clear of fixed chrome.
+function wheelPoint() {
+  const w = window.innerWidth || (document.documentElement ? document.documentElement.clientWidth : 0) || 800;
+  const h = window.innerHeight || (document.documentElement ? document.documentElement.clientHeight : 0) || 600;
+  return { x: Math.floor(w / 2), y: Math.floor(h * 0.6) };
 }
 
-// Scroll the effective target to an ABSOLUTE content position. Realized as a relative delta from the
-// current effective scrollTop and routed through scrollTargetBy (inner scroller + window belt), so a
-// null/wrong inner scroller still moves the document (FIX 1). The driver clamps `top` to the loaded
-// bottom, so this is always a real incremental scroll — never a teleport past the sentinel.
-function scrollAbsTo(scroller, top) {
-  const dy = top - effectiveScrollTop(scroller);
-  if (dy === 0) return;
-  scrollTargetBy(scroller, dy);
-}
-
-// The topmost LIVE tile's top offset in the effective scroll target's content coordinate space.
-// Eviction removes the oldest tiles, so the region above this is gone — the retrigger up-nudge must not
-// scroll into it. (0 = no tile to measure → the top of the content is the bound; see clampUpPx.)
-function topmostLiveTileTop(scroller) {
-  const tiles = document.querySelectorAll(TILE_ANCHOR_SEL);
-  if (!tiles.length) return 0;
-  const tr = tiles[0].getBoundingClientRect();
-  if (scroller) {
-    const sr = scroller.getBoundingClientRect();
-    return scroller.scrollTop + (tr.top - sr.top);
-  }
-  // Document-scrolled: the tile's content-space top is (current scrollY) + (its viewport-relative top).
-  return effectiveScrollTop(scroller) + tr.top;
-}
-
-// maxSafeUpPx: clamp the core's desired up-distance so the retrigger stays above the topmost live tile
-// (never into evicted space — §6.4). Clamps against the CORRECT scrollTop source (inner vs document).
-function maxSafeUpPx(scroller, desiredUp) {
-  return clampUpPx(desiredUp, effectiveScrollTop(scroller), topmostLiveTileTop(scroller));
-}
-
-// The retrigger up-nudge: a small real wheel-up hop (clamped above the topmost live tile so eviction
-// space is never entered — §6.4), after which the rAF driver re-advances DOWN past the prior max so the
-// sentinel leaves→re-enters and the loader re-fires. Routes through scrollTargetBy so a null/document
-// scroller moves too (FIX 1). One-shot — the continuous driver owns the down-travel.
-function retriggerUpNudge(scroller) {
-  const up = maxSafeUpPx(scroller, RETRIGGER_UP_PX);
-  if (up <= 0) return;
-  const target = wheelTarget(scroller);
+// Ask the SW to attach its debugger to THIS tab and start the trusted-wheel loop. Returns {ok:true} on a
+// clean attach, or {ok:false, reason} when DevTools/another debugger blocks the attach (the SW has already
+// raised a capture_notice) — the caller then ends the run honestly instead of spinning on a dead scroll.
+async function startScrollDriver() {
   try {
-    target.dispatchEvent(new WheelEvent("wheel", { deltaY: -up, deltaMode: 0, bubbles: true, cancelable: true }));
+    const res = await chrome.runtime.sendMessage({ kind: "scroll_start" });
+    if (res && res.ok === false) return { ok: false, reason: res.reason || "could not start the scroll driver" };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: "scroll driver unavailable (" + ((e && e.message) || e) + ")" };
+  }
+}
+
+// Tell the SW's wheel loop how to move THIS tick: advance→wheel down · hold→idle · retrigger→UP-burst then
+// resume down. (x,y) re-aims the wheel each tick (cheap; keeps it over the grid if the layout shifts).
+function sendScrollMode(mode) {
+  const p = wheelPoint();
+  try {
+    chrome.runtime.sendMessage({ kind: "scroll_mode", mode, x: p.x, y: p.y });
   } catch (_) {}
-  scrollTargetBy(scroller, -up);
+}
+
+// Stop the SW's wheel loop and detach the debugger. MUST be sent on EVERY run-exit path — a dangling attach
+// leaves Chrome's "Commonplace started debugging this browser" banner up forever.
+function sendScrollStop() {
+  try {
+    chrome.runtime.sendMessage({ kind: "scroll_stop" });
+  } catch (_) {}
 }
 
 // ── Overlay detection glue (OVLY-01, §6.6) ─────────────────────────────────────
@@ -638,16 +632,42 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     }
   }
 
-  // MOTION IS NOW A CONTINUOUS FRAME DRIVER + a SLOW OBSERVER. The motion/completion DECISION lives in
-  // the pure `scrollDrive` reducer (geometry + growth in → mode + completion out). A requestAnimationFrame
-  // FRAME DRIVER does the smooth, self-pacing scroll (advance a small fixed step toward the loaded bottom
-  // every frame, never past it — the frontier clamp IS the pacing). The while-loop below is the OBSERVER:
-  // the slow intelligence (overlay guard, eviction, growth tracking, session recovery, the stepDrive
-  // verdict). Completion is a VERIFIED terminal only (isTerminalPage on a healthy transport); reaching the
-  // bottom with the loader dead is `exhausted` — a DISTINCT reported-incomplete, never a false `done`.
+  // ── START THE TRUSTED-WHEEL SCROLL DRIVER (the moat, live-confirmed 2026-07-13). TikTok's profile grid
+  //    ignores ALL programmatic scrolling; only a TRUSTED wheel moves it. The SW attaches chrome.debugger to
+  //    THIS tab and runs a continuous trusted-wheel loop this observer steers. On attach failure (DevTools
+  //    open / another debugger) the SW has already raised a capture_notice — we END the run honestly here
+  //    rather than grind a dead scroll. Geometry READS below still work (window.scrollY/scrollHeight reflect
+  //    trusted-wheel scrolling); only the physical WRITE moved to the SW.
+  scrollDriverDetached = false;
+  scrollDriverDetachReason = null;
+  const driverStart = await startScrollDriver();
+  if (!driverStart.ok) {
+    console.warn(`[commonplace] scroll driver could not start — ${driverStart.reason}`);
+    updateHud(`capture blocked — ${driverStart.reason}`);
+    chrome.runtime.sendMessage({
+      kind: "scroll_done",
+      status: "giveup",
+      reason: driverStart.reason,
+      captured: prevCount,
+      cursor: lastCursor,
+      source,
+    });
+    // Nothing was started yet (no observer, no successful attach) — nothing to cancel and no scroll_stop
+    // needed (the SW never attached on a failed start). Disarm exactly like teardown would, then return.
+    activeRunSource = null;
+    scrolling = false;
+    console.warn(`[commonplace] capture ABORTED (scroll driver: ${driverStart.reason}, source ${source ?? "manual"})`);
+    return;
+  }
+
+  // MOTION IS NOW A SLOW OBSERVER (the brain) + the SW's TRUSTED-WHEEL LOOP (the smooth motion). The
+  // motion/completion DECISION lives in the pure `scrollDrive` reducer (geometry + growth in → mode +
+  // completion out); this observer maps that verdict to scroll_mode messages the SW's wheel loop obeys
+  // (advance→wheel down · hold→idle · retrigger→UP-burst). Completion is a VERIFIED terminal only
+  // (isTerminalPage on a healthy transport); reaching the bottom with the loader dead is `exhausted` — a
+  // DISTINCT reported-incomplete, never a false `done`.
   let driveState = initialDriveState(Date.now());
-  let driveMode = driveState.mode; // "advance" — the rAF driver reads this each frame
-  let paused = false; // while true the frame driver holds (a pause, or a modest http_error slowdown)
+  let driveMode = driveState.mode; // the mode the observer last decided — mapped to a scroll_mode message
   let running = true;
   let reloadingAway = false; // set when we location.reload() a flagged session — teardown then skips scroll_done
   let outcome = { status: "giveup", reason: "capture ended before a verified terminal" }; // finalized at each terminal
@@ -666,26 +686,11 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   let overlayChurn = 0;
   let lastOverlaySig = null;
 
-  // The scroller is resolved by the observer each tick and SHARED with the frame driver, so the heavy
-  // getScroller() query runs at most every OBSERVER_MS, never per rAF frame.
+  // The scroller is resolved by the observer each tick; the heavy getScroller() query runs at most every
+  // OBSERVER_MS. Geometry is READ here (window/document on TikTok, since getScroller() is null); the
+  // physical WRITE is the SW's trusted-wheel loop, steered by the scroll_mode messages this observer sends.
   let currentScroller = getScroller();
   let lastScrollHeight = scrollerMetrics(currentScroller).scrollHeight; // growth baseline (network is the robust signal)
-
-  // ── FRAME DRIVER — continuous, smooth rAF scroll, self-clamped to the loaded bottom. Advance
-  //    STEP_FAST_PX toward the loaded bottom every frame in advance/hold/retrigger (NEVER past it — the
-  //    clamp IS the pacing: fast while content is ahead, a brief natural wait at the frontier while the
-  //    next page loads). No motion on paused/done/exhausted. rAF pauses when the tab is backgrounded
-  //    (acceptable — a foreground supervised run; the background-tab case is Wave C, out of scope).
-  let rafId = requestAnimationFrame(function frameStep() {
-    if (!running) return; // run ended — stop the loop
-    if (!paused && (driveMode === "advance" || driveMode === "hold" || driveMode === "retrigger")) {
-      const s = currentScroller;
-      const cur = effectiveScrollTop(s);
-      const target = Math.min(cur + STEP_FAST_PX, maxScroll(s));
-      if (target > cur) scrollAbsTo(s, target); // clamped: never a teleport past the sentinel
-    }
-    rafId = requestAnimationFrame(frameStep);
-  });
 
   // Enter a user-visible, resumable PAUSE (CHAL-UX): freeze the giveup ladder (we stop feeding the
   // reducer while paused), notify the SW (chrome notification + popup reason), and watch for recovery.
@@ -695,41 +700,48 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   async function enterPause(level, reason, opts = {}) {
     const overlayTriggered = !!opts.overlayTriggered;
     const resumeWhenOnline = !!opts.resumeWhenOnline;
-    paused = true; // freeze the frame driver — no motion while paused (holds until we resume)
+    sendScrollMode("hold"); // stop the SW's trusted-wheel loop while paused — no motion until we resume
     try {
+      chrome.runtime.sendMessage({ kind: "capture_notice", level, reason });
+    } catch (_) {}
+    console.warn(`[commonplace] capture PAUSED (${level}) — ${reason}`);
+    const pauseStartHealthy = healthyArrivals;
+    const PAUSE_POLL_MS = 1500;
+    while (true) {
       try {
-        chrome.runtime.sendMessage({ kind: "capture_notice", level, reason });
+        const sample = sampleMemory({
+          now: Date.now(),
+          capturedCount: prevCount,
+          domNodes: document.getElementsByTagName("*").length,
+          heap: performance.memory,
+        });
+        updateHud(formatHudLine(sample, { source: lastSource, hasMore: "?", state: `paused (${level})`, evicted: evictedTotal }));
       } catch (_) {}
-      console.warn(`[commonplace] capture PAUSED (${level}) — ${reason}`);
-      const pauseStartHealthy = healthyArrivals;
-      const PAUSE_POLL_MS = 1500;
-      while (true) {
-        try {
-          const sample = sampleMemory({
-            now: Date.now(),
-            capturedCount: prevCount,
-            domNodes: document.getElementsByTagName("*").length,
-            heap: performance.memory,
-          });
-          updateHud(formatHudLine(sample, { source: lastSource, hasMore: "?", state: `paused (${level})`, evicted: evictedTotal }));
-        } catch (_) {}
-        await sleep(PAUSE_POLL_MS);
-        if (healthyArrivals > pauseStartHealthy) break; // a fresh healthy page returned → auto-resume
-        if (resumeWhenOnline && navigator.onLine !== false) break; // back online → resume (regenerate arrivals)
-        if (overlayTriggered) {
-          const f = await gatherOverlayFacts(getScroller());
-          if (!f.hasBlockingLayer && !f.inputSwallowed) break; // the overlay cleared → resume
-        }
+      await sleep(PAUSE_POLL_MS);
+      if (healthyArrivals > pauseStartHealthy) break; // a fresh healthy page returned → auto-resume
+      if (resumeWhenOnline && navigator.onLine !== false) break; // back online → resume (regenerate arrivals)
+      if (overlayTriggered) {
+        const f = await gatherOverlayFacts(getScroller());
+        if (!f.hasBlockingLayer && !f.inputSwallowed) break; // the overlay cleared → resume
       }
-      console.log(`[commonplace] capture RESUMED (was paused: ${level})`);
-    } finally {
-      paused = false; // resume the frame driver whatever happens
     }
+    console.log(`[commonplace] capture RESUMED (was paused: ${level})`);
+    // The caller `continue`s; the next observer tick's stepDrive re-issues the real scroll_mode (advance/
+    // hold), so the SW's wheel loop resumes where it left off — no explicit resume message needed here.
     return true;
   }
 
   while (running) {
-    currentScroller = getScroller(); // refresh + share with the rAF driver (heavy query at most every OBSERVER_MS)
+    // The SW's trusted-wheel driver lost its debugger (banner Cancel / DevTools opened / attach dropped) —
+    // end the run honestly as a reported incomplete rather than spinning a dead scroll. scroll_stop in
+    // teardown is then a harmless no-op (already detached), so the debugger never dangles.
+    if (scrollDriverDetached) {
+      outcome = { status: "giveup", reason: scrollDriverDetachReason || "the scroll driver was disconnected" };
+      running = false;
+      console.warn(`[commonplace] capture INCOMPLETE — ${outcome.reason}`);
+      break;
+    }
+    currentScroller = getScroller(); // refresh each tick (heavy query at most every OBSERVER_MS)
     const scroller = currentScroller;
 
     // ── 1. OVERLAY GUARD FIRST — classify any blocking layer and respond like a person.
@@ -804,10 +816,10 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       httpErrorStreak = 0;
     }
 
-    // ── 4. SESSION RECOVERY — classify the transport and act. A pause here freezes the frame driver
-    //    (paused) and takes precedence over the motion decision this tick. Unchanged ladder (offline /
-    //    empty_ok flagged-refresh / challenge); the modest http_error slowdown replaces the old
-    //    exponential backoff for a real 429/5xx.
+    // ── 4. SESSION RECOVERY — classify the transport and act. A pause here holds the SW's trusted-wheel
+    //    loop (enterPause sends scroll_mode "hold") and takes precedence over the motion decision this tick
+    //    (it `continue`s before stepDrive). Unchanged ladder (offline / empty_ok flagged-refresh /
+    //    challenge); the modest http_error slowdown replaces the old exponential backoff for a real 429/5xx.
     let recSignal = null;
     if (navigator.onLine === false) recSignal = "offline";
     else if (healthyArrived) recSignal = "healthy_arrival"; // resets the recovery streak
@@ -840,7 +852,8 @@ async function autoScroll({ source = null, resuming = false } = {}) {
         }
         reloadedThisRun = true;
         reloadingAway = true;
-        running = false; // stop the frame driver; the page is navigating away
+        running = false; // stop the observer; the page is navigating away
+        sendScrollStop(); // detach the SW debugger BEFORE reload — never leave it attached to a page that's navigating (a dangling attach + a wheel loop on a fresh page)
         await chrome.storage.local.set({ captureReloadedSource: source });
         console.warn("[commonplace] flagged session (empty pages after a refresh) — reloading ONCE to recover (the founder's manual fix, automated)");
         location.reload(); // page navigates away; the supervisor's `current` checkpoint re-drives this run after reload
@@ -867,9 +880,8 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       }
       const ms = HTTP_ERROR_SLOWDOWN_MIN_MS + Math.floor(Math.random() * (HTTP_ERROR_SLOWDOWN_MAX_MS - HTTP_ERROR_SLOWDOWN_MIN_MS));
       console.warn(`[commonplace] server error (429/5xx) — modest slowdown ${ms}ms (streak ${httpErrorStreak}/${HTTP_ERROR_GIVEUP})`);
-      paused = true;
+      sendScrollMode("hold"); // hold the SW's wheel loop for the slowdown; the next tick re-issues the mode
       await sleep(ms);
-      paused = false;
       continue;
     }
 
@@ -899,7 +911,15 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     });
     driveState = drive.state;
     driveMode = drive.mode;
-    if (driveMode === "retrigger") retriggerUpNudge(scroller); // one-shot up-hop; the driver re-advances down
+    // Steer the SW's trusted-wheel loop from the geometry verdict — the physical scroll WRITE lives in the
+    // SW now (TikTok's grid ignores ALL programmatic scrolling; only trusted wheels move it). advance→wheel
+    // down · hold→idle at the frontier while the next page loads · retrigger→a short UP-burst so the loader's
+    // edge-triggered sentinel leaves→re-enters. done/exhausted→stop the loop + detach the debugger now.
+    if (driveMode === "advance" || driveMode === "hold" || driveMode === "retrigger") {
+      sendScrollMode(driveMode);
+    } else {
+      sendScrollStop(); // done / exhausted — teardown also stops, idempotently
+    }
     if (driveMode === "done") {
       outcome = { status: "done", reason: null };
       running = false;
@@ -937,9 +957,9 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     await sleep(OBSERVER_MS);
   }
 
-  // ── TEARDOWN — stop the frame driver, report the outcome, disarm. ──
-  if (rafId != null) cancelAnimationFrame(rafId);
+  // ── TEARDOWN — stop the SW's trusted-wheel driver (ALWAYS detach), report the outcome, disarm. ──
   scrolling = false;
+  sendScrollStop(); // detach the SW debugger on EVERY exit path — a dangling attach = a stuck "debugging" banner
   if (reloadingAway) return; // page navigating away; the supervisor's checkpoint re-drives — no scroll_done
   removeHud();
   if (source) {
@@ -1121,6 +1141,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     // Fix round 1: the SW's revive alarm asks the tab itself whether a run is live before re-driving
     // (its own `supervisorRunning` flag dies with every SW idle-out; this tab is the ground truth).
     sendResponse({ scrolling: scrolling || captureRunActive });
+  } else if (msg && msg.kind === "scroll_detached") {
+    // The SW's trusted-wheel driver lost its debugger (banner Cancel, DevTools opened on the tab, or the
+    // attach dropped). Flag it; autoScroll's observer ends the run honestly on its next tick — a reported
+    // incomplete, never a hang and never a false done.
+    scrollDriverDetached = true;
+    scrollDriverDetachReason = (msg && msg.reason) || "the scroll driver was disconnected";
+    console.warn(`[commonplace] scroll driver detached — ${scrollDriverDetachReason}`);
   }
   // Synchronous sendResponse above; no async channel kept open.
 });

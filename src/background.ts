@@ -97,6 +97,8 @@ function noticeTitle(level: string): string {
       return "Commonplace — session looks flagged";
     case "offline":
       return "Commonplace — paused (offline)";
+    case "debugger":
+      return "Commonplace — close DevTools to let capture scroll";
     default:
       return "Commonplace — capture paused";
   }
@@ -217,6 +219,14 @@ interface SyncStatusMsg { kind: "sync_status" } // popup poll → responds with 
 // CHAL-UX / OVLY-01: content.js raised a resumable pause (captcha/overlay/flagged/offline). Notify the
 // founder (chrome notification) and persist a popup-readable reason. `level` is the notice class.
 interface CaptureNoticeMsg { kind: "capture_notice"; level: string; reason: string }
+// Wave A (the moat, 2026-07-13): TikTok's profile grid ignores ALL programmatic scrolling — only a
+// TRUSTED wheel moves it, which a content script cannot send. The content script asks the SW to drive
+// scrolling via chrome.debugger + Input.dispatchMouseEvent (trusted wheels): scroll_start attaches the
+// debugger + starts the continuous wheel loop, scroll_mode steers it each 250ms observer tick, scroll_stop
+// stops the loop + detaches. `_sender.tab.id` is the target tab.
+interface ScrollStartMsg { kind: "scroll_start" }
+interface ScrollModeMsg { kind: "scroll_mode"; mode: string; x: number; y: number }
+interface ScrollStopMsg { kind: "scroll_stop" }
 interface ExportEnrichedMsg { kind: "export_enriched"; results: unknown[] }
 interface DownloadTestMsg { kind: "download_test"; n?: number }
 interface QueueStartMsg { kind: "queue_start" }
@@ -236,9 +246,203 @@ type Msg =
   | ExportOpenSchemaMsg
   | SyncStartMsg
   | SyncStatusMsg
-  | CaptureNoticeMsg;
+  | CaptureNoticeMsg
+  | ScrollStartMsg
+  | ScrollModeMsg
+  | ScrollStopMsg;
 
-chrome.runtime.onMessage.addListener((msg: Msg, _sender, sendResponse) => {
+// ── Trusted-wheel scroll driver (the moat, live-confirmed 2026-07-13) ───────────────────────────────
+//
+// TikTok's profile grid ignores ALL programmatic scrolling: window.scrollBy, scrollingElement.scrollTop=,
+// scrollIntoView, and even a synthetic WheelEvent move it ZERO pixels — only a REAL TRUSTED wheel scrolls
+// it (a trusted wheel flew the grid 32→110 tiles in ~5s in testing). Content scripts cannot send trusted
+// events, but the extension CAN via chrome.debugger + Input.dispatchMouseEvent. So the physical scroll
+// WRITE lives here in the SW; the content script keeps ALL the intelligence (the scrollDrive reducer,
+// overlay/session recovery, honest completion) and just tells this loop which way to wheel each tick.
+//
+// Lifecycle safety (invariant: the debugger MUST always detach). Every path converges on a clean detach:
+// scroll_stop detaches, mode:stop detaches, a tab close detaches (chrome.tabs.onRemoved), scroll_done
+// defensively detaches, and an EXTERNAL detach (banner "Cancel", DevTools opened, tab discarded —
+// chrome.debugger.onDetach) stops the loop AND tells the content script to end its run honestly. A dangling
+// attach would leave Chrome's "Commonplace started debugging this browser" banner up forever — unacceptable.
+
+const WHEEL = {
+  /** Dispatch cadence (ms) for the continuous loop — small enough to read as smooth continuous motion. */
+  intervalMs: 30,
+  /** Downward wheel delta per tick while advancing (~one mouse "notch"). */
+  advanceDeltaY: 120,
+  /** Upward wheel delta per event during a retrigger burst (applied negative). */
+  retriggerDeltaY: 120,
+  /** Events in a retrigger UP-burst — a short hop up so the loader's edge-triggered sentinel re-fires. */
+  retriggerBurst: 3,
+} as const;
+
+// The capture_notice reason raised when the debugger cannot attach (DevTools open / another debugger
+// already attached to the tab). Surfaced to the founder; the run is then ended honestly, never a silent fail.
+const DEBUGGER_ATTACH_REASON = "close DevTools on the TikTok tab so capture can scroll";
+
+interface WheelDriver {
+  tabId: number;
+  mode: "advance" | "hold";
+  x: number;
+  y: number;
+  /** When > 0 the loop dispatches UP wheels (a retrigger burst) before resuming the advance. */
+  upBurstRemaining: number;
+  timer: ReturnType<typeof setTimeout> | null;
+  /** Set once the loop is torn down so an in-flight pump tick stops rescheduling. */
+  stopped: boolean;
+  /** WE initiated the detach (scroll_stop / tab close / capture end) — onDetach must NOT push scroll_detached. */
+  detaching: boolean;
+}
+
+// Only ONE debugged capture tab at a time (invariant). Null = nothing attached.
+let wheelDriver: WheelDriver | null = null;
+
+type AttachResult = { ok: true } | { ok: false; reason: string };
+
+// Attach the debugger to `tabId`. A reject means DevTools is open or another debugger is already attached —
+// return a TYPED failure so the caller can notify honestly and abort, never silently fail.
+async function attachScrollDebugger(tabId: number): Promise<AttachResult> {
+  try {
+    await chrome.debugger.attach({ tabId }, "1.3");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: (e as Error)?.message ?? String(e) };
+  }
+}
+
+// One trusted wheel event at (x,y). Rejects if the debugger has detached mid-flight (the pump swallows it).
+function dispatchWheel(tabId: number, x: number, y: number, deltaY: number): Promise<unknown> {
+  return chrome.debugger.sendCommand({ tabId }, "Input.dispatchMouseEvent", {
+    type: "mouseWheel",
+    x,
+    y,
+    deltaX: 0,
+    deltaY,
+    pointerType: "mouse",
+  });
+}
+
+// The continuous wheel loop: a self-rescheduling async pump (awaits each dispatch, then schedules the next
+// after WHEEL.intervalMs — so dispatches never pile up). It reads the LATEST mode/coords the content script
+// sent, decoupling smooth motion from the observer's 250ms decision cadence. advance → wheel down · hold →
+// idle · a pending retrigger burst → wheel UP a few times, then resume advancing. Starts in `hold`; the
+// content script's first scroll_mode(advance) sets it moving (avoids wheeling at the (0,0) default).
+function startWheelPump(tabId: number): void {
+  const st: WheelDriver = { tabId, mode: "hold", x: 0, y: 0, upBurstRemaining: 0, timer: null, stopped: false, detaching: false };
+  wheelDriver = st;
+  const pump = async (): Promise<void> => {
+    if (st.stopped || wheelDriver !== st) return;
+    try {
+      if (st.upBurstRemaining > 0) {
+        st.upBurstRemaining--;
+        await dispatchWheel(st.tabId, st.x, st.y, -WHEEL.retriggerDeltaY);
+      } else if (st.mode === "advance") {
+        await dispatchWheel(st.tabId, st.x, st.y, WHEEL.advanceDeltaY);
+      }
+      // hold → no dispatch (the loop idles).
+    } catch {
+      // Dispatch failed — the debugger detached mid-flight; onDetach handles cleanup. Stop pumping.
+      return;
+    }
+    if (!st.stopped && wheelDriver === st) {
+      st.timer = setTimeout(() => void pump(), WHEEL.intervalMs);
+    }
+  };
+  st.timer = setTimeout(() => void pump(), WHEEL.intervalMs);
+}
+
+// Attach + start the loop for a run. Enforces one-debugged-tab-at-a-time; on attach failure raises a
+// capture_notice AND returns the failure so the content script ends the run honestly (never a silent hang).
+async function handleScrollStart(tabId: number | undefined, sendResponse: (r: AttachResult) => void): Promise<void> {
+  if (tabId == null) {
+    sendResponse({ ok: false, reason: "no tab to attach the scroll driver to" });
+    return;
+  }
+  if (wheelDriver) await stopScrollDriver(); // tear down any prior run's attach first (one tab at a time)
+  const res = await attachScrollDebugger(tabId);
+  if (!res.ok) {
+    console.warn(`[commonplace] scroll debugger attach failed on tab ${tabId}: ${res.reason}`);
+    notifyCapture("debugger", DEBUGGER_ATTACH_REASON);
+    sendResponse({ ok: false, reason: DEBUGGER_ATTACH_REASON });
+    return;
+  }
+  startWheelPump(tabId);
+  console.log(`[commonplace] scroll driver attached + trusted-wheel loop started on tab ${tabId}`);
+  sendResponse({ ok: true });
+}
+
+// Steer the loop from the content script's observer: update the aim point + the mode. `retrigger` is
+// EDGE-triggered — it queues an UP-burst then resumes advancing (the loop reads mode level-triggered, the
+// burst once). `stop` detaches. Ignores messages from a tab that isn't the attached one.
+function onScrollMode(tabId: number | undefined, mode: string, x: number, y: number): void {
+  const st = wheelDriver;
+  if (!st || tabId == null || tabId !== st.tabId) return;
+  if (Number.isFinite(x)) st.x = x;
+  if (Number.isFinite(y)) st.y = y;
+  if (mode === "retrigger") {
+    st.upBurstRemaining = WHEEL.retriggerBurst;
+    st.mode = "advance";
+  } else if (mode === "advance") {
+    st.mode = "advance";
+  } else if (mode === "hold") {
+    st.mode = "hold";
+  } else if (mode === "stop") {
+    void stopScrollDriver();
+  }
+}
+
+// Stop the loop and detach — the INTENTIONAL teardown path (scroll_stop / mode:stop / capture end / tab
+// close). Marks `detaching` so onDetach treats the resulting detach as expected (no scroll_detached push),
+// and clears `wheelDriver` BEFORE the await so a re-entrant start sees no driver. Idempotent.
+async function stopScrollDriver(): Promise<void> {
+  const st = wheelDriver;
+  if (!st) return;
+  st.stopped = true;
+  st.detaching = true;
+  if (st.timer != null) {
+    clearTimeout(st.timer);
+    st.timer = null;
+  }
+  if (wheelDriver === st) wheelDriver = null;
+  try {
+    await chrome.debugger.detach({ tabId: st.tabId });
+  } catch {
+    // Already detached / tab gone — fine.
+  }
+}
+
+// EXTERNAL detach: the user clicked the banner's "Cancel", opened DevTools on the tab, or the tab was
+// closed/discarded. Stop the loop and — unless WE initiated it — tell the content script to end its run
+// honestly (a reported incomplete, never a hang or a false done).
+chrome.debugger.onDetach.addListener((source, reason) => {
+  const st = wheelDriver;
+  if (!st || source.tabId !== st.tabId) return;
+  const intentional = st.detaching;
+  st.stopped = true;
+  if (st.timer != null) {
+    clearTimeout(st.timer);
+    st.timer = null;
+  }
+  const tabId = st.tabId;
+  wheelDriver = null;
+  if (!intentional) {
+    console.warn(`[commonplace] scroll debugger detached externally (${reason}) — ending the run on tab ${tabId}`);
+    void chrome.tabs
+      .sendMessage(tabId, {
+        kind: "scroll_detached",
+        reason: "the scroll driver was disconnected (DevTools opened, or you clicked Cancel on the debugging banner)",
+      })
+      .catch(() => {});
+  }
+});
+
+// A closed tab must never leave a dangling attach.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (wheelDriver && wheelDriver.tabId === tabId) void stopScrollDriver();
+});
+
+chrome.runtime.onMessage.addListener((msg: Msg, sender, sendResponse) => {
   if (msg.kind === "item_list") {
     void handleItemList(msg);
   } else if (msg.kind === "scroll_done") {
@@ -252,6 +456,15 @@ chrome.runtime.onMessage.addListener((msg: Msg, _sender, sendResponse) => {
   } else if (msg.kind === "capture_notice") {
     // A resumable pause from the content script — notify + persist (never terminal; the run resumes).
     notifyCapture(msg.level, msg.reason);
+  } else if (msg.kind === "scroll_start") {
+    // Attach the debugger to the sender's tab + start the trusted-wheel loop. Async attach → sendResponse
+    // via the `return true` below so the content script learns ok/attach-failed and can abort honestly.
+    void handleScrollStart(sender.tab?.id, sendResponse);
+    return true;
+  } else if (msg.kind === "scroll_mode") {
+    onScrollMode(sender.tab?.id, msg.mode, msg.x, msg.y);
+  } else if (msg.kind === "scroll_stop") {
+    void stopScrollDriver();
   } else if (msg.kind === "export_enriched") {
     exportData("attic-enriched.json", msg.results);
   } else if (msg.kind === "download_test") {
@@ -690,6 +903,9 @@ async function handleScrollDone(msg: ScrollDoneMsg): Promise<void> {
   // The run ended (done or giveup) — clear the notification dedupe marker so a later run's first pause
   // notifies fresh rather than being suppressed as a duplicate of this run's last pause (FIX 4b).
   clearActiveNotice();
+  // Belt (invariant: always detach): the content script sends scroll_stop before scroll_done, but a
+  // crashed/killed content script may not — so defensively stop the trusted-wheel loop + detach here too.
+  void stopScrollDriver();
   // A source finished enumerating (done OR giveup — partial capture still deserves posters). Kick the
   // decoupled poster pass NOW, before cover URLs expire. Fire-and-forget; never fails the export.
   void runPosterPassNow();
