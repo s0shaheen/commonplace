@@ -132,7 +132,16 @@ function normalizeQuality(v: unknown): SourceQuality {
   return v === "done" || v === "suspicious" || v === "giveup" ? v : null;
 }
 
-/** The right-aligned per-source detail. "N of ~M" when a declared count is known; flags short/incomplete honestly. */
+/** On a CLEAN terminal, a captured count within this fraction of the declared total is treated as a
+ *  complete match — the profile's declared count drifts by a few items between when it renders and when
+ *  the sweep finishes, so we don't nag about a handful. Below it, the shortfall is surfaced as
+ *  "~K unavailable": on a verified terminal we DID reach the end, so the gap is deleted/private/removed
+ *  items the founder simply cannot capture — a legitimate, EXPECTED shortfall, distinct from the
+ *  "· short" (suspicious) case where we never reached a clean end and truncation is suspected. */
+export const UNAVAILABLE_DISPLAY_RATIO = 0.9;
+
+/** The right-aligned per-source detail. "N of ~M" when a declared count is known; flags short/incomplete
+ *  honestly, and on a clean terminal surfaces a real declared-vs-captured gap as "~K unavailable". */
 function rowDetail(state: RowState, quality: SourceQuality, count: number, expected: number | null): string {
   if (state === "current") return "capturing…";
   if (state === "pending") return "pending";
@@ -140,6 +149,12 @@ function rowDetail(state: RowState, quality: SourceQuality, count: number, expec
   const of = expected != null ? `${formatInt(count)} of ~${formatInt(expected)}` : formatInt(count);
   if (quality === "suspicious") return `${of} · short`;
   if (quality === "giveup") return `${of} · incomplete`;
+  // A verified-terminal ("done") capture that came in meaningfully below the declared count: the gap is
+  // unavailable (deleted/private) items, not truncation. Surface it distinctly, and only past the drift
+  // tolerance so a near-exact match reads clean.
+  if (quality === "done" && expected != null && expected > 0 && count < UNAVAILABLE_DISPLAY_RATIO * expected) {
+    return `${of} · ~${formatInt(expected - count)} unavailable`;
+  }
   return of;
 }
 

@@ -44,6 +44,30 @@ describe("completeness display (expected + quality)", () => {
     expect(vm.stateLabel).toBe("Captured — some lists came up short");
   });
 
+  it("a clean done source meaningfully below declared surfaces the '~K unavailable' gap (still 'All caught up')", () => {
+    const vm = computeViewModel(
+      { ...base, running: false, progress: { order: ["favorites"], done: ["favorites"], current: null, counts: { favorites: 900 }, expected: { favorites: 1367 }, statuses: { favorites: "done" } } },
+      { connected: true },
+    );
+    const row = vm.rows.find((r) => r.source === "favorites")!;
+    expect(row.quality).toBe("done");
+    // Verified terminal → we reached the end; the 467 gap is deleted/private items, not truncation.
+    expect(row.detail).toBe("900 of ~1,367 · ~467 unavailable");
+    // A clean terminal with an unavailable gap is still a complete capture of what's available.
+    expect(vm.state).toBe("done");
+    expect(vm.stateLabel).toBe("All caught up");
+    expect(vm.stateTone).toBe("done");
+  });
+
+  it("a clean done source within the drift tolerance shows a plain 'N of ~M' (no 'unavailable' noise)", () => {
+    const vm = computeViewModel(
+      { ...base, running: false, progress: { order: ["favorites"], done: ["favorites"], current: null, counts: { favorites: 1350 }, expected: { favorites: 1367 }, statuses: { favorites: "done" } } },
+      { connected: true },
+    );
+    const row = vm.rows.find((r) => r.source === "favorites")!;
+    expect(row.detail).toBe("1,350 of ~1,367");
+  });
+
   it("a giveup source reads '· incomplete'; unknown expected shows just the count", () => {
     const vm = computeViewModel(
       { ...base, progress: { order: ["posts"], done: ["posts"], current: null, counts: { posts: 12 }, statuses: { posts: "giveup" } } },

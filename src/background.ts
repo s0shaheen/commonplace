@@ -384,6 +384,15 @@ const WHEEL = {
 // already attached to the tab). Surfaced to the founder; the run is then ended honestly, never a silent fail.
 const DEBUGGER_ATTACH_REASON = "close DevTools on the TikTok tab so capture can scroll";
 
+// FIX 2 — the RESUMABLE-pause reason when the debugger detaches EXTERNALLY mid-run (the founder clicked X
+// on the "Commonplace is debugging" banner, opened DevTools, or the tab was discarded). The run is NOT
+// ended — it pauses; Resume re-attaches the debugger + restarts the wheel loop and continues where it left off.
+const DEBUGGER_DETACH_PAUSE_REASON =
+  "Capture paused — the “Commonplace is debugging” banner was closed (or DevTools opened). Click Resume to reconnect and keep capturing.";
+// The reason re-surfaced when Resume can't re-attach (DevTools still open) — stay paused, ask for the fix.
+const DEBUGGER_REATTACH_FAILED_REASON =
+  "Couldn’t reconnect — is DevTools open on the TikTok tab? Close it, then click Resume.";
+
 interface WheelDriver {
   tabId: number;
   mode: "advance" | "hold";
@@ -528,9 +537,12 @@ async function stopScrollDriver(): Promise<void> {
   }
 }
 
-// EXTERNAL detach: the user clicked the banner's "Cancel", opened DevTools on the tab, or the tab was
-// closed/discarded. Stop the loop and — unless WE initiated it — tell the content script to end its run
-// honestly (a reported incomplete, never a hang or a false done).
+// EXTERNAL detach: the user clicked the banner's "Cancel"/X, opened DevTools on the tab, or the tab was
+// discarded. FIX 2 — this NO LONGER ends the run. It enters a RESUMABLE pause: persist the crash-safe
+// `paused` state (level "debugger") + notify, and tell the content script to HOLD (keep the run alive,
+// stop feeding motion). The wheel loop is gone (detached) — that's fine; Resume re-attaches it
+// (handleSyncResume). OUR intentional detaches (scroll_stop / tab close / capture end) set `detaching`
+// and end cleanly as before — only the EXTERNAL detach becomes a pause.
 chrome.debugger.onDetach.addListener((source, reason) => {
   const st = wheelDriver;
   if (!st || source.tabId !== st.tabId) return;
@@ -543,13 +555,11 @@ chrome.debugger.onDetach.addListener((source, reason) => {
   const tabId = st.tabId;
   wheelDriver = null;
   if (!intentional) {
-    console.warn(`[commonplace] scroll debugger detached externally (${reason}) — ending the run on tab ${tabId}`);
-    void chrome.tabs
-      .sendMessage(tabId, {
-        kind: "scroll_detached",
-        reason: "the scroll driver was disconnected (DevTools opened, or you clicked Cancel on the debugging banner)",
-      })
-      .catch(() => {});
+    console.warn(`[commonplace] scroll debugger detached externally (${reason}) — PAUSING the run on tab ${tabId} (resumable; Resume re-attaches)`);
+    void setPaused("debugger", DEBUGGER_DETACH_PAUSE_REASON);
+    // Tell the content script to HOLD (its observer enters a resumable pause held until Resume). Best-effort
+    // — a discarded/closed tab just no-ops (the persisted `paused` state still surfaces in the popup).
+    void chrome.tabs.sendMessage(tabId, { kind: "scroll_paused_detach", reason: DEBUGGER_DETACH_PAUSE_REASON }).catch(() => {});
   }
 });
 
@@ -1119,11 +1129,34 @@ async function handleSyncPause(): Promise<void> {
 // RESUME: clear the user-actionable `paused` state and continue where the run left off. If the content
 // script is still alive and paused, unblock it in place (progress intact — the captured prefix is kept).
 // If the SW/content died while paused, re-drive the in-flight source from its persisted checkpoint.
+//
+// FIX 2 — a DEBUGGER-level pause (external detach: banner closed / DevTools opened) tore down the wheel
+// loop, so before we can resume a live run we must RE-ATTACH the debugger + restart the pump. We do that
+// FIRST and only clear the pause on success; if re-attach fails (DevTools still open) we STAY paused and
+// re-surface an actionable reason so Resume genuinely reconnects rather than resuming into a dead scroll.
 async function handleSyncResume(): Promise<void> {
-  await clearPaused();
-  clearActiveNotice();
   const tabId = await findCaptureTab();
   const live = tabId != null && (await isTabScrolling(tabId));
+
+  // Re-attach when a live content run has NO attached wheel driver (the debugger detached out from under
+  // it — the debugger-pause case, or any time the attach is gone but the run should be live).
+  const needsReattach = live && tabId != null && wheelDriver == null;
+  if (needsReattach && tabId != null) {
+    const res = await attachScrollDebugger(tabId);
+    if (!res.ok) {
+      // Couldn't reconnect (DevTools open / another debugger). Keep the run PAUSED and re-surface the fix —
+      // do NOT clear the pause, do NOT resume into a dead scroll.
+      console.warn(`[commonplace] resume re-attach failed on tab ${tabId}: ${res.reason} — staying paused`);
+      await setPaused("debugger", DEBUGGER_REATTACH_FAILED_REASON);
+      return;
+    }
+    const speed = resolveSpeed((await loadConfig(configStorage)).captureSpeed);
+    startWheelPump(tabId, speed);
+    console.log(`[commonplace] resume — re-attached scroll driver + restarted the trusted-wheel loop on tab ${tabId} (${speed} cadence)`);
+  }
+
+  await clearPaused();
+  clearActiveNotice();
   if (live && tabId != null) {
     try {
       await chrome.tabs.sendMessage(tabId, { kind: "sync_resume" });
@@ -1132,7 +1165,10 @@ async function handleSyncResume(): Promise<void> {
       // Fall through to a checkpoint re-drive.
     }
   }
-  // No live run (SW/content died while paused) — resume the in-flight source from its checkpoint.
+  // No live run (SW/content died while paused) — resume the in-flight source from its checkpoint. If a
+  // debugger pause left an attach dangling from a now-dead run, drop it first (one-debugged-tab invariant);
+  // the checkpoint re-drive re-attaches cleanly via autoScroll → startScrollDriver.
+  if (wheelDriver) await stopScrollDriver();
   await runSupervisorEvent({ kind: "restarted" });
 }
 

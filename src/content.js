@@ -34,6 +34,10 @@ import { shouldHaltForBlock, BAN_HALT_REASON } from "./lib/capture/banGuard.js";
 import { isPastDeadline, RUN_DEADLINE_REASON } from "./lib/capture/deadline.js";
 import { assessVisibility, HIDDEN_PAUSE_REASON } from "./lib/capture/backgroundTab.js";
 import { parseLocalizedCount } from "./lib/capture/declaredCount.js";
+// FIX 3 (mid-run page-clear resilience, 2026-07-13): TikTok's flagged "Something went wrong" empty-state
+// (or a discard) can wipe a POPULATED grid mid-run; the pure detector spots the populated→empty transition
+// so the glue can drive the SAME bounded reload recovery empty_ok uses — never a false stop / false done.
+import { stepPageClear, initialPageClearState, POPULATED_MIN_TILES } from "./lib/capture/pageClear.js";
 
 let lastSource = null;
 let lastHasMore = null; // latest coerced paging signal from the message path (Task 1)
@@ -76,6 +80,11 @@ let lastItemListUrl = null;
 let userStopRequested = false;
 let userPauseRequested = false;
 let userResumeRequested = false;
+// FIX 2 — set when the SW reports its debugger detached EXTERNALLY (the founder closed the "Commonplace
+// is debugging" banner, or opened DevTools). The observer enters a RESUMABLE pause held until the founder
+// clicks Resume (which re-attaches the debugger in the SW). The run is NOT ended — capture continues after
+// Resume. Reset at the start of each run.
+let debuggerPauseRequested = false;
 
 window.addEventListener("message", (e) => {
   if (e.source !== window || !e.data || e.data.__attic !== true) return;
@@ -463,6 +472,26 @@ function detectCaptchaContainer() {
   return false;
 }
 
+// FIX 3 — TikTok's flagged/empty ERROR state: a "Something went wrong" message and/or a Refresh/Retry
+// control where the grid used to be. This is only ever consulted by the page-clear detector when the
+// grid already looks depleted (a cheap tile-count gate), so it stays off the hot path on a healthy page.
+// Best-effort + conservative: a visible retry/refresh control, OR a SHORT visible node literally saying
+// the surface failed to load — combined (in the pure detector) with "the grid was populated then went
+// empty", the false-positive surface is tiny. Live-verify the exact TikTok error markup.
+const PAGE_ERROR_TEXT = /something went wrong|an error occurred|couldn'?t load|failed to load|no internet/i;
+const PAGE_RETRY_TEXT = /^(refresh|retry|try again|reload)$/i;
+function detectPageErrorState() {
+  for (const el of document.querySelectorAll("button, a, [role='button']")) {
+    const t = (el.textContent || "").trim();
+    if (t.length <= 24 && PAGE_RETRY_TEXT.test(t) && isVisible(el)) return true;
+  }
+  for (const el of document.querySelectorAll("p, h1, h2, h3, span")) {
+    const t = (el.textContent || "").trim();
+    if (t.length <= 80 && PAGE_ERROR_TEXT.test(t) && isVisible(el)) return true;
+  }
+  return false;
+}
+
 // "My input isn't landing." Record the effective scrollTop, attempt a small real scroll, re-read after
 // a tick; if a blocking layer is present AND the position didn't move, input is being swallowed
 // (composes with §6.1's closed-loop motion check — this routes to a pause BEFORE it ever reads as a
@@ -521,6 +550,10 @@ const FLAGGED_PAUSE_REASON =
   "TikTok returned empty pages after a refresh — the session looks flagged; try again shortly or solve any challenge in the tab";
 // A founder-initiated pause (popup Pause button) — held until they click Resume.
 const USER_PAUSE_REASON = "paused — click Resume to continue capturing";
+// FIX 2 — the debugger detached externally (banner closed / DevTools opened). A resumable pause HELD until
+// Resume (no healthy arrival can auto-break it — the wheel loop is detached, so no motion/pages will come).
+const DEBUGGER_BANNER_PAUSE_REASON =
+  "capture paused — the “Commonplace is debugging” banner was closed; click Resume to reconnect and keep capturing";
 // A wedged run being re-nudged before we concede (liveness watchdog) — surfaced so a hang self-reports.
 const WEDGE_RETRY_REASON = "capture stalled — re-nudging the loader to keep going";
 
@@ -547,15 +580,39 @@ function armRunSignals() {
 }
 
 // COMPL-07 (item 2): read the source's DECLARED saved count from the profile UI (best-effort, CONSERVATIVE
-// — only the source tab's OWN text, so an unrelated number elsewhere can't fabricate a count). The pure
+// — only the source tab's OWN subtree, so an unrelated number elsewhere can't fabricate a count). The pure
 // parseLocalizedCount handles "1,463" / "1.5K" / "1 463" / non-Latin digits → a number, or null if the
 // count isn't visibly rendered there. A null just means the completeness guard can't flag "suspicious".
+//
+// FIX 4 — the founder confirmed: the FAVORITES tab surfaces the total favorites count; the LIKES tab does
+// NOT (Likes has no visible total). So Likes stays OPEN-ENDED (null) — it can never fabricate a wrong count
+// off some stray number — and Favorites (plus best-effort Posts/Reposts) reads its tab total resiliently.
 // LIVE-VERIFY: the exact element TikTok renders the count on/near varies by locale + layout.
 function readDeclaredCount(source) {
   if (!source) return null;
+  if (source === "likes") return null; // Likes shows no total → open-ended by design
   const tab = findSourceTab(source);
   if (!tab) return null;
-  return parseLocalizedCount(tab.textContent || "");
+  // The tab's own text usually carries the count ("Favorites 1,463" / "1.5K"); parseLocalizedCount grabs
+  // the first numeric run. If the label alone has no number, fall back to a count BADGE within the tab.
+  const direct = parseLocalizedCount(tab.textContent || "");
+  if (direct != null) return direct;
+  return scanTabForCount(tab);
+}
+
+// Scan ONLY within the tab element for a child node that is itself just a count token (a badge/superscript).
+// Conservative — never reaches outside the tab, since a wrong count is worse than none (the completeness
+// guard then simply defaults to the honest scroll outcome). Latin-digit pre-filter; non-Latin locales are
+// covered by the `direct` tab-text read above.
+function scanTabForCount(tab) {
+  for (const el of tab.querySelectorAll("span, strong, sup, b, i, div")) {
+    const t = (el.textContent || "").trim();
+    if (t && t.length <= 12 && /^[\d.,\s ]+\s*[kmb]?$/i.test(t)) {
+      const n = parseLocalizedCount(t);
+      if (n != null) return n;
+    }
+  }
+  return null;
 }
 
 // ── Preflight gate glue (C8, §7) ────────────────────────────────────────────────
@@ -693,6 +750,7 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   userStopRequested = false;
   userPauseRequested = false;
   userResumeRequested = false;
+  debuggerPauseRequested = false; // FIX 2 — clear any stale external-detach flag from a prior run
   let stoppedByUser = false;
   // Opportunistic own-handle capture: if we're already on the founder's own profile, learn it now so a
   // later Sync from ANY page can navigate here autonomously (SUP-02).
@@ -820,6 +878,7 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   let reloadingAway = false; // set when we location.reload() a flagged session — teardown then skips scroll_done
   let outcome = { status: "giveup", reason: "capture ended before a verified terminal" }; // finalized at each terminal
   let rec = initialRecoveryState(Date.now());
+  let pageClearState = initialPageClearState(); // FIX 3 — tracks the populated→empty transition of a mid-run clear
   let httpErrorStreak = 0; // consecutive http_error arrivals — a persistent 429/5xx ends the run honestly
   let challengeCycles = 0; // transport-challenge pause cycles this run — feeds the account-safety kill-switch (banGuard)
   let watchdog = initialWatchdog(); // liveness watchdog — bounded re-nudges before conceding a wedged run
@@ -868,6 +927,10 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     // held the wheel is stopped, so NO healthy arrival can come to break the pause; visibility is the
     // right resume signal instead.
     const resumeWhenVisible = !!opts.resumeWhenVisible;
+    // FIX 2: a debugger-detach pause is HELD until the founder acts (Resume, which re-attaches in the SW —
+    // or Stop). The wheel loop is detached, so NO healthy arrival can come to auto-break it; letting a
+    // stray late page un-pause it would resume into a dead (unattached) scroll. Only user action resumes it.
+    const heldUntilUser = !!opts.heldUntilUser;
     sendScrollMode("hold"); // stop the SW's trusted-wheel loop while paused — no motion until we resume
     // Raise the CRASH-SAFE, popup-readable `paused` state (the SW persists it to storage). This is the
     // single source of truth the UI surfaces as "action needed" — the founder's #1 ask: never a silent
@@ -897,7 +960,7 @@ async function autoScroll({ source = null, resuming = false } = {}) {
         userPauseRequested = false;
         break;
       }
-      if (healthyArrivals > pauseStartHealthy) break; // a fresh healthy page returned → auto-resume
+      if (!heldUntilUser && healthyArrivals > pauseStartHealthy) break; // a fresh healthy page returned → auto-resume
       if (resumeWhenOnline && navigator.onLine !== false) break; // back online → resume (regenerate arrivals)
       if (resumeWhenVisible && !document.hidden) break; // Wave C: tab brought forward → resume the run
       if (overlayTriggered) {
@@ -957,6 +1020,21 @@ async function autoScroll({ source = null, resuming = false } = {}) {
         break;
       }
       continue; // resumed → re-decide motion next tick
+    }
+    // FIX 2 — the SW's debugger detached externally (banner closed / DevTools opened). Enter a RESUMABLE
+    // pause held until the founder clicks Resume (the SW re-attaches the debugger + restarts the wheel loop
+    // BEFORE relaying sync_resume). The run stays ALIVE — never ended on an external detach. `heldUntilUser`
+    // so a stray late page can't auto-break it into a dead, unattached scroll.
+    if (debuggerPauseRequested) {
+      debuggerPauseRequested = false;
+      await enterPause("debugger", DEBUGGER_BANNER_PAUSE_REASON, { heldUntilUser: true });
+      if (userStopRequested) {
+        stoppedByUser = true;
+        running = false;
+        console.warn("[commonplace] capture STOPPED by the founder (during a debugger pause)");
+        break;
+      }
+      continue; // resumed (re-attached) → re-decide motion next tick, wheeling down where it left off
     }
 
     currentScroller = getScroller(); // refresh each tick (heavy query at most every OBSERVER_MS)
@@ -1073,6 +1151,23 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       else if (lastTransport === "offline") recSignal = "offline";
       // http_error / api_error → no recovery signal; the modest-slowdown branch below owns http_error.
     }
+    // ── FIX 3: MID-RUN PAGE CLEAR. TikTok's flagged "Something went wrong" empty-state (a refresh fixes
+    //    it) or a discard can wipe a POPULATED grid mid-run (the live "~6k stopped/cleared" symptom). The
+    //    pure detector spots the populated→empty transition — eviction never trims below its live window,
+    //    so it can't forge one — and we drive the SAME bounded reload recovery empty_ok uses (one reload →
+    //    re-verify → else pause+notify). Never let a mid-run clear read as a stall/giveup or a false done.
+    //    The error-state DOM scan is gated behind a depleted tile count, so it stays off a healthy hot path.
+    const tileCount = document.querySelectorAll(TILE_ANCHOR_SEL).length;
+    const pageErrored = tileCount <= POPULATED_MIN_TILES ? detectPageErrorState() : false;
+    const pc = stepPageClear(pageClearState, { tiles: tileCount, errorState: pageErrored });
+    pageClearState = pc.state;
+    if (pc.cleared && recSignal == null) {
+      console.warn(
+        `[commonplace] mid-run page CLEAR detected (tiles ${tileCount}, peak ${pageClearState.peakTiles}` +
+          `${pageErrored ? ", error-state" : ""}) — driving the bounded reload recovery`,
+      );
+      recSignal = "empty_ok"; // feed the SAME flagged-refresh ladder (2 consecutive → one reload → else pause)
+    }
     if (recSignal) {
       const r = stepRecovery(rec, recSignal, { now: Date.now() });
       rec = r.state;
@@ -1180,6 +1275,13 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       outcome = { status: "done", reason: null };
       running = false;
       console.log(`[commonplace] capture COMPLETE — TikTok reported a verified terminal (hasMore:false); ${prevCount} captured`);
+    } else if (watchMode === "retrigger") {
+      // FIX 1 — a GENUINE arrival-stall (no healthy page for ~1.8s). scrollWatch fires the up-nudge FAST
+      // and gated on the NETWORK (never on geometry, so it can't drag a healthy scroll back up). Map it to
+      // the SW's trusted-wheel pump, which does the actual UP-burst then resumes wheeling down. We do NOT
+      // reset watchState — the reducer's own retrigger budget/cooldown paces the nudges and, once spent,
+      // concedes at the STALL_MS ceiling.
+      sendScrollMode("retrigger");
     } else if (watchMode === "giveup") {
       const wd = stepWatchdog(watchdog);
       watchdog = wd.state;
@@ -1200,7 +1302,7 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     }
 
     // ── 6. TELEMETRY + HUD (real Date.now()/performance.memory/document reads happen ONLY here — glue).
-    const domCount = document.querySelectorAll(TILE_ANCHOR_SEL).length;
+    const domCount = tileCount; // reuse the count read for the page-clear detector this same tick
     const sample = sampleMemory({
       now: Date.now(),
       capturedCount: count,
@@ -1443,13 +1545,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     // Fix round 1: the SW's revive alarm asks the tab itself whether a run is live before re-driving
     // (its own `supervisorRunning` flag dies with every SW idle-out; this tab is the ground truth).
     sendResponse({ scrolling: scrolling || captureRunActive });
+  } else if (msg && msg.kind === "scroll_paused_detach") {
+    // FIX 2 — the SW's debugger detached EXTERNALLY (the founder closed the "Commonplace is debugging"
+    // banner, or opened DevTools). Do NOT end the run — HOLD it: the observer enters a resumable pause on
+    // its next tick and continues (re-attached) when the founder clicks Resume. Captured data is already
+    // safe in IndexedDB; this keeps the RUN alive.
+    debuggerPauseRequested = true;
+    console.warn(`[commonplace] debugger detached externally — holding the run (resumable pause): ${(msg && msg.reason) || ""}`);
   } else if (msg && msg.kind === "scroll_detached") {
-    // The SW's trusted-wheel driver lost its debugger (banner Cancel, DevTools opened on the tab, or the
-    // attach dropped). Flag it; autoScroll's observer ends the run honestly on its next tick — a reported
-    // incomplete, never a hang and never a false done.
+    // Defensive belt (no longer emitted for an EXTERNAL detach — that is now a resumable pause, above).
+    // Kept so any future hard-detach signal still ends the run honestly rather than hanging.
     scrollDriverDetached = true;
     scrollDriverDetachReason = (msg && msg.reason) || "the scroll driver was disconnected";
-    console.warn(`[commonplace] scroll driver detached — ${scrollDriverDetachReason}`);
+    console.warn(`[commonplace] scroll driver detached (hard) — ${scrollDriverDetachReason}`);
   } else if (msg && msg.kind === "sync_stop") {
     // Founder pressed Stop in the popup (relayed by the SW). End the run cleanly on the next observer
     // tick; the SW owns the rest of the stop cleanup (detach + clear supervisor current + clear paused).
