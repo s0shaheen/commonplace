@@ -217,6 +217,119 @@ describe("supervisor.arrivalDrivesRun — carry-forward 2", () => {
   });
 });
 
+// ── Item 1: source selection (config.captureSources → enabled Source[]) ─────────────────────────────
+// The options UI lets the founder pick which lanes a sweep drives. `nextAction`'s third arg carries the
+// enabled set; a disabled source is NEVER driven and NEVER blocks completion. Default = SOURCES so an
+// omitted arg (and every existing call site) behaves exactly as before.
+describe("supervisor.nextAction — enabled source selection (item 1)", () => {
+  const twoSources: Source[] = ["favorites", "likes"];
+
+  it("a 2-source sweep drives only the enabled sources, in order, then all_done", () => {
+    let p = initialProgress();
+    let r = nextAction(p, { kind: "start" }, twoSources);
+    expect(r.action).toEqual({ kind: "capture_source", source: "favorites", resuming: false });
+    p = r.progress;
+    r = nextAction(p, { kind: "source_finished", source: "favorites", captured: 10, status: "done" }, twoSources);
+    expect(r.action).toEqual({ kind: "capture_source", source: "likes", resuming: false });
+    p = r.progress;
+    // Finishing the last ENABLED source completes the sweep — posts/reposts (disabled) never block it.
+    r = nextAction(p, { kind: "source_finished", source: "likes", captured: 20, status: "done" }, twoSources);
+    expect(r.action).toEqual({ kind: "all_done" });
+    expect(r.progress.done).toEqual(["favorites", "likes"]);
+  });
+
+  it("a disabled source is skipped entirely (never becomes current, never appears in the sweep)", () => {
+    // Enable favorites + posts only; likes + reposts are off.
+    const favPosts: Source[] = ["favorites", "posts"];
+    let p = initialProgress();
+    let r = nextAction(p, { kind: "start" }, favPosts);
+    expect(r.action).toEqual({ kind: "capture_source", source: "favorites", resuming: false });
+    p = r.progress;
+    r = nextAction(p, { kind: "source_finished", source: "favorites", captured: 1, status: "done" }, favPosts);
+    // likes is disabled → the next enabled source is posts, NOT likes.
+    expect(r.action).toEqual({ kind: "capture_source", source: "posts", resuming: false });
+    p = r.progress;
+    r = nextAction(p, { kind: "source_finished", source: "posts", captured: 2, status: "done" }, favPosts);
+    expect(r.action).toEqual({ kind: "all_done" });
+    expect(r.progress.done).not.toContain("likes");
+    expect(r.progress.done).not.toContain("reposts");
+  });
+
+  it("the partials-first retry ordering holds AMONG the enabled sources after a complete sweep", () => {
+    const twoDone: SupervisorProgress = {
+      current: null,
+      done: ["favorites", "likes"],
+      counts: {
+        favorites: { captured: 100, status: "done" },
+        likes: { captured: 30, status: "giveup" }, // the partial
+      },
+      order: ["favorites", "likes"],
+    };
+    // A fresh Sync over the same 2 sources: the partial (likes) leads, resuming; favorites re-sweeps fresh.
+    let r = nextAction(twoDone, { kind: "start" }, twoSources);
+    expect(r.action).toEqual({ kind: "capture_source", source: "likes", resuming: true });
+    r = nextAction(r.progress, { kind: "source_finished", source: "likes", captured: 40, status: "done" }, twoSources);
+    expect(r.action).toEqual({ kind: "capture_source", source: "favorites", resuming: false });
+  });
+
+  it("a `suspicious` source is retried first on the next fresh sweep, exactly like a giveup", () => {
+    const swept: SupervisorProgress = {
+      current: null,
+      done: ["favorites", "likes"],
+      counts: {
+        favorites: { captured: 100, status: "done" },
+        likes: { captured: 5, status: "suspicious", expected: 1000 }, // grossly short → suspicious
+      },
+      order: ["favorites", "likes"],
+    };
+    const r = nextAction(swept, { kind: "start" }, twoSources);
+    expect(r.action).toEqual({ kind: "capture_source", source: "likes", resuming: true });
+  });
+
+  it("newly-enabling a source after a completed sweep drives it on the next Sync", () => {
+    // A prior sweep ran favorites+likes only; the founder now also enables posts.
+    const twoDone: SupervisorProgress = {
+      current: null,
+      done: ["favorites", "likes"],
+      counts: { favorites: { captured: 1, status: "done" }, likes: { captured: 2, status: "done" } },
+      order: ["favorites", "likes"],
+    };
+    const threeSources: Source[] = ["favorites", "likes", "posts"];
+    const r = nextAction(twoDone, { kind: "start" }, threeSources);
+    // posts is the only undone enabled source → it is driven (favorites/likes are already done).
+    expect(r.action).toEqual({ kind: "capture_source", source: "posts", resuming: false });
+  });
+});
+
+// ── Item 2: completeness accounting — expected (declared) count recorded per source ─────────────────
+describe("supervisor.nextAction — records expected (declared) count + suspicious status (item 2)", () => {
+  it("source_finished carries the declared count into counts[source].expected", () => {
+    let p = initialProgress();
+    p = nextAction(p, { kind: "start" }).progress;
+    p = nextAction(p, {
+      kind: "source_finished",
+      source: "favorites",
+      captured: 900,
+      status: "done",
+      expected: 1000,
+    }).progress;
+    expect(p.counts.favorites).toEqual({ captured: 900, status: "done", expected: 1000 });
+  });
+
+  it("a suspicious terminal is recorded with its captured/expected", () => {
+    let p = initialProgress();
+    p = nextAction(p, { kind: "start" }).progress;
+    p = nextAction(p, {
+      kind: "source_finished",
+      source: "favorites",
+      captured: 50,
+      status: "suspicious",
+      expected: 1000,
+    }).progress;
+    expect(p.counts.favorites).toEqual({ captured: 50, status: "suspicious", expected: 1000 });
+  });
+});
+
 describe("supervisor — persistence shape", () => {
   it("initialProgress is the empty, resumable starting point", () => {
     expect(initialProgress()).toEqual({ current: null, done: [], counts: {} });

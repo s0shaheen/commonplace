@@ -29,6 +29,11 @@ import {
 } from "./lib/capture/ownIdentity.js";
 import { initialWatchdog, stepWatchdog, MAX_WEDGE_RETRIES } from "./lib/capture/watchdog.js";
 import { shouldHaltForBlock, BAN_HALT_REASON } from "./lib/capture/banGuard.js";
+// Wave-B/C resilience (2026-07-13): the run deadline (a wedged run can't hang forever), background-tab
+// throttling (a hidden tab stops paginating), and the localized declared-count parser (COMPL-07 trust).
+import { isPastDeadline, RUN_DEADLINE_REASON } from "./lib/capture/deadline.js";
+import { assessVisibility, HIDDEN_PAUSE_REASON } from "./lib/capture/backgroundTab.js";
+import { parseLocalizedCount } from "./lib/capture/declaredCount.js";
 
 let lastSource = null;
 let lastHasMore = null; // latest coerced paging signal from the message path (Task 1)
@@ -52,6 +57,12 @@ let runHealthyBaseline = 0;
 // scroll signals — a straggler from the previous source must not inject its hasMore into this run.
 // Null = the manual Alt+Shift+A dev path (no supervisor tag) → arrivalDrivesRun accepts everything.
 let activeRunSource = null;
+
+// COMPL-07 (item 2): DISTINCT item ids captured for THIS source THIS run — the per-run new-id delta that
+// scroll_done reports as `captured` (fixing #15: per-source counts used to report the GLOBAL cumulative
+// total, so truncation was structurally invisible). Only arrivals that DRIVE the run (source-matched via
+// arrivalDrivesRun) contribute, so this is a clean per-source measure. Reset at each run start.
+let runCapturedIds = new Set();
 
 // SUP-02: the freshest intercepted item_list URL (carries the profile owner's secUid). Threaded to
 // own-identity capture; never used to drive the run.
@@ -95,6 +106,13 @@ window.addEventListener("message", (e) => {
     lastCursor = e.data.cursor ?? null;
     lastTransport = e.data.transport ?? "ok";
     lastItemsLen = Array.isArray(e.data.items) ? e.data.items.length : 0; // FIX 5: real page item count
+    // COMPL-07 (item 2): accumulate DISTINCT captured ids for THIS run (only driving arrivals reach here,
+    // so this is the per-source new-id delta). An empty/challenge transport carries items:[] → no-op.
+    if (Array.isArray(e.data.items)) {
+      for (const it of e.data.items) {
+        if (it && typeof it.id === "string" && it.id) runCapturedIds.add(it.id);
+      }
+    }
     if (lastTransport === "ok") healthyArrivals++;
     pageArrivals++;
   }
@@ -524,7 +542,20 @@ function armRunSignals() {
   resetRunSignals();
   runArrivalsBaseline = pageArrivals;
   runHealthyBaseline = healthyArrivals;
+  runCapturedIds = new Set(); // COMPL-07: fresh per-run captured set (nav-window arrivals accrue into it)
   runSignalsArmed = true;
+}
+
+// COMPL-07 (item 2): read the source's DECLARED saved count from the profile UI (best-effort, CONSERVATIVE
+// — only the source tab's OWN text, so an unrelated number elsewhere can't fabricate a count). The pure
+// parseLocalizedCount handles "1,463" / "1.5K" / "1 463" / non-Latin digits → a number, or null if the
+// count isn't visibly rendered there. A null just means the completeness guard can't flag "suspicious".
+// LIVE-VERIFY: the exact element TikTok renders the count on/near varies by locale + layout.
+function readDeclaredCount(source) {
+  if (!source) return null;
+  const tab = findSourceTab(source);
+  if (!tab) return null;
+  return parseLocalizedCount(tab.textContent || "");
 }
 
 // ── Preflight gate glue (C8, §7) ────────────────────────────────────────────────
@@ -686,6 +717,7 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     resetRunSignals();
     runArrivalsBaseline = pageArrivals;
     runHealthyBaseline = healthyArrivals;
+    runCapturedIds = new Set(); // COMPL-07: fresh per-run captured set for a manual/un-armed run
   }
   let arrivalsSeen = runArrivalsBaseline;
   let healthyArrivalsSeen = runHealthyBaseline; // FIX 3: mirror arrivalsSeen for the HEALTHY-only arrival gate
@@ -718,9 +750,10 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       kind: "scroll_done",
       status: "giveup",
       reason: NOT_LOGGED_IN_REASON,
-      captured: prevCount,
+      captured: runCapturedIds.size,
       cursor: lastCursor,
       source,
+      declared: null, // aborted before capture — no honest declared read
     });
     // Disarm exactly like teardown would — but before any frame driver/observer started, so there is
     // nothing to cancel and no HUD churn beyond the reason we just surfaced.
@@ -760,9 +793,10 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       kind: "scroll_done",
       status: "giveup",
       reason: driverStart.reason,
-      captured: prevCount,
+      captured: runCapturedIds.size,
       cursor: lastCursor,
       source,
+      declared: null, // aborted before capture — no honest declared read
     });
     // Nothing was started yet (no observer, no successful attach) — nothing to cancel and no scroll_stop
     // needed (the SW never attached on a failed start). Disarm exactly like teardown would, then return.
@@ -791,6 +825,20 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   let watchdog = initialWatchdog(); // liveness watchdog — bounded re-nudges before conceding a wedged run
   let lastSampleLogTs = 0; // console.log a CaptureSample roughly every ~5s while scrolling
   let snoozeCount = 0; // screen-time reminders auto-snoozed this run (logged, never a passcode)
+  // Item 4 — run deadline: an absolute per-source-run wall-clock cap so a flapping/wedged run can't hang
+  // forever (composes with the liveness watchdog, which bounds a SHORT stall; this bounds the WHOLE run).
+  const runStartedMs = Date.now();
+  // COMPL-07 (item 2) — the source's declared saved count, read from the profile UI (best-effort). Re-read
+  // once after the first healthy page if it wasn't rendered yet at run start.
+  let declaredCount = source ? readDeclaredCount(source) : null;
+  // Wave C (item 5) — background-tab throttling. `lastHealthyMs` anchors the hidden-stall timer; a hidden
+  // tab that stops paginating pauses (or, opt-in, is foregrounded). Read the founder's foreground choice.
+  let lastHealthyMs = Date.now();
+  let keepForeground = false;
+  try {
+    const { cp_config } = await chrome.storage.local.get("cp_config");
+    keepForeground = cp_config?.captureKeepForeground === true;
+  } catch (_) {}
   // Per-run eviction reset: start fresh so the HUD's "evicted N" is this run's tally and pruneGrid
   // re-resolves the grid from scratch (a new source/tab is a new grid element).
   evictGrid = null;
@@ -816,6 +864,10 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   async function enterPause(level, reason, opts = {}) {
     const overlayTriggered = !!opts.overlayTriggered;
     const resumeWhenOnline = !!opts.resumeWhenOnline;
+    // Wave C (item 5): a HIDDEN-tab pause auto-resumes when the tab is brought forward — while hidden +
+    // held the wheel is stopped, so NO healthy arrival can come to break the pause; visibility is the
+    // right resume signal instead.
+    const resumeWhenVisible = !!opts.resumeWhenVisible;
     sendScrollMode("hold"); // stop the SW's trusted-wheel loop while paused — no motion until we resume
     // Raise the CRASH-SAFE, popup-readable `paused` state (the SW persists it to storage). This is the
     // single source of truth the UI surfaces as "action needed" — the founder's #1 ask: never a silent
@@ -847,6 +899,7 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       }
       if (healthyArrivals > pauseStartHealthy) break; // a fresh healthy page returned → auto-resume
       if (resumeWhenOnline && navigator.onLine !== false) break; // back online → resume (regenerate arrivals)
+      if (resumeWhenVisible && !document.hidden) break; // Wave C: tab brought forward → resume the run
       if (overlayTriggered) {
         const f = await gatherOverlayFacts(getScroller());
         if (!f.hasBlockingLayer && !f.inputSwallowed) break; // the overlay cleared → auto-resume
@@ -871,6 +924,19 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       outcome = { status: "giveup", reason: scrollDriverDetachReason || "the scroll driver was disconnected" };
       running = false;
       console.warn(`[commonplace] capture INCOMPLETE — ${outcome.reason}`);
+      break;
+    }
+
+    // ── RUN DEADLINE (item 4) — the absolute wall-clock cap. Past it, conclude HONESTLY (a reported
+    //    incomplete with a clear reason) + notify, rather than letting a flapping run grind indefinitely.
+    //    The SW releases the single-driver lease when the resulting giveup ends the sweep / on the next
+    //    drive re-acquiring; teardown always detaches the debugger.
+    if (isPastDeadline(runStartedMs, Date.now())) {
+      outcome = { status: "giveup", reason: RUN_DEADLINE_REASON };
+      running = false;
+      try { chrome.runtime.sendMessage({ kind: "capture_notice", level: "deadline", reason: RUN_DEADLINE_REASON }); } catch (_) {}
+      sendScrollStop();
+      console.warn(`[commonplace] capture INCOMPLETE — hit the 20-minute run deadline for ${source ?? "manual"}`);
       break;
     }
 
@@ -967,6 +1033,31 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       httpErrorStreak = 0;
       challengeCycles = 0;
       watchdog = initialWatchdog();
+      lastHealthyMs = Date.now(); // Wave C: a healthy page → re-anchor the hidden-stall timer
+      // COMPL-07: the declared count may render only once the grid is active — re-read it if still unknown.
+      if (declaredCount == null && source) declaredCount = readDeclaredCount(source);
+    }
+
+    // ── BACKGROUND-TAB RESILIENCE (Wave C, item 5). The SW-driven trusted-wheel WRITE survives the tab
+    //    being hidden, but TikTok's OWN rendering + IntersectionObserver lazy-load are throttled/paused
+    //    for a hidden tab — so the grid stops paginating and the run would silently stall for a reason
+    //    unrelated to TikTok. Act ONLY when hidden AND stalled (assessVisibility): keepForeground →
+    //    ask the SW to bring the tab forward; else → a resumable pause that auto-resumes the moment the
+    //    tab is shown again (bringing it forward re-paints + re-triggers the loader).
+    if (document.hidden) {
+      const vis = assessVisibility({ hidden: true, msSinceHealthy: Date.now() - lastHealthyMs });
+      if (vis === "hidden_stalled") {
+        if (keepForeground) {
+          try { chrome.runtime.sendMessage({ kind: "focus_capture_tab" }); } catch (_) {}
+          console.warn("[commonplace] hidden tab stalled — asking the SW to foreground it (captureKeepForeground)");
+          await sleep(1500); // let it come forward + resume painting before the next motion decision
+          lastHealthyMs = Date.now(); // give it a fresh window to produce a page before re-triggering
+          continue;
+        }
+        await enterPause("hidden", HIDDEN_PAUSE_REASON, { resumeWhenVisible: true });
+        lastHealthyMs = Date.now(); // reset the stall clock after resuming (tab is now visible)
+        continue;
+      }
     }
 
     // ── 4. SESSION RECOVERY — classify the transport and act. A pause here holds the SW's trusted-wheel
@@ -1155,9 +1246,10 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     kind: "scroll_done",
     status: outcome.status,
     reason: outcome.reason ?? null,
-    captured: prevCount,
+    captured: runCapturedIds.size, // COMPL-07: DISTINCT items captured for THIS source THIS run (per #15)
     cursor: lastCursor,
     source, // Task 5: which source this run drove — lets background.ts's supervisor advance the sequence
+    declared: declaredCount, // COMPL-07: the source's declared saved count (null if unread) → completeness
   });
   activeRunSource = null; // disarm the carry-forward-2 filter; the run is over
   console.log(
@@ -1331,6 +1423,7 @@ async function runCaptureForSource(source, resuming) {
         captured: 0,
         cursor: null,
         source,
+        declared: null, // never reached the source's grid — no declared read
       });
       activeRunSource = null;
       runSignalsArmed = false; // this run bailed before autoScroll — release the arm we set above

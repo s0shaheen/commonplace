@@ -25,13 +25,25 @@ export const SOURCES: readonly Source[] = ["favorites", "likes", "posts", "repos
 /** Store `meta` key holding the persisted SupervisorProgress blob (the resume checkpoint). */
 export const SUPERVISOR_META_KEY = "capture_supervisor";
 
-export type SourceStatus = "done" | "giveup";
+// COMPL-07: `suspicious` is a THIRD honest terminal — a run that ended without a verified terminal AND
+// captured grossly below the source's declared count (see completeness.ts). It is treated exactly like a
+// giveup for sequencing (recorded, sequenced past this sweep, retried first next fresh sweep) but stays a
+// DISTINCT status so the popup can say "captured N of ~M — looks short" instead of a bland "incomplete."
+export type SourceStatus = "done" | "giveup" | "suspicious";
+
+/** A terminal that is NOT a confident `done` — incomplete work to retry on the next fresh sweep. */
+function isPartial(sp: SourceProgress | undefined): boolean {
+  return sp?.status === "giveup" || sp?.status === "suspicious";
+}
 
 export interface SourceProgress {
-  /** Records reported captured by the source's scroll_done (the run's `captured`). */
+  /** Distinct items captured for THIS source THIS run (the per-run new-id delta — COMPL-07 fix #15, no
+   *  longer the global cumulative total). */
   captured: number;
-  /** How the source ended: `done` = TikTok's own hasMore:false; `giveup` = a reported incomplete. */
+  /** How the source ended: `done` = verified hasMore:false; `giveup`/`suspicious` = reported incomplete. */
   status: SourceStatus;
+  /** The source's declared saved count from the profile UI at run time (COMPL-07), or absent if unread. */
+  expected?: number;
 }
 
 export interface SupervisorProgress {
@@ -65,7 +77,7 @@ export interface SupervisorProgress {
 export type SupervisorEvent =
   | { kind: "start" } // a fresh Sync click: begin / continue the sequence (never stomps a live run)
   | { kind: "restarted" } // process came back after a crash: resume the in-flight source if any
-  | { kind: "source_finished"; source: Source; captured: number; status: SourceStatus };
+  | { kind: "source_finished"; source: Source; captured: number; status: SourceStatus; expected?: number };
 
 export type SupervisorAction =
   | { kind: "capture_source"; source: Source; resuming: boolean }
@@ -96,41 +108,63 @@ function advance(progress: SupervisorProgress): { progress: SupervisorProgress; 
   return { progress: { ...progress, current: next }, action: { kind: "capture_source", source: next, resuming } };
 }
 
-/** Every source terminal this sweep, nothing in flight ⇒ the sweep is over. */
-function sweepComplete(progress: SupervisorProgress): boolean {
-  return progress.current == null && SOURCES.every((s) => progress.done.includes(s));
-}
-
 /**
- * Fix round 1 (CRITICAL): a terminal sweep must never brick Sync. Start a FRESH sweep: reset
- * done/counts, order the previously-partial ("giveup") sources FIRST, and mark them `retry` so they
- * are driven with resuming:true — the resume grace (carry-forward 1) is what lets the re-scroll get
- * past their captured prefix to the uncaptured tail a mid-sweep giveup left behind. Previously-done
- * sources re-sweep fresh (resuming:false): idempotent dedup makes that cheap, and any NEW saves sit
- * at the top of the list where a fresh scroll captures them immediately.
+ * Fix round 1 (CRITICAL): a terminal sweep must never brick Sync. Start a FRESH sweep over the ENABLED
+ * sources (item 1 — source selection): reset done/counts, order the previously-partial (giveup OR
+ * suspicious) sources FIRST, and mark them `retry` so they are driven with resuming:true — the resume
+ * grace (carry-forward 1) is what lets the re-scroll get past their captured prefix to the uncaptured
+ * tail a mid-sweep partial left behind. Previously-done sources re-sweep fresh (resuming:false):
+ * idempotent dedup makes that cheap, and any NEW saves sit at the top of the list where a fresh scroll
+ * captures them immediately. A DISABLED source never appears in `order`, so it is never driven.
  */
-function freshSweep(prev: SupervisorProgress): { progress: SupervisorProgress; action: SupervisorAction } {
-  const partials = SOURCES.filter((s) => prev.counts[s]?.status === "giveup");
-  const order = [...partials, ...SOURCES.filter((s) => !partials.includes(s))];
-  return advance({ current: null, done: [], counts: {}, order, retry: partials });
+function freshSweep(
+  prev: SupervisorProgress,
+  enabled: readonly Source[],
+): { progress: SupervisorProgress; action: SupervisorAction } {
+  const partials = enabled.filter((s) => isPartial(prev.counts[s]));
+  const order = [...partials, ...enabled.filter((s) => !partials.includes(s))];
+  return advance({ current: null, done: [], counts: {}, order, retry: [...partials] });
 }
 
 /**
- * The reducer. Pure: `(progress, event) → { progress, action }`. The glue persists the returned
- * progress, then dispatches the action (open/focus tab, tell content.js to capture the source, etc.).
+ * Begin OR continue a sweep for the ENABLED sources (item 1). Called only when nothing is in flight
+ * (`current == null`). If every enabled source is already terminal, the sweep is exhausted → start a
+ * fresh one (partials-first). Otherwise (a first-ever start, or a continue with undone enabled sources
+ * remaining) we (re)build `order` from the enabled set — partials first, and `retry` marks them — then
+ * advance to the first UNDONE enabled source. Because `order` is always the enabled arrangement, a
+ * DISABLED source is never driven and never blocks completion; because it's rebuilt from the current
+ * `enabled`, newly-enabled sources are picked up even if they weren't in a prior sweep's order.
+ */
+function startSweep(
+  progress: SupervisorProgress,
+  enabled: readonly Source[],
+): { progress: SupervisorProgress; action: SupervisorAction } {
+  const undoneEnabled = enabled.filter((s) => !progress.done.includes(s));
+  if (undoneEnabled.length === 0) return freshSweep(progress, enabled);
+  const partials = enabled.filter((s) => isPartial(progress.counts[s]));
+  const order = [...partials, ...enabled.filter((s) => !partials.includes(s))];
+  return advance({ ...progress, order, retry: [...partials] });
+}
+
+/**
+ * The reducer. Pure: `(progress, event, enabled) → { progress, action }`. `enabled` is the set of
+ * sources the founder chose to capture (config.captureSources → Source[]); it defaults to all four so
+ * nothing regresses. The glue persists the returned progress, then dispatches the action (open/focus
+ * tab, tell content.js to capture the source, etc.).
  */
 export function nextAction(
   progress: SupervisorProgress,
   event: SupervisorEvent,
+  enabled: readonly Source[] = SOURCES,
 ): { progress: SupervisorProgress; action: SupervisorAction } {
   switch (event.kind) {
     case "start":
-      // A live run must never be stomped by a second Sync click — advance() returns idle if current
-      // is set. A COMPLETE sweep (every source terminal) starts over as a fresh sweep (fix round 1:
-      // giveup is not terminal-forever, and new saves must always be able to sync). Otherwise, pick
-      // the first undone source of the current sweep.
-      if (sweepComplete(progress)) return freshSweep(progress);
-      return advance(progress);
+      // A live run must never be stomped by a second Sync click — advance() returns idle if current is
+      // set. Otherwise begin/continue a sweep over the ENABLED sources (a fully-swept enabled set starts
+      // over fresh; fix round 1: giveup/suspicious are not terminal-forever, and new saves must always
+      // be able to sync).
+      if (progress.current != null) return advance(progress);
+      return startSweep(progress, enabled);
 
     case "restarted":
       // Crash recovery: an in-flight source (persisted current) is re-driven with resuming:true. With
@@ -142,9 +176,14 @@ export function nextAction(
 
     case "source_finished": {
       // Record the terminal, drop the finished source from `current`, then advance. `done` is a set
-      // (no duplicate on a late/repeated scroll_done). A giveup is recorded and sequenced PAST — the
-      // supervisor never silently retries; a partial source is an honest, visible partial.
-      const counts = { ...progress.counts, [event.source]: { captured: event.captured, status: event.status } };
+      // (no duplicate on a late/repeated scroll_done). A giveup/suspicious is recorded and sequenced
+      // PAST — the supervisor never silently retries within a sweep; a partial source is an honest,
+      // visible partial that leads the NEXT fresh sweep. `expected` (declared count) rides along for the
+      // COMPL-07 report; undefined when the count was unreadable.
+      const counts = {
+        ...progress.counts,
+        [event.source]: { captured: event.captured, status: event.status, expected: event.expected },
+      };
       const done = progress.done.includes(event.source) ? progress.done : [...progress.done, event.source];
       const current = progress.current === event.source ? null : progress.current;
       // Spread keeps this sweep's order/retry — the partials-first walk survives every advance.

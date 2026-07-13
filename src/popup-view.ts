@@ -21,6 +21,10 @@ export interface SyncStatusRaw {
     current?: string | null;
     // Contract: Record<string, number>. We also tolerate the legacy {captured} object shape.
     counts?: Record<string, unknown>;
+    /** Per-source declared saved-count from the profile UI (completeness accounting). null/absent = unknown. */
+    expected?: Record<string, unknown>;
+    /** Per-source terminal quality: "done" (clean) | "suspicious" (short) | "giveup" (incomplete). */
+    statuses?: Record<string, string>;
   } | null;
   notice?: { level?: string; reason?: string; at?: string } | null;
   config?: unknown;
@@ -32,12 +36,18 @@ export type StateTone = "neutral" | "idle" | "active" | "warn" | "error" | "done
 export type Connection = "live" | "reconnecting" | "connecting";
 
 export type RowState = "done" | "current" | "pending";
+/** Terminal quality of a finished source (completeness accounting). */
+export type SourceQuality = "done" | "suspicious" | "giveup" | null;
 export interface SourceRow {
   source: string;
   label: string;
   state: RowState;
   count: number;
-  /** Short right-aligned detail: a formatted count when captured, "capturing…", or "pending". */
+  /** Declared saved-count from the profile UI, when readable (else null). */
+  expected: number | null;
+  /** How a finished source ended — surfaced so a short/incomplete list never reads as a clean done. */
+  quality: SourceQuality;
+  /** Short right-aligned detail: "N of ~M", "N · short", "N · incomplete", "capturing…", or "pending". */
   detail: string;
 }
 
@@ -109,6 +119,28 @@ function coerceCount(v: unknown): number {
     if (typeof c === "number" && Number.isFinite(c)) return Math.max(0, Math.floor(c));
   }
   return 0;
+}
+
+/** Contract says expected is a number; anything non-numeric/negative → null (unknown declared count). */
+function coerceExpected(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v) && v >= 0) return Math.floor(v);
+  return null;
+}
+
+/** Normalize a per-source terminal status string to the display quality (unknown → null). */
+function normalizeQuality(v: unknown): SourceQuality {
+  return v === "done" || v === "suspicious" || v === "giveup" ? v : null;
+}
+
+/** The right-aligned per-source detail. "N of ~M" when a declared count is known; flags short/incomplete honestly. */
+function rowDetail(state: RowState, quality: SourceQuality, count: number, expected: number | null): string {
+  if (state === "current") return "capturing…";
+  if (state === "pending") return "pending";
+  // state === "done": show the count against the declared total when known, and never hide a short/incomplete result.
+  const of = expected != null ? `${formatInt(count)} of ~${formatInt(expected)}` : formatInt(count);
+  if (quality === "suspicious") return `${of} · short`;
+  if (quality === "giveup") return `${of} · incomplete`;
+  return of;
 }
 
 /** Pull a human reason string out of the (typed-as-unknown) halt payload. */
@@ -229,17 +261,23 @@ export function computeViewModel(
   const done = progress.done ?? [];
   const current = progress.current ?? null;
   const rawCounts = progress.counts ?? {};
+  const rawExpected = progress.expected ?? {};
+  const rawStatuses = progress.statuses ?? {};
 
   const rows: SourceRow[] = order.map((source) => {
     const cnt = coerceCount(rawCounts[source]);
+    const expected = coerceExpected(rawExpected[source]);
     let rowState: RowState;
     if (done.includes(source)) rowState = "done";
     else if (source === current) rowState = "current";
     else rowState = "pending";
-    const detail =
-      rowState === "done" ? formatInt(cnt) : rowState === "current" ? "capturing…" : "pending";
-    return { source, label: sourceLabel(source), state: rowState, count: cnt, detail };
+    // Quality only meaningful once a source has finished (is in `done`).
+    const quality: SourceQuality = rowState === "done" ? normalizeQuality(rawStatuses[source]) : null;
+    const detail = rowDetail(rowState, quality, cnt, expected);
+    return { source, label: sourceLabel(source), state: rowState, count: cnt, expected, quality, detail };
   });
+  // Any finished source that ended short or incomplete — the "done" headline must reflect it, not lie "all caught up".
+  const hasGaps = rows.some((r) => r.state === "done" && (r.quality === "suspicious" || r.quality === "giveup"));
 
   // State precedence, most urgent first: an unrecoverable halt, then a user-actionable pause, then a
   // live run, then an all-done sweep, else idle.
@@ -271,8 +309,9 @@ export function computeViewModel(
       stateTone = "active";
       break;
     case "done":
-      stateLabel = "All caught up";
-      stateTone = "done";
+      // Never lie "all caught up" when a source came up short or incomplete.
+      stateLabel = hasGaps ? "Captured — some lists came up short" : "All caught up";
+      stateTone = hasGaps ? "warn" : "done";
       break;
     case "idle":
     default:

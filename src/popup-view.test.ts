@@ -17,6 +17,55 @@ const base: SyncStatusRaw = {
   progress: { order: [...DEFAULT_SOURCE_ORDER], done: [], current: null, counts: {} },
 };
 
+describe("completeness display (expected + quality)", () => {
+  it("a clean done source shows 'N of ~M' when the declared count is known", () => {
+    const vm = computeViewModel(
+      { ...base, running: false, progress: { order: ["favorites"], done: ["favorites"], current: null, counts: { favorites: 1300 }, expected: { favorites: 1367 }, statuses: { favorites: "done" } } },
+      { connected: true },
+    );
+    const row = vm.rows.find((r) => r.source === "favorites")!;
+    expect(row.expected).toBe(1367);
+    expect(row.quality).toBe("done");
+    expect(row.detail).toBe("1,300 of ~1,367");
+    expect(vm.state).toBe("done");
+    expect(vm.stateLabel).toBe("All caught up");
+  });
+
+  it("a suspicious (short) source flags '· short' and the headline warns, not 'all caught up'", () => {
+    const vm = computeViewModel(
+      { ...base, running: false, progress: { order: ["favorites", "likes"], done: ["favorites", "likes"], current: null, counts: { favorites: 1367, likes: 500 }, expected: { favorites: 1367, likes: 4132 }, statuses: { favorites: "done", likes: "suspicious" } } },
+      { connected: true },
+    );
+    const likes = vm.rows.find((r) => r.source === "likes")!;
+    expect(likes.quality).toBe("suspicious");
+    expect(likes.detail).toBe("500 of ~4,132 · short");
+    expect(vm.state).toBe("done");
+    expect(vm.stateTone).toBe("warn");
+    expect(vm.stateLabel).toBe("Captured — some lists came up short");
+  });
+
+  it("a giveup source reads '· incomplete'; unknown expected shows just the count", () => {
+    const vm = computeViewModel(
+      { ...base, progress: { order: ["posts"], done: ["posts"], current: null, counts: { posts: 12 }, statuses: { posts: "giveup" } } },
+      { connected: true },
+    );
+    const posts = vm.rows.find((r) => r.source === "posts")!;
+    expect(posts.expected).toBeNull();
+    expect(posts.detail).toBe("12 · incomplete");
+  });
+
+  it("older replies without expected/statuses degrade to the plain count (backward compatible)", () => {
+    const vm = computeViewModel(
+      { ...base, progress: { order: ["favorites"], done: ["favorites"], current: null, counts: { favorites: 800 } } },
+      { connected: true },
+    );
+    const row = vm.rows.find((r) => r.source === "favorites")!;
+    expect(row.quality).toBeNull();
+    expect(row.detail).toBe("800");
+    expect(vm.stateLabel).toBe("All caught up");
+  });
+});
+
 describe("formatInt / countLabel", () => {
   it("groups thousands deterministically", () => {
     expect(formatInt(0)).toBe("0");

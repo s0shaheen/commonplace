@@ -22,9 +22,17 @@ import {
   type SupervisorEvent,
   type SupervisorProgress,
 } from "./lib/capture/supervisor.js";
-import { loadConfig, type CpConfig, type StorageLike } from "./lib/config.js";
+import { loadConfig, type CpConfig, type CaptureSources, type StorageLike } from "./lib/config.js";
 import { nextWheel, resolveSpeed, type CaptureSpeed } from "./lib/capture/wheelJitter.js";
 import { handleFromPath, profileUrl } from "./lib/capture/ownIdentity.js";
+import { assessCompleteness } from "./lib/capture/completeness.js";
+import {
+  acquireLease,
+  renewLease,
+  canAcquire,
+  leaseIsActive,
+  type CaptureLease,
+} from "./lib/capture/lease.js";
 import type { CapturedItem } from "./lib/types.js";
 
 // DEV-ONLY hot-reload. `__DEV_RELOAD__` is an esbuild `define`: "true" under `npm run dev`, "false"
@@ -134,6 +142,14 @@ function noticeTitle(level: string): string {
       return "Commonplace — capture stopped (TikTok is blocking)";
     case "stalled":
       return "Commonplace — capture stalled, retrying";
+    case "concurrent":
+      return "Commonplace — capture already running in another tab";
+    case "incomplete":
+      return "Commonplace — a source looks incomplete";
+    case "hidden":
+      return "Commonplace — bring the TikTok tab forward";
+    case "deadline":
+      return "Commonplace — capture hit its time cap";
     default:
       return "Commonplace — capture paused";
   }
@@ -224,12 +240,37 @@ async function reconcileCountFromTruth(): Promise<void> {
   await chrome.storage.local.set({ count });
 }
 
-// Storage startup: migrate legacy items (crash-safe), then reconcile the count mirror against IDB.
-// A StorageUnrecoverableError or QuotaExceeded surfacing from the first open halts capture LOUDLY
-// rather than silently proceeding as if storage were healthy.
+// S-DB-5 (item 6): whether the archive's IndexedDB bucket is PERSISTENT (best-effort-exempt from
+// eviction) vs the default evictable bucket. The actual persist() REQUEST is Window-only (the offscreen
+// document makes it — offscreen.ts), so the SW can only READ the state via navigator.storage.persisted()
+// (which IS available in workers) and surface it. The result is mirrored here for the popup/options.
+const STORAGE_PERSISTED_KEY = "cp_storage_persisted";
+async function surfaceStoragePersistence(): Promise<void> {
+  try {
+    // persisted() is available in service workers; persist() is not. Note: the manifest's
+    // `unlimitedStorage` permission already largely exempts the extension origin from eviction — this is
+    // the explicit belt + surfacing so an un-persisted state is never silently the case.
+    const persisted = (await navigator.storage?.persisted?.()) ?? null;
+    await chrome.storage.local.set({ [STORAGE_PERSISTED_KEY]: persisted });
+    if (persisted === false) {
+      console.warn(
+        "[commonplace] storage bucket is NOT persistent yet — the offscreen doc requests persist() on its next run; unlimitedStorage also mitigates eviction.",
+      );
+    } else if (persisted === true) {
+      console.log("[commonplace] storage bucket is persistent ✓");
+    }
+  } catch (e) {
+    console.warn("[commonplace] storage.persisted() check failed:", (e as Error).message);
+  }
+}
+
+// Storage startup: migrate legacy items (crash-safe), reconcile the count mirror against IDB, then
+// surface storage-persistence state. A StorageUnrecoverableError or QuotaExceeded surfacing from the
+// first open halts capture LOUDLY rather than silently proceeding as if storage were healthy.
 async function storageStartup(): Promise<void> {
   await migrateLegacyItems();
   await reconcileCountFromTruth();
+  await surfaceStoragePersistence();
 }
 storageStartup().catch((e) => haltCapture(e));
 
@@ -245,9 +286,10 @@ interface ScrollDoneMsg {
   kind: "scroll_done";
   status?: "done" | "giveup" | string;
   reason?: string | null;
-  captured?: number;
+  captured?: number; // COMPL-07: DISTINCT items captured for THIS source THIS run (per-run new-id delta)
   cursor?: string | null;
   source?: string | null; // Task 5: the source this run drove (null = manual Alt+Shift+A) — advances the supervisor
+  declared?: number | null; // COMPL-07: the source's declared saved count read from the profile UI (null = unread)
 }
 // DYD import lane (SECOND capture lane, additive): the options page parsed a TikTok "Download your
 // data" export off the SW thread (via parseTikTokDyd) and sends the already-normalized, source-tagged
@@ -269,6 +311,9 @@ interface CaptureNoticeMsg { kind: "capture_notice"; level: string; reason: stri
 interface ScrollStartMsg { kind: "scroll_start" }
 interface ScrollModeMsg { kind: "scroll_mode"; mode: string; x: number; y: number }
 interface ScrollStopMsg { kind: "scroll_stop" }
+// Wave C (item 5): content.js detected its tab is HIDDEN + stalled and the founder opted into keeping it
+// foregrounded — the SW brings the sender's tab (and its window) forward so TikTok resumes paginating.
+interface FocusCaptureTabMsg { kind: "focus_capture_tab" }
 // CHAL-UX (the KEY ask): content.js entered / left a RESUMABLE pause (break-reminder passcode, captcha,
 // login, offline, unknown modal, or a founder-initiated pause). The SW persists a crash-safe `paused`
 // state (storage) that syncStatus surfaces as "action needed", and raises a chrome notification.
@@ -306,7 +351,8 @@ type Msg =
   | SyncResumeMsg
   | ScrollStartMsg
   | ScrollModeMsg
-  | ScrollStopMsg;
+  | ScrollStopMsg
+  | FocusCaptureTabMsg;
 
 // ── Trusted-wheel scroll driver (the moat, live-confirmed 2026-07-13) ───────────────────────────────
 //
@@ -552,6 +598,9 @@ chrome.runtime.onMessage.addListener((msg: Msg, sender, sendResponse) => {
     onScrollMode(sender.tab?.id, msg.mode, msg.x, msg.y);
   } else if (msg.kind === "scroll_stop") {
     void stopScrollDriver();
+  } else if (msg.kind === "focus_capture_tab") {
+    // Wave C (item 5): bring the driven tab forward so a hidden/occluded TikTok tab resumes paginating.
+    void focusCaptureTab(sender.tab?.id);
   } else if (msg.kind === "export_enriched") {
     exportData("attic-enriched.json", msg.results);
   } else if (msg.kind === "download_test") {
@@ -642,6 +691,10 @@ async function onReviveAlarm(): Promise<void> {
   // idempotent (stored posters short-circuit) so a redundant wake is cheap.
   if (await posterWorkRemains(s)) void runPosterPassNow();
 
+  // Items 3 + 5: renew the single-driver lease while the run is live (so a long pause never lets it
+  // lapse), GC a dead one, and — if the driven tab was DISCARDED under memory pressure — recover it.
+  await maintainLeaseAndDiscardedTab();
+
   // Task 5: resume an interrupted Sync run. If persisted progress shows a source still `current` (a
   // capture was in flight when the worker died) and nothing is running now, feed `restarted` — the
   // reducer returns that source with resuming:true (carry-forward 1).
@@ -675,6 +728,37 @@ async function onReviveAlarm(): Promise<void> {
     } else if (stale) {
       console.log("[commonplace] alarm-resume skipped — stale in-flight source; click Sync to resume");
     }
+  }
+}
+
+// Items 3 + 5 alarm maintenance (best-effort; never throws into the alarm). Renew the lease while a run
+// is genuinely live; GC an expired one so a new Sync isn't blocked; recover a discarded driven tab.
+async function maintainLeaseAndDiscardedTab(): Promise<void> {
+  const lease = await loadLease();
+  if (lease == null) return;
+  const now = Date.now();
+  // Live run (belt says running, or the leased tab itself reports scrolling) → renew, done.
+  if (supervisorRunning || (await isTabScrolling(lease.tabId))) {
+    await saveLease(renewLease(lease, now));
+    return;
+  }
+  // Not live and already stale → GC it (a dead lease must never block a fresh Sync).
+  if (!leaseIsActive(lease, now)) {
+    await saveLease(null);
+    return;
+  }
+  // Live-within-TTL but not scrolling: the tab may have been DISCARDED (Wave C — memory pressure kills
+  // the content script). In autonomous mode we OWN the tab, so reload it → content.js re-injects and the
+  // resume path below re-drives the persisted `current`. In semi-auto we leave it: reactivating the tab
+  // reloads + re-injects it, and the resume path picks it up (documented).
+  try {
+    const tab = await chrome.tabs.get(lease.tabId);
+    if (tab.discarded && (await loadConfig(configStorage)).autonomousCapture) {
+      console.warn(`[commonplace] driven tab ${lease.tabId} was DISCARDED — reloading to re-inject + resume the run`);
+      await chrome.tabs.reload(lease.tabId);
+    }
+  } catch {
+    // Tab gone entirely — a fresh Sync (or the resume block) handles it; nothing to reload.
   }
 }
 
@@ -831,6 +915,30 @@ const configStorage: StorageLike = {
   set: (o) => chrome.storage.local.set(o),
 };
 
+// Item 1 (source selection): the ENABLED capture lanes the sweep may drive, from config.captureSources.
+// Defensive: if the founder somehow unchecked EVERY lane, fall back to all four rather than a confusing
+// "all caught up" no-op sweep. Preserves the frozen SOURCES order.
+function enabledSources(cs: CaptureSources): Source[] {
+  const on = SOURCES.filter((s) => cs[s]);
+  return on.length > 0 ? on : [...SOURCES];
+}
+
+// ── Single-active-driver lease (CONC-01, item 3) ────────────────────────────────────────────────────
+// A PERSISTED TTL lease (chrome.storage.local, survives SW death) so only ONE tab drives capture at a
+// time — beyond the SW-lifetime `supervisorRunning` boolean, which resets on every idle-out. The
+// decision (acquire/renew/expiry) is the pure lease.ts module; this is the storage glue.
+const LEASE_KEY = "cp_capture_lease";
+async function loadLease(): Promise<CaptureLease | null> {
+  const got = await chrome.storage.local.get(LEASE_KEY);
+  return (got[LEASE_KEY] as CaptureLease | undefined) ?? null;
+}
+async function saveLease(lease: CaptureLease | null): Promise<void> {
+  await chrome.storage.local.set({ [LEASE_KEY]: lease });
+}
+// The capture_notice reason when a second Sync/tab is refused because another tab already holds the lease.
+const CONCURRENT_DRIVER_REASON =
+  "capture is already running in another TikTok tab — only one runs at a time to keep your account safe.";
+
 async function loadSupervisorProgress(s: CpStore): Promise<SupervisorProgress> {
   return (await s.getMeta<SupervisorProgress>(SUPERVISOR_META_KEY)) ?? initialProgress();
 }
@@ -896,6 +1004,21 @@ async function resolveCaptureTab(config: CpConfig): Promise<number | null> {
     return created.id ?? null;
   }
   return existing;
+}
+
+// Wave C (item 5): bring a driven tab forward (activate it + focus its window). Used when the founder
+// opted into `captureKeepForeground` and content.js reported the tab is hidden + stalled — a hidden tab
+// pauses TikTok's own rendering/IntersectionObserver, so foregrounding it lets pagination resume.
+// Best-effort: a vanished tab/window just no-ops.
+async function focusCaptureTab(tabId: number | undefined): Promise<void> {
+  if (tabId == null) return;
+  try {
+    const tab = await chrome.tabs.update(tabId, { active: true });
+    if (tab?.windowId != null) await chrome.windows.update(tab.windowId, { focused: true });
+    console.log(`[commonplace] foregrounded capture tab ${tabId} (hidden-stall recovery)`);
+  } catch (e) {
+    console.warn("[commonplace] focus_capture_tab failed:", (e as Error).message);
+  }
 }
 
 // Ask the content script whether a capture run is live in that tab RIGHT NOW (fix round 1,
@@ -969,6 +1092,7 @@ async function handleSyncStop(): Promise<void> {
   await stopScrollDriver(); // ALWAYS detach — never leave a dangling attach
   await clearPaused();
   clearActiveNotice();
+  await saveLease(null); // release the single-driver lease — a stop is final for this sweep (CONC-01)
   const s = await store();
   const progress = await loadSupervisorProgress(s);
   if (progress.current != null) {
@@ -1017,7 +1141,10 @@ async function handleSyncResume(): Promise<void> {
 async function runSupervisorEventUnlocked(event: SupervisorEvent): Promise<void> {
   const s = await store();
   const progress = await loadSupervisorProgress(s);
-  const { progress: next, action } = nextAction(progress, event);
+  const config = await loadConfig(configStorage);
+  // Item 1: the founder's chosen lanes drive the sweep (default all four → nothing regresses).
+  const enabled = enabledSources(config.captureSources);
+  const { progress: next, action } = nextAction(progress, event, enabled);
   // Staleness belt (fix round 2, #5): stamp when `current` is (re-)set to a source we're about to
   // drive, so the alarm can abandon a `current` left untouched for a day. Clear it when nothing is in
   // flight. The reducer stays pure (no clock); the timestamp is a glue concern.
@@ -1027,12 +1154,12 @@ async function runSupervisorEventUnlocked(event: SupervisorEvent): Promise<void>
   if (action.kind === "idle") return; // a run is already in flight; do not double-drive
   if (action.kind === "all_done") {
     supervisorRunning = false;
+    await saveLease(null); // sweep over — release the single-driver lease so a later Sync re-acquires cleanly
     console.log("[commonplace] Sync complete — all sources enumerated", summarizeProgress(next));
     return;
   }
 
   // capture_source: resolve/open the tab and tell content.js to drive that source.
-  const config = await loadConfig(configStorage);
   const tabId = await resolveCaptureTab(config);
   if (tabId == null) {
     supervisorRunning = false; // nothing to drive right now; a later Sync (or the alarm) retries
@@ -1042,6 +1169,27 @@ async function runSupervisorEventUnlocked(event: SupervisorEvent): Promise<void>
     );
     return;
   }
+  // CONC-01 (item 3): acquire the single-driver lease BEFORE driving. A lease held by ANOTHER tab that is
+  // GENUINELY still driving blocks (never double-drive — two runs double the anti-bot footprint on the
+  // real account). No lease, a stale lease, or this tab's own lease is acquirable. The holder-liveness
+  // check (isTabScrolling) is the belt against a false refusal: a within-TTL lease from a tab whose run
+  // already ended (e.g. the founder switched profile tabs mid-sweep) must NOT block a legit continuation —
+  // that is sequential, not concurrent. Refusal is surfaced + stood down honestly.
+  const nowMs = Date.now();
+  const currentLease = await loadLease();
+  if (!canAcquire(currentLease, tabId, nowMs) && currentLease != null) {
+    const holderLive = await isTabScrolling(currentLease.tabId);
+    if (holderLive) {
+      supervisorRunning = false;
+      notifyCapture("concurrent", CONCURRENT_DRIVER_REASON);
+      console.warn(
+        `[commonplace] Sync refused — capture is live in tab ${currentLease.tabId} (this tab ${tabId}); not double-driving ${action.source}`,
+      );
+      return;
+    }
+    console.log(`[commonplace] reclaiming lease from tab ${currentLease.tabId} (its run ended) for tab ${tabId}`);
+  }
+  await saveLease(acquireLease(tabId, nowMs));
   // AUTONOMOUS NAVIGATION (SUP-02): before driving, make sure the tab is on the founder's OWN profile —
   // the surface that hosts the favorites/likes/posts/reposts sub-tabs. From ANY page this navigates to
   // `/@handle` first (using the learned handle, discovering it if unknown), so a Sync from the FYP / a
@@ -1169,22 +1317,40 @@ async function syncStatus(): Promise<{
   count: number;
   running: boolean;
   paused: { level: string; reason: string } | null;
-  progress: { order: string[]; done: string[]; current: string | null; counts: Record<string, number> };
+  progress: {
+    order: string[];
+    done: string[];
+    current: string | null;
+    counts: Record<string, number>;
+    // COMPL-07 (item 2) — ADDITIVE: per-source declared count + honest status so the popup can show
+    // "captured N of ~M" and flag a suspicious source. The popup view-model tolerates their absence.
+    expected: Record<string, number>;
+    statuses: Record<string, string>;
+  };
   notice: { level: string; reason: string; at: string } | null;
   config: unknown;
   halt: unknown | null;
+  // S-DB-5 (item 6) — ADDITIVE: whether the archive's storage bucket is persistent (null = unknown).
+  storagePersisted: boolean | null;
 }> {
   const s = await store();
-  const [progress, count, config, paused] = await Promise.all([
+  const [progress, count, config, paused, persistState] = await Promise.all([
     loadSupervisorProgress(s),
     s.count(),
     loadConfig(configStorage),
     loadPaused(),
+    chrome.storage.local.get(STORAGE_PERSISTED_KEY),
   ]);
   const counts: Record<string, number> = {};
+  const expected: Record<string, number> = {};
+  const statuses: Record<string, string> = {};
   for (const [source, sp] of Object.entries(progress.counts)) {
-    if (sp) counts[source] = sp.captured;
+    if (!sp) continue;
+    counts[source] = sp.captured; // the existing per-source captured contract (unchanged)
+    if (typeof sp.expected === "number") expected[source] = sp.expected;
+    statuses[source] = sp.status;
   }
+  const persisted = persistState[STORAGE_PERSISTED_KEY];
   return {
     count,
     running: supervisorRunning,
@@ -1194,10 +1360,13 @@ async function syncStatus(): Promise<{
       done: [...progress.done],
       current: progress.current,
       counts,
+      expected,
+      statuses,
     },
     notice: captureNotice,
     config,
     halt: captureHalt,
+    storagePersisted: typeof persisted === "boolean" ? persisted : null,
   };
 }
 
@@ -1217,8 +1386,31 @@ async function handleScrollDone(msg: ScrollDoneMsg): Promise<void> {
   // Task 5: if this run was supervisor-driven (a tagged source), advance the sequence to the next
   // source. A manual Alt+Shift+A run carries source:null and is left untouched (dev path preserved).
   if (isSource(msg.source)) {
-    const status = msg.status === "done" ? "done" : "giveup";
-    void runSupervisorEvent({ kind: "source_finished", source: msg.source, captured: msg.captured ?? 0, status });
+    // COMPL-07 (the TRUST feature): refine the honest terminal. content.js reports `done` (a VERIFIED
+    // hasMore:false terminal) or `giveup`; here we compare captured-this-source vs the profile's declared
+    // count and, if we ended WITHOUT a clean terminal AND fell grossly short, downgrade to `suspicious`
+    // — never present a grossly-short capture as complete. A verified terminal stays `done` (a declared
+    // count can be stale/hidden/wrong). `expected` (declared) is persisted per source (supervisor
+    // counts, in the store `meta`) as the durable per-run completeness report.
+    const terminalDone = msg.status === "done";
+    const declared =
+      typeof msg.declared === "number" && Number.isFinite(msg.declared) ? msg.declared : null;
+    const captured = msg.captured ?? 0;
+    const status = assessCompleteness({ terminalDone, captured, declared });
+    if (status === "suspicious") {
+      notifyCapture(
+        "incomplete",
+        `captured ${captured} of ~${declared} ${msg.source} — that looks short. Sync again to try for the rest.`,
+      );
+      console.warn(`[commonplace] ${msg.source} SUSPICIOUS — captured ${captured} of declared ~${declared} (no clean terminal)`);
+    }
+    void runSupervisorEvent({
+      kind: "source_finished",
+      source: msg.source,
+      captured,
+      status,
+      expected: declared ?? undefined,
+    });
     // Fix round 2 (#3): supervisor SWEEPS do NOT auto-download. A 4-source sweep would otherwise fire
     // 4+ full-library exports, each a base64 data:URL built in the SW — the size-fragile path P3
     // moved schema export OFF. The data is canonical in IndexedDB; explicit export stays a separate,

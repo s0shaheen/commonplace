@@ -39,6 +39,22 @@ import type { CapturedItem, Analysis } from "./lib/types.js";
 import type { MediaPart } from "./lib/geminiClient.js";
 import type { GroundedEntity, KbResolver } from "./lib/grounding.js";
 
+// S-DB-5 (storage persistence): request a PERSISTENT storage bucket so the archive isn't in the default
+// evictable bucket. navigator.storage.persist() is Window-only — the service worker CANNOT call it, so we
+// do it here in the offscreen DOCUMENT (a real extension-origin document), which runs whenever the engine
+// or an export does durable work. Best-effort + additive: the result is mirrored to chrome.storage.local
+// (`cp_storage_persisted`) so the SW/popup can surface it; the manifest's `unlimitedStorage` permission
+// already largely exempts the extension origin from eviction, so this is the explicit belt.
+void (async () => {
+  try {
+    const granted = (await navigator.storage?.persist?.()) ?? null;
+    await chrome.storage.local.set({ cp_storage_persisted: granted });
+    console.log(`[commonplace] navigator.storage.persist() → ${granted}`);
+  } catch (e) {
+    console.warn("[commonplace] storage.persist() request failed:", (e as Error)?.message ?? e);
+  }
+})();
+
 // Attach an HTTP status to a thrown fetch failure so the queue can tell a 429 (retry with backoff)
 // apart from a hard error (fail after 5 attempts).
 function httpError(status: number, url: string): Error & { status: number } {

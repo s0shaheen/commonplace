@@ -35,6 +35,12 @@ export interface CpConfig {
   captureSources: CaptureSources;
   // Scroll cadence preset. Default "normal" (the tested pacing); "conservative"/"fast" scale it.
   captureSpeed: CaptureSpeed;
+  // Background-tab resilience (Wave C). When a driven tab is HIDDEN and stops paginating (Chrome pauses
+  // hidden-tab rendering/IntersectionObserver), false (default) = pause + notify "bring the tab forward"
+  // and auto-resume when it's shown; true = the SW foregrounds the tab to keep capturing (more intrusive
+  // — it steals focus — so opt-in). The SW-driven trusted-wheel WRITE survives backgrounding; TikTok's
+  // own lazy-load may not, which is what this guards.
+  captureKeepForeground: boolean;
 }
 
 /** Frozen default: every lane on. */
@@ -69,6 +75,7 @@ export const DEFAULT_CONFIG: CpConfig = {
   autonomousCapture: false,
   captureSources: DEFAULT_CAPTURE_SOURCES,
   captureSpeed: "normal",
+  captureKeepForeground: false,
 };
 
 /** Read the stored partial and merge it over the frozen defaults. `captureSources` is deep-merged so
