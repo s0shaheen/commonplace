@@ -39,6 +39,30 @@ import { parseLocalizedCount } from "./lib/capture/declaredCount.js";
 // so the glue can drive the SAME bounded reload recovery empty_ok uses — never a false stop / false done.
 import { stepPageClear, initialPageClearState, POPULATED_MIN_TILES } from "./lib/capture/pageClear.js";
 
+// DEV-ONLY diagnostics stream. `__DEV_DIAG__` is an esbuild `define`: "true" under `npm run dev`, "false"
+// for `npm run build`. Every diag() call sits behind `if (__DEV_DIAG__)`, so prod dead-code-eliminates
+// them all AND tree-shakes src/devDiag.js out of dist/ — enforced by scripts/audit-dist.mjs. This streams
+// the observer's HUD-as-structured-data + key capture events to an on-disk file (scripts/devDiag-sink.mjs)
+// so the controller can triage a live run WITHOUT driving the browser or contending for the tab's debugger.
+import { diag } from "./devDiag.js";
+// Dev-only global error hook: uncaught errors in THIS isolated content-script world (not the page's own).
+// Guarded so resource-load 'error' events (no .error) and prod are both no-ops.
+if (__DEV_DIAG__) {
+  window.addEventListener("error", (e) => {
+    if (!e || !e.error) return; // skip resource-load noise — only real JS errors
+    diag({ kind: "error", t: Date.now(), msg: String(e.message || e.error), stack: e.error?.stack });
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    const r = e?.reason;
+    diag({ kind: "error", t: Date.now(), msg: `unhandledrejection: ${r?.message || r}`, stack: r?.stack });
+  });
+}
+
+// DEV-ONLY: throttle for the ~1/sec structured `state` heartbeat (the HUD as data) + a run-local count of
+// trusted-wheel UP-burst retriggers, both emitted in the observer's telemetry step. Stripped in prod.
+let lastDiagStateTs = 0;
+let diagRetriggers = 0;
+
 let lastSource = null;
 let lastHasMore = null; // latest coerced paging signal from the message path (Task 1)
 let lastCursor = null;
@@ -800,6 +824,7 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   }
   if (preflight === "not_logged_in") {
     console.warn(`[commonplace] preflight — ${NOT_LOGGED_IN_NOTICE}`);
+    if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "preflight", detail: { result: "not_logged_in", source: source ?? "manual" } });
     try {
       chrome.runtime.sendMessage({ kind: "capture_notice", level: "login", reason: NOT_LOGGED_IN_NOTICE });
     } catch (_) {}
@@ -846,6 +871,7 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   const driverStart = await startScrollDriver();
   if (!driverStart.ok) {
     console.warn(`[commonplace] scroll driver could not start — ${driverStart.reason}`);
+    if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "attach", detail: { ok: false, reason: driverStart.reason, source: source ?? "manual" } });
     updateHud(`capture blocked — ${driverStart.reason}`);
     chrome.runtime.sendMessage({
       kind: "scroll_done",
@@ -862,6 +888,14 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     scrolling = false;
     console.warn(`[commonplace] capture ABORTED (scroll driver: ${driverStart.reason}, source ${source ?? "manual"})`);
     return;
+  }
+
+  // DEV-ONLY: the run is now truly underway (driver attached + wheel loop live). Emit a start marker so
+  // the controller can bracket this run in the on-disk stream. diagRetriggers is per-run — reset it here.
+  if (__DEV_DIAG__) {
+    diagRetriggers = 0;
+    diag({ kind: "log", t: Date.now(), level: "info", msg: `capture start — source=${source ?? "manual"}${resuming ? " (resuming)" : ""}` });
+    diag({ kind: "event", t: Date.now(), type: "preflight", detail: { result: "ready", source: source ?? "manual" } });
   }
 
   // MOTION IS NOW A SLOW OBSERVER (the brain) + the SW's TRUSTED-WHEEL LOOP (the smooth continuous DOWN
@@ -944,6 +978,7 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       chrome.runtime.sendMessage({ kind: "capture_paused", level, reason });
     } catch (_) {}
     console.warn(`[commonplace] capture PAUSED (${level}) — ${reason}`);
+    if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "pause", detail: { level, reason, opts } });
     const pauseStartHealthy = healthyArrivals;
     const PAUSE_POLL_MS = 1500;
     userResumeRequested = false; // consume any stale resume from before this pause began
@@ -956,6 +991,23 @@ async function autoScroll({ source = null, resuming = false } = {}) {
           heap: performance.memory,
         });
         updateHud(formatHudLine(sample, { source: lastSource, hasMore: "?", state: `paused (${level})`, evicted: evictedTotal }));
+        // DEV-ONLY: a paused heartbeat so the on-disk stream shows the run is held (not silently dead).
+        if (__DEV_DIAG__) {
+          diag({
+            kind: "state",
+            t: sample.ts,
+            count: prevCount,
+            source: lastSource ?? activeRunSource ?? null,
+            mode: `paused:${level}`,
+            hasMore: null,
+            heapMB: sample.heapUsedMB,
+            domNodes: sample.domNodes,
+            evicted: evictedTotal,
+            retriggers: diagRetriggers,
+            paused: true,
+            perSource: activeRunSource ? { [activeRunSource]: runCapturedIds.size } : {},
+          });
+        }
       } catch (_) {}
       await sleep(PAUSE_POLL_MS);
       if (userStopRequested) break; // founder pressed Stop → exit the pause; the observer loop ends the run
@@ -979,6 +1031,7 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       chrome.runtime.sendMessage({ kind: "capture_resumed" });
     } catch (_) {}
     console.log(`[commonplace] capture RESUMED (was paused: ${level})`);
+    if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "resume", detail: { level } });
     // The caller `continue`s; the next observer tick's scrollWatch re-issues the real scroll_mode (advance),
     // so the SW's wheel loop resumes wheeling down where it left off.
     return true;
@@ -1072,12 +1125,14 @@ async function autoScroll({ source = null, resuming = false } = {}) {
         const clicked = clickByLabel(overlay.el, oa.buttonLabel);
         snoozeCount++;
         console.log(`[commonplace] screen-time reminder — snoozed via "${oa.buttonLabel}" (${clicked ? "clicked" : "no button found"}); snooze #${snoozeCount}`);
+        if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "overlay", detail: { action: "snooze", overlay: verdict.overlay, label: oa.buttonLabel, clicked, snoozeCount } });
         await sleep(1000); // let the modal dismiss; never rapid-click
         continue;
       }
       if (oa.kind === "dismiss") {
         const clicked = clickByLabel(overlay.el, oa.buttonLabel);
         console.log(`[commonplace] benign overlay (${verdict.overlay}) — dismissed via "${oa.buttonLabel}" (${clicked ? "clicked" : "no button found"})`);
+        if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "overlay", detail: { action: "dismiss", overlay: verdict.overlay, label: oa.buttonLabel, clicked } });
         await sleep(1000);
         continue;
       }
@@ -1200,6 +1255,7 @@ async function autoScroll({ source = null, resuming = false } = {}) {
         reloadedThisRun = true;
         reloadingAway = true;
         running = false; // stop the observer; the page is navigating away
+        if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "reload", detail: { source: source ?? "manual", reason: "flagged session — empty pages after refresh" } });
         sendScrollStop(); // detach the SW debugger BEFORE reload — never leave it attached to a page that's navigating (a dangling attach + a wheel loop on a fresh page)
         await chrome.storage.local.set({ captureReloadedSource: source });
         console.warn("[commonplace] flagged session (empty pages after a refresh) — reloading ONCE to recover (the founder's manual fix, automated)");
@@ -1289,13 +1345,16 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       // the SW's trusted-wheel pump, which does the actual UP-burst then resumes wheeling down. We do NOT
       // reset watchState — the reducer's own retrigger budget/cooldown paces the nudges and, once spent,
       // concedes at the STALL_MS ceiling.
+      if (__DEV_DIAG__) diagRetriggers++;
       sendScrollMode("retrigger");
     } else if (watchMode === "giveup") {
       const wd = stepWatchdog(watchdog);
       watchdog = wd.state;
       if (wd.action === "retry") {
         console.warn(`[commonplace] run wedged (no new pages) — re-nudging the loader (retry ${watchdog.retries}/${MAX_WEDGE_RETRIES})`);
+        if (__DEV_DIAG__) diag({ kind: "log", t: Date.now(), level: "warn", msg: `run wedged — re-nudging loader (retry ${watchdog.retries}/${MAX_WEDGE_RETRIES})` });
         try { chrome.runtime.sendMessage({ kind: "capture_notice", level: "stalled", reason: WEDGE_RETRY_REASON }); } catch (_) {}
+        if (__DEV_DIAG__) diagRetriggers++;
         sendScrollMode("retrigger"); // jolt the lazy-loader: a brief up-burst, then resume advancing
         watchState = initialWatchState(Date.now()); // fresh stall window so the re-nudge has time to work
         watchMode = "advance";
@@ -1318,6 +1377,25 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       heap: performance.memory,
     });
     updateHud(formatHudLine(sample, { source: lastSource, hasMore: lastHasMore, state: watchMode, evicted: evictedTotal }));
+    // DEV-ONLY: the HUD as STRUCTURED DATA, ~1/sec — the controller's primary live-run heartbeat. Reuses
+    // the exact values already computed for the HUD/log line; throttled so it can't flood; best-effort.
+    if (__DEV_DIAG__ && sample.ts - lastDiagStateTs >= 1000) {
+      lastDiagStateTs = sample.ts;
+      diag({
+        kind: "state",
+        t: sample.ts,
+        count,
+        source: lastSource ?? activeRunSource ?? null,
+        mode: watchMode,
+        hasMore: lastHasMore,
+        heapMB: sample.heapUsedMB,
+        domNodes: sample.domNodes,
+        evicted: evictedTotal,
+        retriggers: diagRetriggers,
+        paused: false,
+        perSource: activeRunSource ? { [activeRunSource]: runCapturedIds.size } : {},
+      });
+    }
     if (shouldLogSample(lastSampleLogTs, sample.ts, 5000)) {
       lastSampleLogTs = sample.ts;
       console.log("[commonplace] capture sample", sample);
@@ -1477,6 +1555,7 @@ async function navigateToSource(source) {
   }
   tab.click();
   console.log(`[commonplace] navigateToSource(${source}) → clicked sub-tab; waiting for its first page`);
+  if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "nav", detail: { source } });
   // SUP-05: wait for the source's first item_list to arrive (up to 5s) instead of a blind fixed sleep —
   // robust to a fast OR a slow grid swap. On timeout, a short floor still lets the grid settle.
   const arrived = await waitForSourceArrival(5000);

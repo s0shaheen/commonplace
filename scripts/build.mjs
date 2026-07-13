@@ -29,10 +29,12 @@ const common = {
   outdir: DIST,
   logLevel: "info",
   sourcemap: watch ? "inline" : false,
-  // PRODUCTION SAFETY: the dev-only hot-reload client is behind `if (__DEV_RELOAD__)`. Defining it
-  // `false` here makes esbuild dead-code-eliminate that branch AND its dynamic import(), so the
-  // reload client can never reach a production dist/. scripts/dev.mjs overrides this to "true".
-  define: { __DEV_RELOAD__: "false" },
+  // PRODUCTION SAFETY: the dev-only hot-reload client is behind `if (__DEV_RELOAD__)`, and the dev-only
+  // diagnostics client (src/devDiag.ts) behind `if (__DEV_DIAG__)`. Defining BOTH `false` here makes
+  // esbuild dead-code-eliminate those branches (and the reload client's dynamic import()), so neither
+  // the reload client nor the diagnostics stream can reach a production dist/. scripts/dev.mjs overrides
+  // both to "true". Enforced by scripts/audit-dist.mjs.
+  define: { __DEV_RELOAD__: "false", __DEV_DIAG__: "false" },
 };
 
 // ESM: service worker (type:module) + offscreen document + options page.

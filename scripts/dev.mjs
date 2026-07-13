@@ -14,8 +14,9 @@
 import * as esbuild from "esbuild";
 import { mkdirSync, rmSync } from "node:fs";
 import { WebSocketServer } from "ws";
-import { esmOptions, iifeOptions, copyStatics, DIST } from "./build.mjs";
+import { esmOptions, iifeOptions, copyStatics, DIST, ROOT } from "./build.mjs";
 import { buildValidators } from "./build-validators.mjs";
+import { startDiagSink } from "./devDiag-sink.mjs";
 
 const PORT = 9012;
 
@@ -77,13 +78,21 @@ const reloadNotifyPlugin = {
   },
 };
 
-// Dev overrides: compile the reload client IN (__DEV_RELOAD__ = "true") + inline sourcemaps.
+// Dev overrides: compile the reload client IN (__DEV_RELOAD__ = "true") AND the diagnostics client
+// (__DEV_DIAG__ = "true") + inline sourcemaps. `npm run build` leaves both "false" (see build.mjs), so
+// prod dead-code-eliminates them — enforced by scripts/audit-dist.mjs.
 const withDev = (opts) => ({
   ...opts,
-  define: { ...opts.define, __DEV_RELOAD__: "true" },
+  define: { ...opts.define, __DEV_RELOAD__: "true", __DEV_DIAG__: "true" },
   sourcemap: "inline",
   plugins: [...(opts.plugins ?? []), reloadNotifyPlugin],
 });
+
+// DEV-ONLY diagnostics sink: receives the extension's diag stream (src/devDiag.ts, gated by
+// __DEV_DIAG__) and appends it to ./.dev-diag/run-<ts>.jsonl so the controller can triage a live capture
+// run by reading a file on disk — no browser driving, no chrome.debugger contention. Best-effort: a bind
+// failure just disables diag (hot-reload is unaffected).
+const diagSink = startDiagSink(ROOT);
 
 async function main() {
   buildValidators();
@@ -103,6 +112,7 @@ async function main() {
     console.log("\n[dev] shutting down…");
     await Promise.all([esmCtx.dispose(), iifeCtx.dispose()]);
     wss.close();
+    diagSink?.close();
     process.exit(0);
   };
   process.on("SIGINT", shutdown);

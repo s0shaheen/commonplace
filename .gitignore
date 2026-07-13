@@ -4,6 +4,9 @@ dist/
 # dev browser profile — dedicated Chrome profile for `npm run dev:browser` (keeps TikTok/IG logins)
 .dev-profile/
 
+# dev-only capture diagnostics stream (scripts/devDiag-sink.mjs) — on-disk triage logs + shots, never committed
+.dev-diag/
+
 # CWS submission zip — build artifact, never committed (regenerate with `npm run package`)
 commonplace-cws-v*.zip
 src/lib/generated/*

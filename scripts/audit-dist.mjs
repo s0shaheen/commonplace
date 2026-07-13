@@ -47,16 +47,23 @@ const SECRET_PATTERNS = [
   { name: "literal secrets.js reference", re: /secrets\.js/ },
 ];
 
-// DEV-ARTIFACT GUARD — the regression test that the hot-reload dev tooling can NEVER ship. The
-// reload client (src/devReload.ts) is compiled into dist/ ONLY under `npm run dev` (__DEV_RELOAD__
-// = true) and is dead-code-eliminated by `npm run build` (__DEV_RELOAD__ = false). If any of these
-// fingerprints survives into a production dist/, the reload client leaked — fail the build.
+// DEV-ARTIFACT GUARD — the regression test that the DEV-ONLY tooling can NEVER ship. Two dev clients
+// are compiled into dist/ ONLY under `npm run dev` and dead-code-eliminated by `npm run build`:
+//   • the hot-reload client (src/devReload.ts), gated by __DEV_RELOAD__;
+//   • the diagnostics client (src/devDiag.ts), gated by __DEV_DIAG__ — it streams live-capture telemetry
+//     + throttled Page.captureScreenshot shots to a localhost:9013 sink for on-disk triage.
+// If any of these fingerprints survives into a production dist/, a dev client leaked — fail the build.
 // (Patterns are word/char-anchored to their exact source forms so they can't false-positive on
-// unrelated code; e.g. the manifest's `http://localhost/*` host-permission is NOT `ws://localhost`.)
+// unrelated code; e.g. the manifest's `http://localhost/*` host-permission is NOT `ws://localhost` nor
+// `localhost:9013`.)
 const DEV_ARTIFACT_PATTERNS = [
   { name: "hot-reload client reference (devReload)", re: /devReload/ },
   { name: "dev reload WebSocket URL (ws://localhost)", re: /ws:\/\/localhost/ },
   { name: "dev-reload build flag left true (__DEV_RELOAD__)", re: /__DEV_RELOAD__/ },
+  { name: "diagnostics client reference (devDiag)", re: /devDiag/ },
+  { name: "diagnostics sink URL (localhost:9013)", re: /localhost:9013/ },
+  { name: "diagnostics build flag left true (__DEV_DIAG__)", re: /__DEV_DIAG__/ },
+  { name: "dev-only screenshot loop (captureScreenshot)", re: /captureScreenshot/ },
 ];
 
 const failures = [];
@@ -128,10 +135,10 @@ for (const file of files) {
       fail(`${rel} contains a ${name}.`);
     }
   }
-  // Dev-artifact guard: the hot-reload client must never appear in a production dist/.
+  // Dev-artifact guard: the hot-reload + diagnostics dev clients must never appear in a production dist/.
   for (const { name, re } of DEV_ARTIFACT_PATTERNS) {
     if (re.test(text)) {
-      fail(`${rel} contains a ${name} — the DEV hot-reload client leaked into a production build. Rebuild with \`npm run build\` (not \`npm run dev\`).`);
+      fail(`${rel} contains a ${name} — a DEV client leaked into a production build. Rebuild with \`npm run build\` (not \`npm run dev\`).`);
     }
   }
 }

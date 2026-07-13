@@ -43,6 +43,14 @@ if (__DEV_RELOAD__) {
   import("./devReload.js").catch(() => {});
 }
 
+// DEV-ONLY diagnostics stream. `__DEV_DIAG__` is an esbuild `define`: "true" under `npm run dev`,
+// "false" for `npm run build`. Every diag() call below sits behind `if (__DEV_DIAG__)`, so prod
+// dead-code-eliminates them all AND tree-shakes src/devDiag.ts out of dist/ — enforced by
+// scripts/audit-dist.mjs. The stream lets the controller triage a live capture run by reading a file
+// on disk (scripts/devDiag-sink.mjs), with ZERO chrome.debugger contention. See src/devDiag.ts.
+declare const __DEV_DIAG__: boolean;
+import { diag, startShotLoop } from "./devDiag.js";
+
 // Decoupled poster pass (Task 4): posters are NO LONGER fetched inline during capture — that inline
 // fetch was a §2.3 crash vector (3k image fetches + Blob decodes contending with the live scroll).
 // They land in a throttled, resumable post-enumeration pass instead — HONESTLY SERIAL: one fetch at
@@ -160,6 +168,10 @@ function noticeTitle(level: string): string {
 function notifyCapture(level: string, reason: string): void {
   // Always refresh the persisted, popup-readable notice (freshest reason wins).
   captureNotice = { level, reason, at: new Date().toISOString() };
+  // DEV-ONLY: mirror every capture notice/pause into the diagnostics stream — the highest-value triage
+  // signal (why a run paused/blocked). `level` is the notice class; deduped tray-notification logic below
+  // is unaffected.
+  if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "overlay", detail: { level, reason } });
   // Dedupe the tray notification: same level still active ⇒ update-only, no second chrome notification.
   if (activeNoticeLevel === level) return;
   activeNoticeLevel = level;
@@ -193,6 +205,9 @@ function haltCapture(e: unknown): void {
   } else {
     console.error("[commonplace] storage write failed:", (e as Error).message);
   }
+  // DEV-ONLY: surface a storage failure/halt into the diagnostics stream (a swallowed write must never
+  // read as "done" — the controller sees the halt here).
+  if (__DEV_DIAG__) diag({ kind: "error", t: Date.now(), msg: `storage: ${(e as Error)?.message ?? String(e)}`, stack: (e as Error)?.stack, halt: captureHalt?.reason ?? null });
 }
 
 // One-shot migration: fold any legacy `items` array into the store, then drop the key so this is
@@ -412,6 +427,11 @@ interface WheelDriver {
 // Only ONE debugged capture tab at a time (invariant). Null = nothing attached.
 let wheelDriver: WheelDriver | null = null;
 
+// DEV-ONLY: stop-handle for the diagnostics screenshot loop (src/devDiag.ts). Armed when a wheel driver
+// starts, disarmed on every detach path. The loop runs on its OWN timer (off the wheel pump) and captures
+// via the ALREADY-ATTACHED debugger, so it can never delay scrolling. Stripped from prod (see __DEV_DIAG__).
+let stopDiagShots: (() => void) | null = null;
+
 type AttachResult = { ok: true } | { ok: false; reason: string };
 
 // Attach the debugger to `tabId`. A reject means DevTools is open or another debugger is already attached —
@@ -471,6 +491,12 @@ async function enableBackgroundEmulation(tabId: number): Promise<void> {
 function startWheelPump(tabId: number, speed: CaptureSpeed): void {
   const st: WheelDriver = { tabId, mode: "hold", x: 0, y: 0, upBurstRemaining: 0, timer: null, stopped: false, detaching: false, speed };
   wheelDriver = st;
+  // DEV-ONLY: (re)arm the diagnostics screenshot loop for this live run. It reads wheelDriver.tabId off
+  // its own 4s timer and skips when no driver — never touches or delays the wheel pump below.
+  if (__DEV_DIAG__) {
+    if (stopDiagShots) stopDiagShots();
+    stopDiagShots = startShotLoop(() => wheelDriver?.tabId ?? null);
+  }
   const pump = async (): Promise<void> => {
     if (st.stopped || wheelDriver !== st) return;
     // Anti-block (C7 + PACE): the ADVANCE delta + the gap to the next tick are JITTERED per tick via the
@@ -512,6 +538,7 @@ async function handleScrollStart(tabId: number | undefined, sendResponse: (r: At
   const res = await attachScrollDebugger(tabId);
   if (!res.ok) {
     console.warn(`[commonplace] scroll debugger attach failed on tab ${tabId}: ${res.reason}`);
+    if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "attach", detail: { tabId, ok: false, reason: res.reason } });
     notifyCapture("debugger", DEBUGGER_ATTACH_REASON);
     sendResponse({ ok: false, reason: DEBUGGER_ATTACH_REASON });
     return;
@@ -524,6 +551,7 @@ async function handleScrollStart(tabId: number | undefined, sendResponse: (r: At
   if (config.captureBackground) await enableBackgroundEmulation(tabId);
   startWheelPump(tabId, speed);
   console.log(`[commonplace] scroll driver attached + trusted-wheel loop started on tab ${tabId} (${speed} cadence)`);
+  if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "attach", detail: { tabId, ok: true, speed, background: config.captureBackground } });
   sendResponse({ ok: true });
 }
 
@@ -560,6 +588,10 @@ async function stopScrollDriver(): Promise<void> {
     st.timer = null;
   }
   if (wheelDriver === st) wheelDriver = null;
+  if (__DEV_DIAG__) {
+    if (stopDiagShots) { stopDiagShots(); stopDiagShots = null; }
+    diag({ kind: "event", t: Date.now(), type: "detach", detail: { tabId: st.tabId, external: false } });
+  }
   try {
     await chrome.debugger.detach({ tabId: st.tabId });
   } catch {
@@ -584,6 +616,10 @@ chrome.debugger.onDetach.addListener((source, reason) => {
   }
   const tabId = st.tabId;
   wheelDriver = null;
+  if (__DEV_DIAG__) {
+    if (stopDiagShots) { stopDiagShots(); stopDiagShots = null; }
+    diag({ kind: "event", t: Date.now(), type: "detach", detail: { tabId, external: !intentional, reason } });
+  }
   if (!intentional) {
     console.warn(`[commonplace] scroll debugger detached externally (${reason}) — PAUSING the run on tab ${tabId} (resumable; Resume re-attaches)`);
     void setPaused("debugger", DEBUGGER_DETACH_PAUSE_REASON);
@@ -609,6 +645,7 @@ chrome.runtime.onMessage.addListener((msg: Msg, sender, sendResponse) => {
   } else if (msg.kind === "scroll_done") {
     void handleScrollDone(msg);
   } else if (msg.kind === "sync_start") {
+    if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "resume", detail: { control: "sync_start" } });
     void handleSyncClick();
   } else if (msg.kind === "sync_status") {
     // Popup poll — respond async (channel kept open by the `return true` below).
@@ -624,10 +661,13 @@ chrome.runtime.onMessage.addListener((msg: Msg, sender, sendResponse) => {
     // The run left its pause (auto-resumed or the founder clicked Resume) — drop the action-needed state.
     void clearPaused();
   } else if (msg.kind === "sync_stop") {
+    if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "halt", detail: { control: "sync_stop" } });
     void handleSyncStop();
   } else if (msg.kind === "sync_pause") {
+    if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "pause", detail: { control: "sync_pause" } });
     void handleSyncPause();
   } else if (msg.kind === "sync_resume") {
+    if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "resume", detail: { control: "sync_resume" } });
     void handleSyncResume();
   } else if (msg.kind === "scroll_start") {
     // Attach the debugger to the sender's tab + start the trusted-wheel loop. Async attach → sendResponse
@@ -1441,6 +1481,9 @@ async function syncStatus(): Promise<{
 }
 
 async function handleScrollDone(msg: ScrollDoneMsg): Promise<void> {
+  // DEV-ONLY: the authoritative "run ended" record — status (done/giveup), per-run captured count,
+  // declared count, and reason. The controller reads this to know how a run concluded.
+  if (__DEV_DIAG__) diag({ kind: "log", t: Date.now(), level: msg.status === "done" ? "info" : "warn", msg: `scroll_done ${msg.status ?? "?"} source=${msg.source ?? "manual"} captured=${msg.captured ?? "?"} declared=${msg.declared ?? "?"}${msg.reason ? ` reason="${msg.reason}"` : ""}` });
   // The run ended (done or giveup) — clear the notification dedupe marker so a later run's first pause
   // notifies fresh rather than being suppressed as a duplicate of this run's last pause (FIX 4b), and
   // drop any lingering `paused` state (a finished run is not awaiting the founder).
