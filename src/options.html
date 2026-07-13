@@ -5,105 +5,259 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Commonplace — Settings</title>
     <style>
-      body { font: 14px/1.5 system-ui, sans-serif; max-width: 560px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
-      h1 { font-size: 1.3rem; margin: 0 0 0.25rem; }
-      p.sub { color: #666; margin: 0 0 1.5rem; }
-      fieldset { border: 1px solid #ddd; border-radius: 8px; margin: 0 0 1rem; padding: 0.75rem 1rem 1rem; }
-      legend { font-weight: 600; padding: 0 0.4rem; }
-      label { display: block; margin: 0.4rem 0; }
-      label.inline { display: inline-flex; align-items: center; gap: 0.4rem; margin-right: 1rem; }
-      input[type="text"], input[type="password"], input[type="number"] { width: 100%; padding: 0.4rem 0.5rem; box-sizing: border-box; border: 1px solid #ccc; border-radius: 6px; font: inherit; }
-      input[type="number"] { width: 6rem; }
-      .hint { color: #888; font-size: 0.85em; margin: 0.15rem 0 0; }
-      .disabled-note { color: #a00; font-size: 0.85em; }
-      button { font: inherit; font-weight: 600; padding: 0.5rem 1.1rem; border: 0; border-radius: 6px; background: #1a1a1a; color: #fff; cursor: pointer; }
-      button:hover { background: #333; }
-      #status { margin-left: 0.8rem; color: #178a3a; font-weight: 600; }
-      section.import { margin-top: 2rem; }
-      section.import h2 { font-size: 1.05rem; margin: 0 0 0.25rem; }
-      #dydResult { display: block; margin-top: 0.6rem; font-weight: 600; }
-      #dydResult.ok { color: #178a3a; }
-      #dydResult.err { color: #a00; }
+      /* ── Paper & Proof tokens (system fonts; strict-CSP-safe, no external resources) ──────────── */
+      :root {
+        --paper: oklch(0.965 0.01 90);
+        --panel: oklch(0.99 0.008 90);
+        --ink: oklch(0.23 0.015 60);
+        --ink-soft: oklch(0.48 0.02 65);
+        --ink-faint: oklch(0.62 0.015 65);
+        --rule: oklch(0.9 0.012 80);
+        --rule-strong: oklch(0.82 0.015 75);
+        --accent: oklch(0.5 0.13 30);
+        --accent-ink: oklch(0.99 0.01 90);
+        --accent-wash: oklch(0.94 0.045 35);
+        --good: oklch(0.5 0.11 150);
+        --danger: oklch(0.5 0.17 25);
+        --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, ui-serif, serif;
+        --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: oklch(0.19 0.01 60);
+          --panel: oklch(0.24 0.012 60);
+          --ink: oklch(0.92 0.01 85);
+          --ink-soft: oklch(0.74 0.015 80);
+          --ink-faint: oklch(0.6 0.015 75);
+          --rule: oklch(0.32 0.012 60);
+          --rule-strong: oklch(0.42 0.015 60);
+          --accent: oklch(0.66 0.15 32);
+          --accent-ink: oklch(0.16 0.01 60);
+          --accent-wash: oklch(0.32 0.06 32);
+          --good: oklch(0.7 0.12 150);
+          --danger: oklch(0.68 0.16 25);
+        }
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        font: 14px/1.55 var(--sans);
+        max-width: 680px;
+        margin: 0 auto;
+        padding: 32px 20px 64px;
+        color: var(--ink);
+        background: var(--paper);
+        -webkit-font-smoothing: antialiased;
+      }
+      h1 { font-family: var(--serif); font-size: 26px; font-weight: 600; margin: 0 0 4px; }
+      p.sub { color: var(--ink-soft); margin: 0 0 28px; max-width: 60ch; }
+
+      section {
+        background: var(--panel);
+        border: 1px solid var(--rule);
+        border-radius: 12px;
+        padding: 18px 20px 20px;
+        margin: 0 0 18px;
+      }
+      section > h2 {
+        font-family: var(--serif); font-size: 16px; font-weight: 600; margin: 0 0 3px;
+        display: flex; align-items: baseline; gap: 8px;
+      }
+      section > .section-sub { color: var(--ink-soft); font-size: 12.5px; margin: 0 0 14px; }
+      .group { padding: 12px 0; border-top: 1px solid var(--rule); }
+      .group:first-of-type { border-top: 0; padding-top: 4px; }
+      .group > .g-label { font-weight: 600; font-size: 13px; margin: 0 0 8px; }
+
+      label { display: block; margin: 8px 0; }
+      label.inline { display: inline-flex; align-items: center; gap: 7px; margin: 4px 18px 4px 0; }
+      .checks { display: flex; flex-wrap: wrap; gap: 2px 4px; }
+      input[type="text"], input[type="password"], input[type="number"], select {
+        width: 100%; padding: 8px 10px; margin-top: 5px; box-sizing: border-box;
+        border: 1px solid var(--rule-strong); border-radius: 7px; font: inherit;
+        background: var(--paper); color: var(--ink);
+      }
+      input[type="number"] { width: 7rem; }
+      select { max-width: 22rem; font-family: var(--mono); font-size: 13px; }
+      input:focus-visible, select:focus-visible, button:focus-visible {
+        outline: 2px solid var(--accent); outline-offset: 2px;
+      }
+      code { font-family: var(--mono); font-size: 0.92em; background: var(--accent-wash); padding: 0.5px 4px; border-radius: 4px; }
+      .hint { color: var(--ink-faint); font-size: 12px; margin: 4px 0 0; }
+      .note {
+        color: var(--ink-soft); font-size: 12px; margin: 8px 0 0; padding: 9px 11px;
+        border-left: 2px solid var(--accent); background: var(--accent-wash); border-radius: 0 6px 6px 0;
+      }
+      .disabled-note { color: var(--ink-faint); font-size: 12px; margin: 4px 0 0; font-style: italic; }
+
+      button {
+        font: inherit; font-weight: 600; cursor: pointer; border-radius: 8px;
+        padding: 9px 16px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+      }
+      button:hover { filter: brightness(1.06); }
+      button.secondary { background: var(--panel); color: var(--ink); border-color: var(--rule-strong); }
+      button.secondary:hover { filter: none; border-color: var(--ink-faint); }
+
+      .save-bar { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
+      #status { color: var(--good); font-weight: 600; }
+      #exportResult, #dydResult { display: inline-block; margin-top: 8px; font-weight: 600; font-size: 12.5px; }
+      #dydResult.ok, #exportResult.ok { color: var(--good); }
+      #dydResult.err, #exportResult.err { color: var(--danger); }
+
+      .about-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; align-items: baseline; }
+      .about-grid dt { color: var(--ink-soft); }
+      .about-grid dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+      [hidden] { display: none !important; }
     </style>
   </head>
   <body>
     <h1>Commonplace — Settings</h1>
-    <p class="sub">Bring your own keys. Everything here is stored locally in this browser (chrome.storage.local), never in the extension source.</p>
+    <p class="sub">
+      Bring your own keys. Everything here is stored locally in this browser (<code>chrome.storage.local</code>),
+      never in the extension source. We can't read your library — that's the architecture, not a promise.
+    </p>
 
     <form id="cfg">
-      <fieldset>
-        <legend>Engine lane</legend>
-        <label class="inline"><input type="radio" name="engineLane" value="managed" /> Managed (Gemini, cloud)</label>
-        <label class="inline"><input type="radio" name="engineLane" value="local" /> Local (Ollama, on-device)</label>
-      </fieldset>
+      <!-- ── CAPTURE ─────────────────────────────────────────────────────────────────────────── -->
+      <section>
+        <h2>Capture</h2>
+        <p class="section-sub">How the extension pulls your saved videos into the local library.</p>
 
-      <fieldset>
-        <legend>Managed lane — Gemini</legend>
-        <label>API key
-          <input type="password" id="geminiKey" autocomplete="off" placeholder="AI… (kept in local storage only)" />
-        </label>
-        <p class="hint">Model is pinned to <code>gemini-2.5-flash-lite</code> (SPEC §15).</p>
-      </fieldset>
+        <div class="group">
+          <p class="g-label">Mode</p>
+          <label class="inline"><input type="checkbox" id="autonomousCapture" /> Autonomous capture (opt-in)</label>
+          <p class="hint">
+            Default (off) is <strong>semi-auto</strong>: open your TikTok saved page and click <em>Start
+            capture</em> — the run drives your foreground tab while you're present.
+          </p>
+          <p class="note">
+            Autonomous mode lets the extension open and drive a TikTok tab unattended. It puts the largest
+            automated-scroll footprint on your real account and carries a higher rate-limit / account-safety
+            risk. Capture is always paced to a human cadence; leave this off unless you want the
+            click-once-and-forget workflow.
+          </p>
+        </div>
 
-      <fieldset>
-        <legend>Ingestion</legend>
-        <label class="inline"><input type="radio" name="ingestion" value="keyframes_vtt" /> Keyframes + VTT</label>
-        <label class="inline"><input type="radio" name="ingestion" value="native" /> Native</label>
-        <p class="hint">Provisional default; the Phase-4 ablation decides the final value.</p>
-        <label class="inline"><input type="checkbox" id="escalateNative" disabled /> Escalate to native on low confidence</label>
-        <p class="disabled-note">Locked off — set by the Phase-4 ablation (cascade retracted, SPEC §13).</p>
-      </fieldset>
+        <div class="group">
+          <p class="g-label">Sources to capture</p>
+          <div class="checks">
+            <label class="inline"><input type="checkbox" id="captureFavorites" /> Favorites</label>
+            <label class="inline"><input type="checkbox" id="captureLikes" /> Likes</label>
+            <label class="inline"><input type="checkbox" id="capturePosts" /> Posts</label>
+            <label class="inline"><input type="checkbox" id="captureReposts" /> Reposts</label>
+          </div>
+          <p class="hint">Unchecked sources are skipped this sweep. Favorites first is the recommended default.</p>
+        </div>
 
-      <fieldset>
-        <legend>Places enrichment (optional)</legend>
-        <label class="inline"><input type="checkbox" id="placesEnabled" /> Enable Google Places grounding</label>
-        <label>Places API key
-          <input type="password" id="placesKey" autocomplete="off" placeholder="(not provisioned yet)" />
-        </label>
-      </fieldset>
+        <div class="group">
+          <p class="g-label">Scroll speed</p>
+          <label class="inline"><input type="radio" name="captureSpeed" value="conservative" /> Conservative</label>
+          <label class="inline"><input type="radio" name="captureSpeed" value="normal" /> Normal</label>
+          <label class="inline"><input type="radio" name="captureSpeed" value="fast" /> Fast</label>
+          <p class="hint">
+            <strong>Normal</strong> is the tested cadence. <em>Conservative</em> scrolls more gently (safest
+            for your session); <em>Fast</em> trades a little safety for speed.
+          </p>
+        </div>
+      </section>
 
-      <fieldset>
-        <legend>Capture mode</legend>
-        <label class="inline"><input type="checkbox" id="autonomousCapture" /> Autonomous capture (opt-in)</label>
-        <p class="hint">
-          Default (unchecked) is <strong>semi-auto</strong>: you open your TikTok saved page and click
-          <em>Sync</em>; capture runs in your foreground tab while you're present.
-        </p>
-        <p class="disabled-note">
-          Autonomous mode lets the extension open and drive a TikTok tab unattended. This puts the
-          largest automated-scroll footprint on your real account and carries a higher rate-limit /
-          account-safety risk. Capture is always paced to human cadence, but leave this off unless you
-          want the click-once-and-forget workflow.
-        </p>
-      </fieldset>
+      <!-- ── ANALYSIS ────────────────────────────────────────────────────────────────────────── -->
+      <section>
+        <h2>Analysis</h2>
+        <p class="section-sub">The engine that understands each video. Keys live only in local storage.</p>
 
-      <fieldset>
-        <legend>Performance</legend>
-        <label>Concurrency
-          <input type="number" id="concurrency" min="1" max="16" step="1" />
-        </label>
-      </fieldset>
+        <div class="group">
+          <p class="g-label">Engine lane</p>
+          <label class="inline"><input type="radio" name="engineLane" value="managed" /> Managed (Gemini, cloud)</label>
+          <label class="inline"><input type="radio" name="engineLane" value="local" /> Local (Ollama, on-device)</label>
+        </div>
 
-      <button type="submit">Save</button>
-      <span id="status" role="status" aria-live="polite"></span>
+        <div class="group">
+          <p class="g-label">Gemini (managed lane)</p>
+          <label>API key
+            <input type="password" id="geminiKey" autocomplete="off" placeholder="AI… (kept in local storage only)" />
+          </label>
+          <label>Model
+            <select id="managedModel">
+              <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite — fast &amp; cheap (recommended)</option>
+              <option value="gemini-2.5-flash">gemini-2.5-flash — balanced</option>
+              <option value="gemini-2.5-pro">gemini-2.5-pro — highest quality</option>
+            </select>
+          </label>
+          <p class="hint">
+            Your key stays in <code>chrome.storage.local</code> — never in the extension source, never
+            uploaded. Flash-Lite is the recommended default (SPEC §15).
+          </p>
+        </div>
+
+        <div class="group">
+          <p class="g-label">Ingestion</p>
+          <label class="inline"><input type="radio" name="ingestion" value="keyframes_vtt" /> Keyframes + VTT</label>
+          <label class="inline"><input type="radio" name="ingestion" value="native" /> Native</label>
+          <p class="hint">Provisional default; the Phase-4 ablation decides the final value.</p>
+          <label class="inline"><input type="checkbox" id="escalateNative" disabled /> Escalate to native on low confidence</label>
+          <p class="disabled-note">Locked off — set by the Phase-4 ablation (cascade retracted, SPEC §13).</p>
+        </div>
+
+        <div class="group">
+          <p class="g-label">Places enrichment (optional)</p>
+          <label class="inline"><input type="checkbox" id="placesEnabled" /> Enable Google Places grounding</label>
+          <label>Places API key
+            <input type="password" id="placesKey" autocomplete="off" placeholder="(not provisioned yet)" />
+          </label>
+        </div>
+
+        <div class="group">
+          <p class="g-label">Performance</p>
+          <label>Concurrency
+            <input type="number" id="concurrency" min="1" max="16" step="1" />
+          </label>
+          <p class="hint">How many videos the engine analyzes at once. Default 2.</p>
+        </div>
+      </section>
+
+      <div class="save-bar">
+        <button type="submit">Save settings</button>
+        <span id="status" role="status" aria-live="polite"></span>
+      </div>
     </form>
 
-    <section class="import">
-      <h2>Import from TikTok "Download your data"</h2>
-      <p class="sub">
-        The second capture lane — load your entire liked &amp; favorited history in one shot, with no
-        scrolling. In TikTok: <strong>Profile → ☰ → Settings and privacy → Account → Download your
-        data</strong>, choose <strong>JSON</strong>, request it, then download the ZIP. Unzip it and
-        pick the <code>user_data.json</code> file below.
-      </p>
-      <fieldset>
-        <legend>Data export (JSON)</legend>
+    <!-- ── IMPORT / EXPORT ─────────────────────────────────────────────────────────────────────── -->
+    <section>
+      <h2>Import &amp; export</h2>
+      <p class="section-sub">Your library is yours. Export is always free.</p>
+
+      <div class="group">
+        <p class="g-label">Import from TikTok "Download your data"</p>
+        <p class="hint" style="margin-bottom: 8px;">
+          Load your entire liked &amp; favorited history in one shot, no scrolling. In TikTok:
+          <strong>Profile → ☰ → Settings and privacy → Account → Download your data</strong>, choose
+          <strong>JSON</strong>, request it, download the ZIP, unzip, then pick <code>user_data.json</code> below.
+        </p>
         <label>user_data.json
           <input type="file" id="dydFile" accept=".json,application/json" />
         </label>
         <p class="hint">Parsed locally in your browser. Nothing is uploaded.</p>
         <span id="dydResult" role="status" aria-live="polite"></span>
-      </fieldset>
+      </div>
+
+      <div class="group">
+        <p class="g-label">Export library</p>
+        <p class="hint" style="margin-bottom: 8px;">
+          Download your whole library as an open-schema JSON file (<code>commonplace-export.json</code>).
+        </p>
+        <button type="button" class="secondary" id="exportBtn">Export library (JSON)</button>
+        <span id="exportResult" role="status" aria-live="polite"></span>
+      </div>
+    </section>
+
+    <!-- ── ABOUT ───────────────────────────────────────────────────────────────────────────────── -->
+    <section>
+      <h2>About</h2>
+      <dl class="about-grid">
+        <dt>Library</dt><dd id="libCount">…</dd>
+        <dt>Version</dt><dd id="extVersion">…</dd>
+      </dl>
     </section>
 
     <script type="module" src="options.js"></script>

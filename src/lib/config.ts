@@ -5,12 +5,22 @@
 // in a web_accessible_resource (SPEC §25 key-exposure posture). The options page reads and
 // writes this via the real chrome.storage.local; tests use an in-memory StorageLike fake.
 
+/** The four capture lanes, in the supervisor's frozen sweep order. Mirrors capture/supervisor's
+ *  `Source` but is declared here independently so config carries no dependency on capture internals. */
+export type CaptureSource = "favorites" | "likes" | "posts" | "reposts";
+
+/** Which capture lanes a sweep is allowed to drive (options → SW reads this to skip unchecked lanes). */
+export type CaptureSources = Record<CaptureSource, boolean>;
+
+/** Scroll cadence preset the capture engine paces to. Normal is the tested default. */
+export type CaptureSpeed = "conservative" | "normal" | "fast";
+
 export interface CpConfig {
   geminiKey: string | null;
   engineLane: "managed" | "local"; // default "managed"
   localModel: string; // default "qwen3-vl:8b"
   localEndpoint: string; // default "http://localhost:11434"
-  managedModel: string; // default "gemini-2.5-flash-lite" (pinned, SPEC §15)
+  managedModel: string; // default "gemini-2.5-flash-lite" (recommended; user-selectable in options)
   ingestion: "keyframes_vtt" | "native"; // default "keyframes_vtt" — PROVISIONAL (Phase-4 ablation decides)
   escalateNative: boolean; // default false — cascade retracted (SPEC §13)
   placesEnabled: boolean; // default false — key not provisioned
@@ -21,7 +31,19 @@ export interface CpConfig {
   // TikTok tab via chrome.tabs and drives it with no presence — opt-in behind the options toggle's
   // account-risk note (it puts the largest automated-scroll footprint on the real account).
   autonomousCapture: boolean; // default false
+  // Which lanes a sweep drives. Default: all four. Unchecking a lane tells the supervisor to skip it.
+  captureSources: CaptureSources;
+  // Scroll cadence preset. Default "normal" (the tested pacing); "conservative"/"fast" scale it.
+  captureSpeed: CaptureSpeed;
 }
+
+/** Frozen default: every lane on. */
+export const DEFAULT_CAPTURE_SOURCES: CaptureSources = {
+  favorites: true,
+  likes: true,
+  posts: true,
+  reposts: true,
+};
 
 /** chrome.storage.local satisfies this shape. */
 export interface StorageLike {
@@ -45,13 +67,18 @@ export const DEFAULT_CONFIG: CpConfig = {
   placesKey: null,
   concurrency: 2,
   autonomousCapture: false,
+  captureSources: DEFAULT_CAPTURE_SOURCES,
+  captureSpeed: "normal",
 };
 
-/** Read the stored partial and merge it over the frozen defaults. */
+/** Read the stored partial and merge it over the frozen defaults. `captureSources` is deep-merged so
+ *  a stored blob predating a lane (or written partially) still backfills every lane from the default. */
 export async function loadConfig(storage: StorageLike): Promise<CpConfig> {
   const got = await storage.get(CONFIG_KEY);
   const stored = (got[CONFIG_KEY] ?? {}) as Partial<CpConfig>;
-  return { ...DEFAULT_CONFIG, ...stored };
+  const merged = { ...DEFAULT_CONFIG, ...stored };
+  merged.captureSources = { ...DEFAULT_CAPTURE_SOURCES, ...(stored.captureSources ?? {}) };
+  return merged;
 }
 
 /** Merge a patch over the current effective config and persist the full blob. */

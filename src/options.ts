@@ -21,12 +21,18 @@ const radio = (name: string, value: string) =>
 function populate(cfg: CpConfig) {
   radio("engineLane", cfg.engineLane)!.checked = true;
   radio("ingestion", cfg.ingestion)!.checked = true;
+  radio("captureSpeed", cfg.captureSpeed)!.checked = true;
   $<HTMLInputElement>("geminiKey").value = cfg.geminiKey ?? "";
+  $<HTMLSelectElement>("managedModel").value = cfg.managedModel;
   $<HTMLInputElement>("escalateNative").checked = cfg.escalateNative; // disabled in the UI
   $<HTMLInputElement>("placesEnabled").checked = cfg.placesEnabled;
   $<HTMLInputElement>("placesKey").value = cfg.placesKey ?? "";
   $<HTMLInputElement>("concurrency").value = String(cfg.concurrency);
   $<HTMLInputElement>("autonomousCapture").checked = cfg.autonomousCapture;
+  $<HTMLInputElement>("captureFavorites").checked = cfg.captureSources.favorites;
+  $<HTMLInputElement>("captureLikes").checked = cfg.captureSources.likes;
+  $<HTMLInputElement>("capturePosts").checked = cfg.captureSources.posts;
+  $<HTMLInputElement>("captureReposts").checked = cfg.captureSources.reposts;
 }
 
 function readForm(): Partial<CpConfig> {
@@ -34,16 +40,28 @@ function readForm(): Partial<CpConfig> {
     "managed") as CpConfig["engineLane"];
   const ingestion = (document.querySelector<HTMLInputElement>('input[name="ingestion"]:checked')?.value ??
     "keyframes_vtt") as CpConfig["ingestion"];
+  const captureSpeed = (document.querySelector<HTMLInputElement>('input[name="captureSpeed"]:checked')?.value ??
+    "normal") as CpConfig["captureSpeed"];
+  // The model <select> only offers vetted values, but fall back to the pinned default defensively.
+  const managedModel = $<HTMLSelectElement>("managedModel").value || "gemini-2.5-flash-lite";
   const geminiKey = $<HTMLInputElement>("geminiKey").value.trim();
   const placesKey = $<HTMLInputElement>("placesKey").value.trim();
   return {
     engineLane,
     ingestion,
+    captureSpeed,
+    managedModel,
     geminiKey: geminiKey || null,
     placesEnabled: $<HTMLInputElement>("placesEnabled").checked,
     placesKey: placesKey || null,
     concurrency: Math.max(1, Number($<HTMLInputElement>("concurrency").value) || 1),
     autonomousCapture: $<HTMLInputElement>("autonomousCapture").checked, // opt-in self-driving (Task 5)
+    captureSources: {
+      favorites: $<HTMLInputElement>("captureFavorites").checked,
+      likes: $<HTMLInputElement>("captureLikes").checked,
+      posts: $<HTMLInputElement>("capturePosts").checked,
+      reposts: $<HTMLInputElement>("captureReposts").checked,
+    },
     // escalateNative is intentionally NOT written from the UI — locked off (SPEC §13).
   };
 }
@@ -102,8 +120,27 @@ async function handleDydFile(file: File): Promise<void> {
   }
 }
 
+// About/Status: extension version (from the manifest) + live library count (via sync_status). Both are
+// best-effort — a sleeping SW leaves the count as a dash rather than blocking the page.
+async function populateAbout(): Promise<void> {
+  try {
+    $("extVersion").textContent = `v${chrome.runtime.getManifest().version}`;
+  } catch {
+    $("extVersion").textContent = "—";
+  }
+  try {
+    const st = (await chrome.runtime.sendMessage({ kind: "sync_status" })) as { count?: number } | undefined;
+    const n = typeof st?.count === "number" ? st.count : null;
+    $("libCount").textContent = n == null ? "—" : `${n.toLocaleString("en-US")} ${n === 1 ? "item" : "items"}`;
+  } catch {
+    $("libCount").textContent = "—";
+  }
+}
+
 async function main() {
   populate(await loadConfig(storage));
+  void populateAbout();
+
   const form = $<HTMLFormElement>("cfg");
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -118,6 +155,19 @@ async function main() {
   dydInput.addEventListener("change", () => {
     const file = dydInput.files?.[0];
     if (file) void handleDydFile(file);
+  });
+
+  // Export the whole library via the existing offscreen open-schema export path (fire-and-forget; the
+  // SW spins up the offscreen doc and downloads commonplace-export.json).
+  $("exportBtn").addEventListener("click", () => {
+    const el = $("exportResult");
+    void chrome.runtime.sendMessage({ kind: "export_open_schema" }).catch(() => {});
+    el.textContent = "Export started — check your downloads for commonplace-export.json";
+    el.className = "ok";
+    setTimeout(() => {
+      el.textContent = "";
+      el.className = "";
+    }, 5000);
   });
 }
 

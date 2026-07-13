@@ -19,6 +19,16 @@ import { stepRecovery, initialRecoveryState } from "./lib/capture/sessionRecover
 // (scrollDrive.ts is retired from this lane but kept; the discrete step-then-dwell machine — scrollMotion/
 // pacing/scrollState in the hot path, plus the requestsIssued→backoff discriminator — is gone.)
 import { initialWatchState, stepWatch } from "./lib/capture/scrollWatch.js";
+// Wave A resilience (2026-07-13): own-identity capture (autonomous nav), the liveness watchdog (no
+// silent hangs), and the account-safety kill-switch (don't hammer a wall) — all PURE, glued thinly here.
+import {
+  handleFromPath,
+  parseSecUidFromUrl,
+  isOwnProfile,
+  chooseOwnHandle,
+} from "./lib/capture/ownIdentity.js";
+import { initialWatchdog, stepWatchdog, MAX_WEDGE_RETRIES } from "./lib/capture/watchdog.js";
+import { shouldHaltForBlock, BAN_HALT_REASON } from "./lib/capture/banGuard.js";
 
 let lastSource = null;
 let lastHasMore = null; // latest coerced paging signal from the message path (Task 1)
@@ -43,6 +53,19 @@ let runHealthyBaseline = 0;
 // Null = the manual Alt+Shift+A dev path (no supervisor tag) → arrivalDrivesRun accepts everything.
 let activeRunSource = null;
 
+// SUP-02: the freshest intercepted item_list URL (carries the profile owner's secUid). Threaded to
+// own-identity capture; never used to drive the run.
+let lastItemListUrl = null;
+
+// User capture controls (CHAL-UX): the popup drives these via the SW. They are module-level so the SW's
+// sync_stop/sync_pause/sync_resume messages set them while a run's observer loop reads them each tick.
+// `userResumeRequested` breaks ANY pause (incl. a still-unsolved challenge) when the founder clicks
+// Resume; `userPauseRequested` makes the observer enter a resumable user pause; `userStopRequested`
+// ends the run cleanly (no supervisor-advancing scroll_done — the SW owns stop cleanup).
+let userStopRequested = false;
+let userPauseRequested = false;
+let userResumeRequested = false;
+
 window.addEventListener("message", (e) => {
   if (e.source !== window || !e.data || e.data.__attic !== true) return;
   if (e.data.kind === "request_issued") {
@@ -53,6 +76,7 @@ window.addEventListener("message", (e) => {
     return;
   }
   if (e.data.kind === "item_list") {
+    lastItemListUrl = e.data.url ?? lastItemListUrl; // SUP-02: the freshest item_list URL carries secUid
     // ALWAYS relay the SLIM, already-normalized+source-tagged items the main world parsed (Task 3) —
     // the heavy raw envelope no longer crosses any structured-clone boundary. Even a straggler from
     // the previous source is valid data: the SW upserts by id (idempotent, unions sources), so we
@@ -477,6 +501,10 @@ const OVERLAY_CHURN_REASON = "unresolved overlay — needs you (capture resumes 
 const CHALLENGE_REASON_OVERLAY = "a captcha is blocking capture — solve it in the TikTok tab; capture resumes automatically";
 const FLAGGED_PAUSE_REASON =
   "TikTok returned empty pages after a refresh — the session looks flagged; try again shortly or solve any challenge in the tab";
+// A founder-initiated pause (popup Pause button) — held until they click Resume.
+const USER_PAUSE_REASON = "paused — click Resume to continue capturing";
+// A wedged run being re-nudged before we concede (liveness watchdog) — surfaced so a hang self-reports.
+const WEDGE_RETRY_REASON = "capture stalled — re-nudging the loader to keep going";
 
 // FIX 6 — clear the PREVIOUS source's straggler paging signals. Split out of autoScroll so
 // runCaptureForSource can call it BEFORE navigateToSource (arming the run) instead of after the nav
@@ -537,6 +565,88 @@ function gatherPreflightFacts() {
   };
 }
 
+// ── Own-identity capture (SUP-02) ────────────────────────────────────────────────
+// Learn the founder's OWN handle so the SW can navigate ANY tab to their profile before capturing.
+// CONFIDENT capture happens only on the user's OWN profile (an owner-only control — Edit-profile or the
+// private Favorites tab — is present); a nav-link read is the cold-start fallback. The keep/overwrite
+// decision is the pure `chooseOwnHandle` (never clobbers a known handle with junk). secUid rides along
+// from the last item_list URL, trusted only on the own profile (else it's some viewed creator's).
+
+function detectEditProfile() {
+  if (document.querySelector('[data-e2e="edit-profile-entrance"], [data-e2e="edit-profile"]')) return true;
+  for (const el of document.querySelectorAll("button, a")) {
+    const t = (el.textContent || "").trim();
+    if (/^edit profile$/i.test(t) && isVisible(el)) return true;
+  }
+  return false;
+}
+
+function detectFavoritesTabPresent() {
+  // Favorites is private — its sub-tab renders only on the account owner's own profile.
+  return !!document.querySelector('[data-e2e="favorites-tab"]');
+}
+
+function gatherOwnProfileFacts() {
+  return { editProfilePresent: detectEditProfile(), favoritesTabPresent: detectFavoritesTabPresent() };
+}
+
+// The logged-in user's profile link in the left nav / header — the from-ANY-page discovery path when we
+// don't yet know the handle. Best-effort across TikTok's data-e2e variants; a miss is a graceful null.
+function detectOwnHandleFromNav() {
+  const sels = ['a[data-e2e="nav-profile"]', 'a[data-e2e="profile-icon"]', '[data-e2e="nav-profile"]'];
+  for (const sel of sels) {
+    const el = document.querySelector(sel);
+    const href = el && (el.getAttribute("href") || el.closest?.("a")?.getAttribute("href"));
+    if (href) {
+      try {
+        const h = handleFromPath(new URL(href, location.origin).pathname);
+        if (h) return h;
+      } catch (_) {}
+    }
+  }
+  return null;
+}
+
+// Persist a discovered handle (+ secUid when confident) through the pure keep/overwrite policy.
+async function persistOwnIdentity(observed, confident) {
+  try {
+    const { cp_own_handle: stored } = await chrome.storage.local.get("cp_own_handle");
+    const next = chooseOwnHandle(stored, observed, confident);
+    const patch = {};
+    if (next && next !== stored) patch.cp_own_handle = next;
+    if (confident) {
+      const secUid = parseSecUidFromUrl(lastItemListUrl); // trust secUid only on the own profile
+      if (secUid) patch.cp_own_secuid = secUid;
+    }
+    if (Object.keys(patch).length) await chrome.storage.local.set(patch);
+  } catch (_) {}
+}
+
+// Opportunistic capture: if we're on the founder's OWN profile right now, persist the handle confidently.
+function maybeCaptureOwnIdentity() {
+  if (isProfilePage() && isOwnProfile(gatherOwnProfileFacts())) {
+    const h = handleFromPath(location.pathname);
+    if (h) void persistOwnIdentity(h, true);
+  }
+}
+
+// Synchronous best-effort own-handle for the SW's discover_handle probe (persists as a side effect).
+function discoverOwnHandle() {
+  if (isProfilePage() && isOwnProfile(gatherOwnProfileFacts())) {
+    const h = handleFromPath(location.pathname);
+    if (h) {
+      void persistOwnIdentity(h, true);
+      return h;
+    }
+  }
+  const nav = detectOwnHandleFromNav();
+  if (nav) {
+    void persistOwnIdentity(nav, false);
+    return nav;
+  }
+  return null;
+}
+
 let scrolling = false;
 // autoScroll drives ONE source to completion via a continuous rAF scroll + a slow observer. `source`
 // (Task 5) tags the run for carry-forward (2)'s arrival filter; `resuming` (carry-forward 1) marks a
@@ -548,6 +658,14 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   scrolling = true;
   cachedScroller = null;
   activeRunSource = source; // arm the carry-forward-2 filter BEFORE any arrival can land
+  // Fresh run → clear any stale user-control requests from a previous run (CHAL-UX).
+  userStopRequested = false;
+  userPauseRequested = false;
+  userResumeRequested = false;
+  let stoppedByUser = false;
+  // Opportunistic own-handle capture: if we're already on the founder's own profile, learn it now so a
+  // later Sync from ANY page can navigate here autonomously (SUP-02).
+  maybeCaptureOwnIdentity();
 
   // PER-RUN RESET (review fix, critical). These module-level signals belong to the PREVIOUS run /
   // source — a completed Favorites run leaves lastHasMore=false, and the store's `count` is a
@@ -669,6 +787,8 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   let outcome = { status: "giveup", reason: "capture ended before a verified terminal" }; // finalized at each terminal
   let rec = initialRecoveryState(Date.now());
   let httpErrorStreak = 0; // consecutive http_error arrivals — a persistent 429/5xx ends the run honestly
+  let challengeCycles = 0; // transport-challenge pause cycles this run — feeds the account-safety kill-switch (banGuard)
+  let watchdog = initialWatchdog(); // liveness watchdog — bounded re-nudges before conceding a wedged run
   let lastSampleLogTs = 0; // console.log a CaptureSample roughly every ~5s while scrolling
   let snoozeCount = 0; // screen-time reminders auto-snoozed this run (logged, never a passcode)
   // Per-run eviction reset: start fresh so the HUD's "evicted N" is this run's tally and pruneGrid
@@ -697,12 +817,16 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     const overlayTriggered = !!opts.overlayTriggered;
     const resumeWhenOnline = !!opts.resumeWhenOnline;
     sendScrollMode("hold"); // stop the SW's trusted-wheel loop while paused — no motion until we resume
+    // Raise the CRASH-SAFE, popup-readable `paused` state (the SW persists it to storage). This is the
+    // single source of truth the UI surfaces as "action needed" — the founder's #1 ask: never a silent
+    // stop. The SW also raises a chrome notification (he may be away from the tab).
     try {
-      chrome.runtime.sendMessage({ kind: "capture_notice", level, reason });
+      chrome.runtime.sendMessage({ kind: "capture_paused", level, reason });
     } catch (_) {}
     console.warn(`[commonplace] capture PAUSED (${level}) — ${reason}`);
     const pauseStartHealthy = healthyArrivals;
     const PAUSE_POLL_MS = 1500;
+    userResumeRequested = false; // consume any stale resume from before this pause began
     while (true) {
       try {
         const sample = sampleMemory({
@@ -714,16 +838,28 @@ async function autoScroll({ source = null, resuming = false } = {}) {
         updateHud(formatHudLine(sample, { source: lastSource, hasMore: "?", state: `paused (${level})`, evicted: evictedTotal }));
       } catch (_) {}
       await sleep(PAUSE_POLL_MS);
+      if (userStopRequested) break; // founder pressed Stop → exit the pause; the observer loop ends the run
+      if (userResumeRequested) {
+        // Founder pressed Resume → continue regardless of whether the obstruction visibly cleared.
+        userResumeRequested = false;
+        userPauseRequested = false;
+        break;
+      }
       if (healthyArrivals > pauseStartHealthy) break; // a fresh healthy page returned → auto-resume
       if (resumeWhenOnline && navigator.onLine !== false) break; // back online → resume (regenerate arrivals)
       if (overlayTriggered) {
         const f = await gatherOverlayFacts(getScroller());
-        if (!f.hasBlockingLayer && !f.inputSwallowed) break; // the overlay cleared → resume
+        if (!f.hasBlockingLayer && !f.inputSwallowed) break; // the overlay cleared → auto-resume
       }
     }
+    // Clear the persisted `paused` state so the UI drops the action-needed prompt. (On a user Stop the SW
+    // also clears it — this is idempotent.)
+    try {
+      chrome.runtime.sendMessage({ kind: "capture_resumed" });
+    } catch (_) {}
     console.log(`[commonplace] capture RESUMED (was paused: ${level})`);
     // The caller `continue`s; the next observer tick's scrollWatch re-issues the real scroll_mode (advance),
-    // so the SW's wheel loop resumes wheeling down where it left off — no explicit resume message needed here.
+    // so the SW's wheel loop resumes wheeling down where it left off.
     return true;
   }
 
@@ -737,6 +873,26 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       console.warn(`[commonplace] capture INCOMPLETE — ${outcome.reason}`);
       break;
     }
+
+    // ── USER CONTROLS (CHAL-UX). Stop ends the run cleanly (the SW owns the stop cleanup, so we send NO
+    //    supervisor-advancing scroll_done). Pause enters a resumable user pause held until Resume.
+    if (userStopRequested) {
+      stoppedByUser = true;
+      running = false;
+      console.warn("[commonplace] capture STOPPED by the founder");
+      break;
+    }
+    if (userPauseRequested) {
+      await enterPause("user", USER_PAUSE_REASON);
+      if (userStopRequested) {
+        stoppedByUser = true;
+        running = false;
+        console.warn("[commonplace] capture STOPPED by the founder (during a pause)");
+        break;
+      }
+      continue; // resumed → re-decide motion next tick
+    }
+
     currentScroller = getScroller(); // refresh each tick (heavy query at most every OBSERVER_MS)
     const scroller = currentScroller;
 
@@ -804,10 +960,13 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     healthyArrivalsSeen = healthyArrivals;
     if (healthyArrived) {
       // FIX 4a: a healthy page proves whatever was blocking is gone — reset overlay churn AND any
-      // server-error streak.
+      // server-error streak. Also reset the account-safety counters (a real page means we're not walled)
+      // and the liveness watchdog (fresh progress → fresh re-nudge budget for a future wedge).
       overlayChurn = 0;
       lastOverlaySig = null;
       httpErrorStreak = 0;
+      challengeCycles = 0;
+      watchdog = initialWatchdog();
     }
 
     // ── 4. SESSION RECOVERY — classify the transport and act. A pause here holds the SW's trusted-wheel
@@ -855,23 +1014,38 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       }
       if (rc.kind === "pause_notify") {
         const level = recSignal === "offline" ? "offline" : recSignal === "challenge" ? "challenge" : "flagged";
+        if (recSignal === "challenge") {
+          // A transport-level wall (403 / login redirect / captcha HTML). Count the cycle; if it keeps
+          // re-blocking after each auto-resume past the ceiling, HALT to protect the account (C7) rather
+          // than keep re-entering a pause against a wall that never clears.
+          challengeCycles++;
+          if (shouldHaltForBlock({ httpErrorStreak, challengeCycles })) {
+            outcome = { status: "giveup", reason: BAN_HALT_REASON };
+            try { chrome.runtime.sendMessage({ kind: "capture_notice", level: "blocked", reason: BAN_HALT_REASON }); } catch (_) {}
+            running = false;
+            console.warn(`[commonplace] capture HALTED (account safety) — repeated challenge — ${BAN_HALT_REASON}`);
+            break;
+          }
+        }
         await enterPause(level, rc.reason, { resumeWhenOnline: recSignal === "offline" });
         continue;
       }
       // rc.kind === "continue": nothing to do.
     } else if (arrived && lastTransport === "http_error") {
       // A REAL server rate/error signal (429/5xx). MODEST fixed slowdown (pause the driver a few seconds
-      // then resume) — NOT the old 2s→60s exponential backoff. Persistent past HTTP_ERROR_GIVEUP
-      // consecutive http_error arrivals ⇒ an honest reported-incomplete (never a false done).
+      // then resume) — NOT the old 2s→60s exponential backoff. But a SUSTAINED run of server errors is a
+      // wall: the account-safety kill-switch (banGuard) HALTS the run — stop wheeling, detach (teardown),
+      // raise a user-visible "blocked" notice — never keep hammering (never a false done).
       httpErrorStreak++;
-      if (httpErrorStreak >= HTTP_ERROR_GIVEUP) {
-        outcome = { status: "giveup", reason: HTTP_ERROR_REASON };
+      if (shouldHaltForBlock({ httpErrorStreak, challengeCycles })) {
+        outcome = { status: "giveup", reason: BAN_HALT_REASON };
+        try { chrome.runtime.sendMessage({ kind: "capture_notice", level: "blocked", reason: BAN_HALT_REASON }); } catch (_) {}
         running = false;
-        console.warn(`[commonplace] capture INCOMPLETE — ${HTTP_ERROR_REASON}`);
+        console.warn(`[commonplace] capture HALTED (account safety) — repeated server errors — ${BAN_HALT_REASON}`);
         break;
       }
       const ms = HTTP_ERROR_SLOWDOWN_MIN_MS + Math.floor(Math.random() * (HTTP_ERROR_SLOWDOWN_MAX_MS - HTTP_ERROR_SLOWDOWN_MIN_MS));
-      console.warn(`[commonplace] server error (429/5xx) — modest slowdown ${ms}ms (streak ${httpErrorStreak}/${HTTP_ERROR_GIVEUP})`);
+      console.warn(`[commonplace] server error (429/5xx) — modest slowdown ${ms}ms (streak ${httpErrorStreak})`);
       sendScrollMode("hold"); // hold the SW's wheel loop for the slowdown; the next tick re-issues the mode
       await sleep(ms);
       continue;
@@ -905,22 +1079,33 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     watchMode = watch.mode;
     // Steer the SW's trusted-wheel loop from the NETWORK verdict — the physical scroll WRITE lives in the
     // SW now (TikTok's grid ignores ALL programmatic scrolling; only trusted wheels move it). advance→keep
-    // wheeling DOWN continuously · done/giveup→stop the loop + detach the debugger now. We NEVER send hold or
-    // retrigger from this normal path (those were the geometry-era frontier machinery; a pause still sends a
-    // legitimate hold via enterPause / the http_error slowdown).
-    if (watchMode === "advance") {
-      sendScrollMode("advance");
-    } else {
-      sendScrollStop(); // done / giveup — teardown also stops, idempotently
-    }
+    // wheeling DOWN continuously · done→stop the loop + detach. A `giveup` (stall) is FIRST offered to the
+    // LIVENESS WATCHDOG: a wedged run gets a bounded re-nudge (a retrigger up-burst re-arms the loader) +
+    // a surfaced notice before we concede, so a merely-wedged run self-reports and recovers instead of
+    // silently ending; only a truly dead loader concedes. A pause still sends its own legitimate hold via
+    // enterPause / the http_error slowdown.
     if (watchMode === "done") {
+      sendScrollStop(); // stop the loop + detach the debugger; teardown also stops, idempotently
       outcome = { status: "done", reason: null };
       running = false;
       console.log(`[commonplace] capture COMPLETE — TikTok reported a verified terminal (hasMore:false); ${prevCount} captured`);
     } else if (watchMode === "giveup") {
-      outcome = { status: "giveup", reason: "TikTok stopped loading new pages" };
-      running = false;
-      console.warn(`[commonplace] capture INCOMPLETE — ${outcome.reason}`);
+      const wd = stepWatchdog(watchdog);
+      watchdog = wd.state;
+      if (wd.action === "retry") {
+        console.warn(`[commonplace] run wedged (no new pages) — re-nudging the loader (retry ${watchdog.retries}/${MAX_WEDGE_RETRIES})`);
+        try { chrome.runtime.sendMessage({ kind: "capture_notice", level: "stalled", reason: WEDGE_RETRY_REASON }); } catch (_) {}
+        sendScrollMode("retrigger"); // jolt the lazy-loader: a brief up-burst, then resume advancing
+        watchState = initialWatchState(Date.now()); // fresh stall window so the re-nudge has time to work
+        watchMode = "advance";
+      } else {
+        sendScrollStop(); // budget spent — concede honestly + detach
+        outcome = { status: "giveup", reason: "TikTok stopped loading new pages" };
+        running = false;
+        console.warn(`[commonplace] capture INCOMPLETE — ${outcome.reason}`);
+      }
+    } else {
+      sendScrollMode("advance"); // keep wheeling DOWN continuously
     }
 
     // ── 6. TELEMETRY + HUD (real Date.now()/performance.memory/document reads happen ONLY here — glue).
@@ -953,6 +1138,14 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   sendScrollStop(); // detach the SW debugger on EVERY exit path — a dangling attach = a stuck "debugging" banner
   if (reloadingAway) return; // page navigating away; the supervisor's checkpoint re-drives — no scroll_done
   removeHud();
+  if (stoppedByUser) {
+    // The founder pressed Stop. The SW already ran the stop cleanup (detached, cleared the supervisor's
+    // `current` so nothing auto-resumes, cleared `paused`). We must NOT send a scroll_done — a
+    // source_finished would advance the supervisor and re-drive the next source. Just disarm and exit.
+    activeRunSource = null;
+    console.log(`[commonplace] auto-scroll stopped by the founder (source ${source ?? "manual"}) — ${prevCount} captured`);
+    return;
+  }
   if (source) {
     // Terminal reached this attempt — clear the reload guard so a later fresh Sync of this source can
     // reload again if IT hits a flag. (The reload path `return`s earlier and never reaches here.)
@@ -1020,11 +1213,13 @@ async function downloadViaFetch(n) {
 // run). If nav fails, no matching-source page arrives, the carry-forward-2 filter keeps this run clean,
 // and the run bounds out to a REPORTED giveup — an honest incomplete the supervisor records and
 // sequences past, never a fake "done." Task 6 must confirm/repair these selectors on the real site.
+// data-e2e FIRST (TikTok's most stable handle). Live-confirmed working 2026-07-13 on the founder's DOM:
+// `favorites-tab`, `liked-tab`. Extra variants cover markup drift; the text fallbacks are last resort.
 const SOURCE_TAB_HINTS = {
-  favorites: { e2e: ["favorites-tab", "user-favorite"], text: [/^favorites$/i] },
-  likes: { e2e: ["liked-tab", "user-liked"], text: [/^liked$/i, /^likes$/i] },
-  posts: { e2e: ["user-post", "posts-tab"], text: [/^videos$/i, /^posts$/i] },
-  reposts: { e2e: ["user-repost", "repost-tab"], text: [/^reposts$/i] },
+  favorites: { e2e: ["favorites-tab", "user-favorite", "favorite-tab"], text: [/^favorites$/i, /^favorite$/i] },
+  likes: { e2e: ["liked-tab", "user-liked", "likes-tab"], text: [/^liked$/i, /^likes$/i] },
+  posts: { e2e: ["user-post", "posts-tab", "post-tab"], text: [/^videos$/i, /^posts$/i] },
+  reposts: { e2e: ["user-repost", "repost-tab", "reposts-tab"], text: [/^reposts$/i, /^repost$/i] },
 };
 
 function findSourceTab(source) {
@@ -1053,20 +1248,40 @@ function isProfilePage() {
   return !/\/(video|photo)\//.test(p); // …but not a single video/photo permalink
 }
 
+// Wait for the ACTIVE source's first page to actually arrive (SUP-05) rather than sleeping a fixed
+// interval. `pageArrivals` only counts arrivals matching `activeRunSource` (the item_list handler gates
+// on arrivalDrivesRun before bumping it), so a bump here means the clicked sub-tab's grid began
+// paginating. Returns true on arrival, false on timeout. A small floor sleep on timeout lets a slow
+// grid settle before we start wheeling.
+async function waitForSourceArrival(timeoutMs) {
+  const start = pageArrivals;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await sleep(200);
+    if (pageArrivals > start) return true;
+  }
+  return false;
+}
+
 async function navigateToSource(source) {
   if (!source) return false;
   const tab = findSourceTab(source);
   if (!tab) {
     console.warn(
       `[commonplace] navigateToSource(${source}): no sub-tab found — capture will run against whatever ` +
-        `is showing; a non-matching source is filtered out (carry-forward 2) and the run reports giveup. ` +
-        `(FRAGILE SEAM — Task 6 must verify the SPA sub-tab selectors on the live site.)`,
+        `is showing; a non-matching source is filtered out (carry-forward 2) and the run reports giveup.`,
     );
     return false;
   }
   tab.click();
-  console.log(`[commonplace] navigateToSource(${source}) → clicked sub-tab; waiting for it to load`);
-  await sleep(1500); // let TikTok swap the grid + fire the first source item_list before we scroll
+  console.log(`[commonplace] navigateToSource(${source}) → clicked sub-tab; waiting for its first page`);
+  // SUP-05: wait for the source's first item_list to arrive (up to 5s) instead of a blind fixed sleep —
+  // robust to a fast OR a slow grid swap. On timeout, a short floor still lets the grid settle.
+  const arrived = await waitForSourceArrival(5000);
+  if (!arrived) {
+    console.log(`[commonplace] navigateToSource(${source}) → no first page within 5s; proceeding (the run's stall/watchdog will handle a truly dead grid)`);
+    await sleep(500);
+  }
   return true;
 }
 
@@ -1088,6 +1303,9 @@ async function runCaptureForSource(source, resuming) {
   }
   captureRunActive = true;
   try {
+    // SUP-02: opportunistically learn our own handle from this tab (if it's the founder's own profile)
+    // BEFORE we hop into a sub-tab, so a later Sync from ANY page can navigate here autonomously.
+    maybeCaptureOwnIdentity();
     activeRunSource = source ?? null; // arm the filter BEFORE nav so the first arrival is already gated
     // FIX 6: reset the previous source's stragglers AND baseline the arrival counters NOW, before the
     // nav window — so a first/only page that lands during navigateToSource's sleep is preserved as this
@@ -1139,6 +1357,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     scrollDriverDetached = true;
     scrollDriverDetachReason = (msg && msg.reason) || "the scroll driver was disconnected";
     console.warn(`[commonplace] scroll driver detached — ${scrollDriverDetachReason}`);
+  } else if (msg && msg.kind === "sync_stop") {
+    // Founder pressed Stop in the popup (relayed by the SW). End the run cleanly on the next observer
+    // tick; the SW owns the rest of the stop cleanup (detach + clear supervisor current + clear paused).
+    userStopRequested = true;
+    console.warn("[commonplace] sync_stop received — will stop the run");
+  } else if (msg && msg.kind === "sync_pause") {
+    // Founder pressed Pause — the observer enters a resumable user pause on its next tick.
+    userPauseRequested = true;
+    console.log("[commonplace] sync_pause received");
+  } else if (msg && msg.kind === "sync_resume") {
+    // Founder pressed Resume — break any active pause (even an unsolved challenge) and continue the run.
+    userResumeRequested = true;
+    userPauseRequested = false;
+    console.log("[commonplace] sync_resume received");
+  } else if (msg && msg.kind === "discover_handle") {
+    // The SW is trying to navigate to the founder's profile from an unknown-handle start. Hand back the
+    // best own-handle this tab can see (own profile via location, else the nav profile link).
+    sendResponse({ handle: discoverOwnHandle() });
   }
   // Synchronous sendResponse above; no async channel kept open.
 });

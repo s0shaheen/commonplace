@@ -1,22 +1,12 @@
-// Popup controller (Task 5) — the "Sync" front door. One button starts/continues the capture
-// supervisor; a 1s poll paints live status (current source, per-source counts + state, library total,
-// poster-pass activity). Plain DOM, no framework, matching options.ts's style. All decision logic
-// lives in the pure supervisor + SW glue; this is a thin view over `sync_status`.
+// Popup controller — the capture dashboard. It polls `sync_status` once a second while open and paints
+// a compact live view: library total, capture state, the per-source progress rows, the action-needed
+// banner (the founder's #1 ask: SEE that capture is waiting on him), and state-appropriate controls.
+//
+// All the DECISIONS — the state label, which buttons are live, the banner text, the rows — come from
+// the PURE `computeViewModel` (popup-view.ts, unit-tested). This file is glue: poll → compute → paint,
+// and wire the buttons to the documented capture messages. It touches capture ONLY via that contract.
 
-import { SOURCES, type Source, type SupervisorProgress } from "./lib/capture/supervisor.js";
-import { loadConfig, type StorageLike } from "./lib/config.js";
-
-interface SyncStatus {
-  progress: SupervisorProgress;
-  running: boolean;
-  posterRunning: boolean;
-  count: number;
-}
-
-const storage: StorageLike = {
-  get: (k) => chrome.storage.local.get(k),
-  set: (o) => chrome.storage.local.set(o),
-};
+import { computeViewModel, type PopupViewModel, type SyncStatusRaw } from "./popup-view.js";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -24,91 +14,138 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   return el as T;
 };
 
-const SOURCE_LABEL: Record<Source, string> = {
-  favorites: "Favorites",
-  likes: "Likes",
-  posts: "Posts",
-  reposts: "Reposts",
-};
+// ── Live state: last-known status + whether the latest poll succeeded ─────────────────────────────
+let lastStatus: SyncStatusRaw | null = null;
+let lastConnected = false;
 
-function sourceState(p: SupervisorProgress, src: Source): { label: string; cls: string } {
-  const rec = p.counts[src];
-  if (rec) return { label: `${rec.status === "giveup" ? "partial" : "done"} · ${rec.captured}`, cls: rec.status };
-  if (p.current === src) return { label: "capturing…", cls: "current" };
-  return { label: "pending", cls: "pending" };
+// ── Rendering (glue only — no decisions here) ─────────────────────────────────────────────────────
+function renderBanner(vm: PopupViewModel): void {
+  const banner = $("banner");
+  if (!vm.banner) {
+    banner.hidden = true;
+    return;
+  }
+  banner.hidden = false;
+  banner.dataset.kind = vm.banner.kind;
+  $("bannerGlyph").textContent = vm.banner.kind === "halt" ? "⛔" : "⚠";
+  $("bannerTitle").textContent = vm.banner.title;
+  $("bannerReason").textContent = vm.banner.reason;
+  // The big Resume lives in the banner only for a user-actionable pause.
+  $("bannerResumeWrap").hidden = vm.banner.kind !== "paused";
 }
 
-function render(st: SyncStatus): void {
-  const { progress } = st;
-  // Honest headline (fix round 1, critical): "all sources synced" ONLY when every source ended with
-  // TikTok's own hasMore:false. A sweep containing any giveup ("partial") says so — a throttled-out
-  // source has an uncaptured tail, and the headline must never paper over it. (The next Sync click
-  // starts a fresh sweep that re-attempts the partial sources first.)
-  const partials = SOURCES.filter((s) => progress.counts[s]?.status === "giveup").length;
-  const state = st.running
-    ? progress.current
-      ? `capturing ${SOURCE_LABEL[progress.current]}…`
-      : "working…"
-    : progress.done.length >= SOURCES.length
-      ? partials > 0
-        ? `synced — ${partials} partial (Sync retries them)`
-        : "all sources synced"
-      : "idle";
-  $("state").textContent = state;
-  $("count").textContent = String(st.count);
-
+function renderRows(vm: PopupViewModel): void {
   const ul = $("sources");
   ul.innerHTML = "";
-  for (const src of SOURCES) {
-    const { label, cls } = sourceState(progress, src);
+  if (vm.rows.length === 0) return;
+  for (const row of vm.rows) {
     const li = document.createElement("li");
+    li.dataset.state = row.state;
+
+    const mark = document.createElement("span");
+    mark.className = "s-mark";
+    mark.setAttribute("aria-hidden", "true");
+    mark.textContent = row.state === "done" ? "✓" : row.state === "current" ? "" : "·";
+
     const name = document.createElement("span");
-    name.textContent = SOURCE_LABEL[src];
-    const badge = document.createElement("span");
-    badge.className = `badge ${cls}`;
-    badge.textContent = label;
-    li.append(name, badge);
+    name.className = "s-name";
+    name.textContent = row.label;
+
+    const detail = document.createElement("span");
+    detail.className = "s-detail";
+    if (row.state === "current") {
+      const sp = document.createElement("span");
+      sp.className = "spinner";
+      sp.setAttribute("aria-hidden", "true");
+      detail.append(sp, document.createTextNode(row.count > 0 ? String(row.count) : "capturing…"));
+    } else {
+      detail.textContent = row.detail;
+    }
+
+    li.append(mark, name, detail);
     ul.appendChild(li);
   }
-
-  const posterRow = $("poster-row");
-  if (st.posterRunning) {
-    posterRow.hidden = false;
-    $("poster").textContent = "fetching…";
-  } else {
-    posterRow.hidden = true;
-  }
-
-  // Disable Sync while a run is in flight (the SW also guards, but a disabled button reads clearly).
-  ($("sync") as HTMLButtonElement).disabled = st.running;
-  ($("sync") as HTMLButtonElement).textContent = st.running ? "Syncing…" : "Sync now";
 }
 
+function applyControl(btn: HTMLButtonElement, c: { visible: boolean; enabled: boolean; label: string }): void {
+  btn.hidden = !c.visible;
+  btn.disabled = !c.enabled;
+  if (c.label) btn.textContent = c.label;
+}
+
+function render(vm: PopupViewModel): void {
+  renderBanner(vm);
+  $("count").textContent = vm.countLabel;
+  $("stateLabel").textContent = vm.stateLabel;
+  $("stateDot").dataset.tone = vm.stateTone;
+
+  const conn = $("conn");
+  conn.dataset.conn = vm.connection;
+  conn.textContent = vm.connection === "reconnecting" ? "reconnecting…" : vm.connection === "connecting" ? "connecting…" : "live";
+
+  renderRows(vm);
+
+  applyControl($<HTMLButtonElement>("btnStart"), vm.controls.start);
+  applyControl($<HTMLButtonElement>("btnResume"), vm.controls.resume);
+  applyControl($<HTMLButtonElement>("btnPause"), vm.controls.pause);
+  applyControl($<HTMLButtonElement>("btnStop"), vm.controls.stop);
+}
+
+function repaint(): void {
+  render(computeViewModel(lastStatus, { connected: lastConnected }));
+}
+
+// ── Messaging (the documented capture contract only) ──────────────────────────────────────────────
 async function poll(): Promise<void> {
   try {
-    const st = (await chrome.runtime.sendMessage({ kind: "sync_status" })) as SyncStatus | undefined;
-    if (st) render(st);
+    const st = (await chrome.runtime.sendMessage({ kind: "sync_status" })) as SyncStatusRaw | undefined;
+    if (st && typeof st === "object") {
+      lastStatus = st;
+      lastConnected = true;
+    } else {
+      lastConnected = false;
+    }
   } catch {
-    // SW asleep or momentarily unreachable — leave the last paint up; the next tick retries.
+    // SW asleep / momentarily unreachable — keep the last paint but flag "reconnecting".
+    lastConnected = false;
   }
+  repaint();
 }
 
-async function main(): Promise<void> {
-  const cfg = await loadConfig(storage);
-  $("mode").textContent = cfg.autonomousCapture
-    ? "Autonomous mode ON — Sync drives a TikTok tab unattended."
-    : "Semi-auto: open your TikTok saved page, then Sync.";
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+function toast(text: string): void {
+  const el = $("toast");
+  el.textContent = text;
+  el.hidden = false;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (el.hidden = true), 2600);
+}
 
-  $("sync").addEventListener("click", () => {
-    void chrome.runtime.sendMessage({ kind: "sync_start" });
-    // Optimistic: repaint shortly after so the button flips without waiting a full poll tick.
-    setTimeout(() => void poll(), 200);
+// Fire a fire-and-forget capture command, then poll shortly after so the UI flips without waiting a
+// full tick. Optimistically mark connected so a command right after opening doesn't read as offline.
+function command(kind: "sync_start" | "sync_stop" | "sync_pause" | "sync_resume"): void {
+  void chrome.runtime.sendMessage({ kind }).catch(() => {});
+  setTimeout(() => void poll(), 180);
+}
+
+function main(): void {
+  $("btnStart").addEventListener("click", () => command("sync_start"));
+  $("btnResume").addEventListener("click", () => command("sync_resume"));
+  $("bannerResume").addEventListener("click", () => command("sync_resume"));
+  $("btnPause").addEventListener("click", () => command("sync_pause"));
+  $("btnStop").addEventListener("click", () => command("sync_stop"));
+
+  $("btnSettings").addEventListener("click", () => chrome.runtime.openOptionsPage());
+  $("btnExport").addEventListener("click", () => {
+    // The existing export path: the SW spins up the offscreen doc and downloads commonplace-export.json.
+    void chrome.runtime.sendMessage({ kind: "export_open_schema" }).catch(() => {});
+    toast("Export started — check your downloads for commonplace-export.json");
   });
 
-  $("settings").addEventListener("click", () => chrome.runtime.openOptionsPage());
-
-  await poll();
+  // Paint the connecting state immediately, then poll.
+  repaint();
+  void poll();
   setInterval(() => void poll(), 1000);
 }
 
-void main();
+main();

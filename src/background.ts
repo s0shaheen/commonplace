@@ -23,6 +23,8 @@ import {
   type SupervisorProgress,
 } from "./lib/capture/supervisor.js";
 import { loadConfig, type CpConfig, type StorageLike } from "./lib/config.js";
+import { nextWheel, resolveSpeed, type CaptureSpeed } from "./lib/capture/wheelJitter.js";
+import { handleFromPath, profileUrl } from "./lib/capture/ownIdentity.js";
 import type { CapturedItem } from "./lib/types.js";
 
 // DEV-ONLY hot-reload. `__DEV_RELOAD__` is an esbuild `define`: "true" under `npm run dev`, "false"
@@ -74,6 +76,35 @@ let captureHalt: CaptureHalt | null = null;
 type CaptureNotice = { level: string; reason: string; at: string };
 let captureNotice: CaptureNotice | null = null;
 
+// CHAL-UX (the KEY ask): the CRASH-SAFE `paused` state — the single source of truth the popup surfaces
+// as an "action needed" prompt so a pause is NEVER a silent stop. Persisted to chrome.storage.local
+// (`cp_paused`) so a service-worker restart still knows a run is paused-awaiting-user. content.js raises
+// it on entering a pause (capture_paused) and clears it on leaving (capture_resumed); syncStatus reads
+// storage so it survives the SW dying. `null`/absent = not paused.
+type CapturePaused = { level: string; reason: string; at: string };
+const PAUSED_KEY = "cp_paused";
+
+async function setPaused(level: string, reason: string): Promise<void> {
+  const paused: CapturePaused = { level, reason, at: new Date().toISOString() };
+  await chrome.storage.local.set({ [PAUSED_KEY]: paused });
+  if (level === "user") {
+    // A founder-initiated Pause needs no tray notification (he just clicked it) — but still surface the
+    // popup-readable reason so the dashboard shows the paused state.
+    captureNotice = { level, reason, at: paused.at };
+  } else {
+    notifyCapture(level, reason); // raise the tray notification (he may be away) + freshen the notice
+  }
+}
+
+async function clearPaused(): Promise<void> {
+  await chrome.storage.local.set({ [PAUSED_KEY]: null });
+}
+
+async function loadPaused(): Promise<CapturePaused | null> {
+  const got = await chrome.storage.local.get(PAUSED_KEY);
+  return (got[PAUSED_KEY] as CapturePaused | undefined) ?? null;
+}
+
 // FIX 4b — chrome-notification dedupe. content.js can re-raise the SAME pause level repeatedly while a
 // run flaps in and out of a pause (a captcha that momentarily clears then re-blocks). We still UPDATE
 // the popup-readable `captureNotice` each time (freshest reason wins), but we raise a NEW tray
@@ -99,6 +130,10 @@ function noticeTitle(level: string): string {
       return "Commonplace — paused (offline)";
     case "debugger":
       return "Commonplace — close DevTools to let capture scroll";
+    case "blocked":
+      return "Commonplace — capture stopped (TikTok is blocking)";
+    case "stalled":
+      return "Commonplace — capture stalled, retrying";
     default:
       return "Commonplace — capture paused";
   }
@@ -234,6 +269,15 @@ interface CaptureNoticeMsg { kind: "capture_notice"; level: string; reason: stri
 interface ScrollStartMsg { kind: "scroll_start" }
 interface ScrollModeMsg { kind: "scroll_mode"; mode: string; x: number; y: number }
 interface ScrollStopMsg { kind: "scroll_stop" }
+// CHAL-UX (the KEY ask): content.js entered / left a RESUMABLE pause (break-reminder passcode, captcha,
+// login, offline, unknown modal, or a founder-initiated pause). The SW persists a crash-safe `paused`
+// state (storage) that syncStatus surfaces as "action needed", and raises a chrome notification.
+interface CapturePausedMsg { kind: "capture_paused"; level: string; reason: string }
+interface CaptureResumedMsg { kind: "capture_resumed" }
+// Popup capture controls (the UI package calls these; shapes are the documented contract).
+interface SyncStopMsg { kind: "sync_stop" } // stop the run cleanly, detach, clear supervisor current
+interface SyncPauseMsg { kind: "sync_pause" } // hold the run (the content script pauses)
+interface SyncResumeMsg { kind: "sync_resume" } // clear a user-actionable pause and resume where it left off
 interface ExportEnrichedMsg { kind: "export_enriched"; results: unknown[] }
 interface DownloadTestMsg { kind: "download_test"; n?: number }
 interface QueueStartMsg { kind: "queue_start" }
@@ -255,6 +299,11 @@ type Msg =
   | SyncStartMsg
   | SyncStatusMsg
   | CaptureNoticeMsg
+  | CapturePausedMsg
+  | CaptureResumedMsg
+  | SyncStopMsg
+  | SyncPauseMsg
+  | SyncResumeMsg
   | ScrollStartMsg
   | ScrollModeMsg
   | ScrollStopMsg;
@@ -301,6 +350,8 @@ interface WheelDriver {
   stopped: boolean;
   /** WE initiated the detach (scroll_stop / tab close / capture end) — onDetach must NOT push scroll_detached. */
   detaching: boolean;
+  /** The anti-block cadence profile (config cp_config.captureSpeed) — governs the jittered delta/interval. */
+  speed: CaptureSpeed;
 }
 
 // Only ONE debugged capture tab at a time (invariant). Null = nothing attached.
@@ -336,25 +387,34 @@ function dispatchWheel(tabId: number, x: number, y: number, deltaY: number): Pro
 // sent, decoupling smooth motion from the observer's 250ms decision cadence. advance → wheel down · hold →
 // idle · a pending retrigger burst → wheel UP a few times, then resume advancing. Starts in `hold`; the
 // content script's first scroll_mode(advance) sets it moving (avoids wheeling at the (0,0) default).
-function startWheelPump(tabId: number): void {
-  const st: WheelDriver = { tabId, mode: "hold", x: 0, y: 0, upBurstRemaining: 0, timer: null, stopped: false, detaching: false };
+function startWheelPump(tabId: number, speed: CaptureSpeed): void {
+  const st: WheelDriver = { tabId, mode: "hold", x: 0, y: 0, upBurstRemaining: 0, timer: null, stopped: false, detaching: false, speed };
   wheelDriver = st;
   const pump = async (): Promise<void> => {
     if (st.stopped || wheelDriver !== st) return;
+    // Anti-block (C7 + PACE): the ADVANCE delta + the gap to the next tick are JITTERED per tick via the
+    // pure wheelJitter module (occasional micro-pause included) so the stream reads like a human flicking
+    // a trackpad, not a metronome. Retrigger up-bursts and the hold idle keep fixed, short cadences.
+    let nextDelayMs: number = WHEEL.intervalMs;
     try {
       if (st.upBurstRemaining > 0) {
         st.upBurstRemaining--;
         await dispatchWheel(st.tabId, st.x, st.y, -WHEEL.retriggerDeltaY);
+        nextDelayMs = WHEEL.intervalMs;
       } else if (st.mode === "advance") {
-        await dispatchWheel(st.tabId, st.x, st.y, WHEEL.advanceDeltaY);
+        const tick = nextWheel(Math.random, st.speed);
+        await dispatchWheel(st.tabId, st.x, st.y, tick.deltaY);
+        nextDelayMs = tick.intervalMs;
+      } else {
+        // hold → no dispatch (the loop idles); poll again soon to notice a mode change.
+        nextDelayMs = 60;
       }
-      // hold → no dispatch (the loop idles).
     } catch {
       // Dispatch failed — the debugger detached mid-flight; onDetach handles cleanup. Stop pumping.
       return;
     }
     if (!st.stopped && wheelDriver === st) {
-      st.timer = setTimeout(() => void pump(), WHEEL.intervalMs);
+      st.timer = setTimeout(() => void pump(), nextDelayMs);
     }
   };
   st.timer = setTimeout(() => void pump(), WHEEL.intervalMs);
@@ -375,8 +435,10 @@ async function handleScrollStart(tabId: number | undefined, sendResponse: (r: At
     sendResponse({ ok: false, reason: DEBUGGER_ATTACH_REASON });
     return;
   }
-  startWheelPump(tabId);
-  console.log(`[commonplace] scroll driver attached + trusted-wheel loop started on tab ${tabId}`);
+  // Anti-block cadence: read the founder's configured pace (default "normal") and drive the pump's jitter.
+  const speed = resolveSpeed((await loadConfig(configStorage)).captureSpeed);
+  startWheelPump(tabId, speed);
+  console.log(`[commonplace] scroll driver attached + trusted-wheel loop started on tab ${tabId} (${speed} cadence)`);
   sendResponse({ ok: true });
 }
 
@@ -467,8 +529,20 @@ chrome.runtime.onMessage.addListener((msg: Msg, sender, sendResponse) => {
     void syncStatus().then(sendResponse);
     return true;
   } else if (msg.kind === "capture_notice") {
-    // A resumable pause from the content script — notify + persist (never terminal; the run resumes).
+    // A one-shot / transient notice (preflight, wedge re-nudge, ban halt) — notify + persist the reason.
     notifyCapture(msg.level, msg.reason);
+  } else if (msg.kind === "capture_paused") {
+    // A RESUMABLE pause — persist the crash-safe `paused` state + notify. syncStatus surfaces it.
+    void setPaused(msg.level, msg.reason);
+  } else if (msg.kind === "capture_resumed") {
+    // The run left its pause (auto-resumed or the founder clicked Resume) — drop the action-needed state.
+    void clearPaused();
+  } else if (msg.kind === "sync_stop") {
+    void handleSyncStop();
+  } else if (msg.kind === "sync_pause") {
+    void handleSyncPause();
+  } else if (msg.kind === "sync_resume") {
+    void handleSyncResume();
   } else if (msg.kind === "scroll_start") {
     // Attach the debugger to the sender's tab + start the trusted-wheel loop. Async attach → sendResponse
     // via the `return true` below so the content script learns ok/attach-failed and can abort honestly.
@@ -863,8 +937,9 @@ function runSupervisorEvent(event: SupervisorEvent): Promise<void> {
 // carry-forward-1 grace re-walks its captured prefix). Otherwise `start` (begin / continue / idle).
 async function handleSyncClick(): Promise<void> {
   // A fresh Sync means the founder is (re)starting a run — clear the notification dedupe marker so the
-  // new run's first pause notifies fresh (FIX 4b).
+  // new run's first pause notifies fresh (FIX 4b), and drop any stale `paused` state from a prior run.
   clearActiveNotice();
+  await clearPaused();
   const progress = await loadSupervisorProgress(await store());
   if (progress.current != null && !supervisorRunning) {
     const tabId = await findCaptureTab();
@@ -875,6 +950,66 @@ async function handleSyncClick(): Promise<void> {
     }
   }
   await runSupervisorEvent({ kind: "start" });
+}
+
+// ── Popup capture controls (the documented contract) ────────────────────────────────────────────────
+
+// STOP: end the live run cleanly. Tell the content script to stop, detach the debugger, and CLEAR the
+// supervisor's `current` so neither the alarm nor a stray scroll_done re-drives — a stop is final for
+// this sweep. Clears the paused state + the notice. `running` flips false.
+async function handleSyncStop(): Promise<void> {
+  const tabId = await findCaptureTab();
+  if (tabId != null) {
+    try {
+      await chrome.tabs.sendMessage(tabId, { kind: "sync_stop" });
+    } catch {
+      // Content script gone (tab closed / not injected) — the debugger detach + state clear below still run.
+    }
+  }
+  await stopScrollDriver(); // ALWAYS detach — never leave a dangling attach
+  await clearPaused();
+  clearActiveNotice();
+  const s = await store();
+  const progress = await loadSupervisorProgress(s);
+  if (progress.current != null) {
+    // Clear the crash-resume anchor so the revival alarm won't resume a stopped run.
+    await s.setMeta(SUPERVISOR_META_KEY, { ...progress, current: null, currentStartedAt: undefined });
+  }
+  supervisorRunning = false;
+  console.log("[commonplace] Sync STOPPED by the founder — run halted, supervisor `current` cleared");
+}
+
+// PAUSE: hold the live run (the content script enters a resumable user pause, which raises capture_paused
+// → the crash-safe `paused` state). Best-effort relay to the driven tab.
+async function handleSyncPause(): Promise<void> {
+  const tabId = await findCaptureTab();
+  if (tabId != null) {
+    try {
+      await chrome.tabs.sendMessage(tabId, { kind: "sync_pause" });
+    } catch {
+      // No live content script to pause — nothing to do.
+    }
+  }
+}
+
+// RESUME: clear the user-actionable `paused` state and continue where the run left off. If the content
+// script is still alive and paused, unblock it in place (progress intact — the captured prefix is kept).
+// If the SW/content died while paused, re-drive the in-flight source from its persisted checkpoint.
+async function handleSyncResume(): Promise<void> {
+  await clearPaused();
+  clearActiveNotice();
+  const tabId = await findCaptureTab();
+  const live = tabId != null && (await isTabScrolling(tabId));
+  if (live && tabId != null) {
+    try {
+      await chrome.tabs.sendMessage(tabId, { kind: "sync_resume" });
+      return;
+    } catch {
+      // Fall through to a checkpoint re-drive.
+    }
+  }
+  // No live run (SW/content died while paused) — resume the in-flight source from its checkpoint.
+  await runSupervisorEvent({ kind: "restarted" });
 }
 
 // Feed one event to the pure reducer, persist the new progress, then act on the returned action.
@@ -907,6 +1042,11 @@ async function runSupervisorEventUnlocked(event: SupervisorEvent): Promise<void>
     );
     return;
   }
+  // AUTONOMOUS NAVIGATION (SUP-02): before driving, make sure the tab is on the founder's OWN profile —
+  // the surface that hosts the favorites/likes/posts/reposts sub-tabs. From ANY page this navigates to
+  // `/@handle` first (using the learned handle, discovering it if unknown), so a Sync from the FYP / a
+  // video / someone else's profile still reaches the right place. A no-op when we're already there.
+  await ensureOnOwnProfile(tabId);
   supervisorRunning = true;
   try {
     await chrome.tabs.sendMessage(tabId, { kind: "capture_source", source: action.source, resuming: action.resuming });
@@ -919,33 +1059,154 @@ async function runSupervisorEventUnlocked(event: SupervisorEvent): Promise<void>
   }
 }
 
+// ── Autonomous profile navigation (SUP-02) ──────────────────────────────────────────────────────────
+// Reach the founder's own profile from ANY starting page. The handle is learned by content.js (persisted
+// to cp_own_handle when it sees the own profile) — most runs already have it after the first Sync. If it
+// is unknown we discover it from the live tab's nav link (landing on tiktok.com first if needed). If we
+// STILL can't determine it, we leave the tab as-is: content.js's preflight surfaces an honest, actionable
+// result (e.g. "not on a TikTok profile page") rather than bot-scrolling the wrong page.
+
+async function getOwnHandle(): Promise<string | null> {
+  const { cp_own_handle } = await chrome.storage.local.get("cp_own_handle");
+  return typeof cp_own_handle === "string" && cp_own_handle.length > 0 ? cp_own_handle : null;
+}
+
+/** The @handle segment of a URL's path (owner of whatever page), or null. */
+function urlHandle(url: string | undefined | null): string | null {
+  if (!url) return null;
+  try {
+    return handleFromPath(new URL(url).pathname);
+  } catch {
+    return null;
+  }
+}
+
+async function ensureOnOwnProfile(tabId: number): Promise<void> {
+  let tab: chrome.tabs.Tab;
+  try {
+    tab = await chrome.tabs.get(tabId);
+  } catch {
+    return; // tab vanished — nothing to navigate
+  }
+  const url = tab.url ?? "";
+  let handle = await getOwnHandle();
+  // Already on our own profile (known handle matches, or handle unknown but it's some profile we assume
+  // is ours — content.js will confirm/capture it). Nothing to do.
+  if (isProfileUrl(url)) {
+    if (!handle || urlHandle(url) === handle) return;
+    // On a DIFFERENT @handle than ours (viewing someone else) → fall through and navigate home.
+  }
+  if (!handle) handle = await discoverOwnHandle(tabId, url);
+  if (!handle) return; // unknown — let content.js preflight report an honest result
+  if (isProfileUrl(url) && urlHandle(url) === handle) return; // already there
+  console.log(`[commonplace] autonomous nav → founder's profile @${handle} (was: ${url || "?"})`);
+  await navigateTab(tabId, profileUrl(handle));
+}
+
+// Ask the live content script for the own-handle (it reads the nav link / its own profile). If the tab
+// isn't even on TikTok, land on the home page first so the nav link exists, then ask again.
+async function discoverOwnHandle(tabId: number, url: string): Promise<string | null> {
+  const ask = async (): Promise<string | null> => {
+    try {
+      const res = (await chrome.tabs.sendMessage(tabId, { kind: "discover_handle" })) as { handle?: string } | undefined;
+      return res?.handle && typeof res.handle === "string" ? res.handle : null;
+    } catch {
+      return null;
+    }
+  };
+  let h = await ask();
+  if (!h && !url.includes("tiktok.com")) {
+    await navigateTab(tabId, "https://www.tiktok.com/");
+    h = await ask();
+  }
+  if (h) await chrome.storage.local.set({ cp_own_handle: h });
+  return h;
+}
+
+// Navigate a tab and wait for it to finish loading (so the fresh content script is ready before we drive).
+async function navigateTab(tabId: number, url: string): Promise<void> {
+  await chrome.tabs.update(tabId, { url });
+  await waitForTabComplete(tabId, 15000);
+  await new Promise((r) => setTimeout(r, 600)); // small settle so the content script registers its listener
+}
+
+// Resolve when the tab reaches status "complete", or after a timeout (never hang).
+function waitForTabComplete(tabId: number, timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (): void => {
+      if (done) return;
+      done = true;
+      chrome.tabs.onUpdated.removeListener(listener);
+      clearTimeout(timer);
+      resolve();
+    };
+    const listener = (id: number, info: { status?: string }): void => {
+      if (id === tabId && info.status === "complete") finish();
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    const timer = setTimeout(finish, timeoutMs);
+    // Guard against a tab that is already "complete" before the listener attached.
+    void chrome.tabs
+      .get(tabId)
+      .then((t) => {
+        if (t.status === "complete") finish();
+      })
+      .catch(() => {});
+  });
+}
+
 function summarizeProgress(p: SupervisorProgress): Record<string, unknown> {
   return { done: p.done, current: p.current, counts: p.counts };
 }
 
-// Popup status poll: the live picture — supervisor progress, whether a run/poster-pass is active,
-// and the canonical library count.
+// Popup status poll — the documented message contract the UI package reads (popup-view.ts). Returns
+// EXACTLY: the library count, whether a run is live, the crash-safe `paused` state (the action-needed
+// prompt), per-source progress (order/done/current/counts), the freshest transient `notice`, the current
+// config (so the UI shows settings), and any storage `halt`. `paused` is read from storage so it survives
+// a SW restart; `counts` maps the supervisor's per-source SourceProgress → a captured NUMBER per source.
 async function syncStatus(): Promise<{
-  progress: SupervisorProgress;
-  running: boolean;
-  posterRunning: boolean;
   count: number;
-  halt: CaptureHalt | null;
-  notice: CaptureNotice | null;
+  running: boolean;
+  paused: { level: string; reason: string } | null;
+  progress: { order: string[]; done: string[]; current: string | null; counts: Record<string, number> };
+  notice: { level: string; reason: string; at: string } | null;
+  config: unknown;
+  halt: unknown | null;
 }> {
   const s = await store();
-  const [progress, count] = await Promise.all([loadSupervisorProgress(s), s.count()]);
-  // `halt` surfaces a storage-full / unrecoverable-DB stop to the popup (invariant 4: honest, never a
-  // false success). A halt during the open itself would reject this call — the popup treats a failed
-  // poll as "not healthy" too. `notice` mirrors it for a RESUMABLE pause (captcha/overlay/flagged/
-  // offline) — a reason the popup can show while the run waits, distinct from a terminal halt.
-  return { progress, running: supervisorRunning, posterRunning: posterPassRunning, count, halt: captureHalt, notice: captureNotice };
+  const [progress, count, config, paused] = await Promise.all([
+    loadSupervisorProgress(s),
+    s.count(),
+    loadConfig(configStorage),
+    loadPaused(),
+  ]);
+  const counts: Record<string, number> = {};
+  for (const [source, sp] of Object.entries(progress.counts)) {
+    if (sp) counts[source] = sp.captured;
+  }
+  return {
+    count,
+    running: supervisorRunning,
+    paused: paused ? { level: paused.level, reason: paused.reason } : null,
+    progress: {
+      order: [...(progress.order ?? SOURCES)],
+      done: [...progress.done],
+      current: progress.current,
+      counts,
+    },
+    notice: captureNotice,
+    config,
+    halt: captureHalt,
+  };
 }
 
 async function handleScrollDone(msg: ScrollDoneMsg): Promise<void> {
   // The run ended (done or giveup) — clear the notification dedupe marker so a later run's first pause
-  // notifies fresh rather than being suppressed as a duplicate of this run's last pause (FIX 4b).
+  // notifies fresh rather than being suppressed as a duplicate of this run's last pause (FIX 4b), and
+  // drop any lingering `paused` state (a finished run is not awaiting the founder).
   clearActiveNotice();
+  void clearPaused();
   // Belt (invariant: always detach): the content script sends scroll_stop before scroll_done, but a
   // crashed/killed content script may not — so defensively stop the trusted-wheel loop + detach here too.
   void stopScrollDriver();
