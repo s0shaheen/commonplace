@@ -7,6 +7,7 @@ import { coerceHasMore, isTerminalPage } from "./lib/capture/interceptParse.js";
 import { tilesToEvict, DEFAULT_LIVE_WINDOW } from "./lib/capture/pruneWindow.js";
 import { arrivalDrivesRun } from "./lib/capture/supervisor.js";
 import { classifyOverlay } from "./lib/capture/overlayClassifier.js";
+import { assessPreflight } from "./lib/capture/preflight.js";
 import { stepRecovery, initialRecoveryState } from "./lib/capture/sessionRecovery.js";
 import { clampUpPx } from "./lib/capture/scrollGeom.js";
 // The re-founded motion: ONE continuous, self-pacing rAF scroll. scrollDrive.ts owns the geometry-driven
@@ -510,6 +511,44 @@ function armRunSignals() {
   runSignalsArmed = true;
 }
 
+// ── Preflight gate glue (C8, §7) ────────────────────────────────────────────────
+// Every DOM read for the run-start check lives here; the VERDICT is the pure assessPreflight. Live
+// evidence (2026-07-12): a run fired on a LOGGED-OUT TikTok tab (a "Log in" CTA, 0 personal tiles,
+// nothing to scroll) and ground ~10s through hold→retrigger→exhausted before a generic "reached the
+// bottom" giveup. We detect that IMMEDIATELY and report a clear, actionable reason instead.
+
+const PREFLIGHT_SETTLE_MS = 1200; // brief wait+recheck so a slow-loading logged-in grid isn't misread as logged-out
+const NOT_LOGGED_IN_NOTICE = "You're not logged into TikTok — log in and try again.";
+const NOT_LOGGED_IN_REASON = "not logged into TikTok"; // the scroll_done giveup reason
+
+// A prominent logged-OUT signal: a header "Log in" / "Sign up" CTA. data-e2e is TikTok's most stable
+// handle; the text fallback matches a VISIBLE button/anchor whose trimmed text is exactly a login/
+// signup CTA ("Log in" / "Log In" / "login" / "Sign up" / "signup", case-insensitive, either spacing).
+// A visible match anywhere is acceptable — the conservative triple-guard in assessPreflight (CTA AND
+// 0 tiles AND no arrival this run) is what prevents a false block, so precision here isn't load-bearing.
+const LOGIN_CTA_TEXT = /^(log ?in|sign ?up)$/i;
+function detectLoginCta() {
+  const direct = document.querySelector('[data-e2e="top-login-button"]');
+  if (direct && isVisible(direct)) return true;
+  for (const el of document.querySelectorAll("button, a")) {
+    const t = (el.textContent || "").trim();
+    if (LOGIN_CTA_TEXT.test(t) && isVisible(el)) return true;
+  }
+  return false;
+}
+
+// Gather run-start facts for assessPreflight. sawItemListArrival is "since THIS run's arrival baseline"
+// (runArrivalsBaseline is set at run arm/start) — the network is truth: a real session loading its grid
+// produces item_list arrivals, a logged-out page produces none.
+function gatherPreflightFacts() {
+  return {
+    onProfilePage: isProfilePage(),
+    loginCtaPresent: detectLoginCta(),
+    ownTileCount: document.querySelectorAll(TILE_ANCHOR_SEL).length,
+    sawItemListArrival: pageArrivals > runArrivalsBaseline,
+  };
+}
+
 let scrolling = false;
 // autoScroll drives ONE source to completion via a continuous rAF scroll + a slow observer. `source`
 // (Task 5) tags the run for carry-forward (2)'s arrival filter; `resuming` (carry-forward 1) marks a
@@ -547,6 +586,43 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   // Baseline against the CURRENT persisted total: a pre-existing count is not growth.
   const { count: initialCount = 0 } = await chrome.storage.local.get("count");
   let prevCount = initialCount;
+
+  // ── PREFLIGHT GATE (C8, §7) — refuse a run that can't succeed, BEFORE the frame driver starts.
+  //    assessPreflight (pure) reads run-start facts and, on an UNAMBIGUOUS logged-out page (a login CTA
+  //    AND 0 own tiles AND no item_list arrival this run), returns `not_logged_in` — so we report a
+  //    clear, actionable reason IMMEDIATELY instead of grinding the hold→retrigger→exhausted ladder to
+  //    a generic "reached the bottom" giveup (the 2026-07-12 live failure). CONSERVATIVE: to avoid
+  //    misreading a still-loading logged-in grid as logged-out, we act only after a brief settle +
+  //    re-check — a real session paints tiles / fires its first page within it, flipping the verdict to
+  //    `ready`. We bail ONLY if it's STILL not_logged_in after the settle. `not_profile` is intentionally
+  //    NOT handled here: the supervised non-profile run is already given up in runCaptureForSource, and a
+  //    manual FYP run stays as-is — this gate adds only the not_logged_in guard the live evidence demands.
+  let preflight = assessPreflight(gatherPreflightFacts());
+  if (preflight === "not_logged_in") {
+    await sleep(PREFLIGHT_SETTLE_MS); // let a slow logged-in grid paint / its first page arrive
+    preflight = assessPreflight(gatherPreflightFacts());
+  }
+  if (preflight === "not_logged_in") {
+    console.warn(`[commonplace] preflight — ${NOT_LOGGED_IN_NOTICE}`);
+    try {
+      chrome.runtime.sendMessage({ kind: "capture_notice", level: "login", reason: NOT_LOGGED_IN_NOTICE });
+    } catch (_) {}
+    updateHud(`capture blocked — ${NOT_LOGGED_IN_REASON}`);
+    chrome.runtime.sendMessage({
+      kind: "scroll_done",
+      status: "giveup",
+      reason: NOT_LOGGED_IN_REASON,
+      captured: prevCount,
+      cursor: lastCursor,
+      source,
+    });
+    // Disarm exactly like teardown would — but before any frame driver/observer started, so there is
+    // nothing to cancel and no HUD churn beyond the reason we just surfaced.
+    activeRunSource = null;
+    scrolling = false;
+    console.warn(`[commonplace] capture ABORTED (preflight: not logged in, source ${source ?? "manual"}) — ${NOT_LOGGED_IN_REASON}`);
+    return;
+  }
 
   // Reload guard (§6.5 SESS-01): at most ONE auto-refresh per Sync attempt per source. Persisted so a
   // reload-resume (a fresh content script after location.reload) knows it already spent its reload and
