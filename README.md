@@ -1,36 +1,48 @@
-# Commonplace
+# commonplace
 
-**A commonplace book for the video age.** A local-first browser extension that turns your saved TikToks (Instagram/X to follow) into a structured library you own: every save is captured before its links rot, analyzed by an AI that writes down what it's about *with evidence receipts*, and grounded to durable public identifiers (MusicBrainz, Wikidata, Google Places) — or given an honest "not found."
+a browser extension that saves your tiktok likes and favorites into a library you actually own, before the links rot.
 
-The differentiator is measurement: the evaluation harness is open-source and the grounding accuracy numbers will be published, per-layer, with confidence intervals, before launch.
+it grabs each saved video's info locally (nothing leaves your machine unless you turn on analysis). optionally, it runs everything through an ai that writes down what each video is about, with the exact evidence it used, and links the people, places, and songs to real public ids (wikidata, musicbrainz, google places) instead of guessing. instagram and x are next.
 
-## Repository layout
+it's early and under active development, so expect rough edges.
 
-| Path | What it is |
-|---|---|
-| `src/` | The MV3 extension: capture shell + the TypeScript engine (`src/lib`) — lanes, resolvers, grounding, store, queue, exporters |
-| `schema/` | **The frozen data contract** (JSON Schema + SHACL + vocabularies + fixtures + CHANGELOG). Public-bound |
-| `eval/` | **The open-source evaluation instrument** (Python/uv): matcher, per-layer metrics, calibration, bootstrap CIs, scorecard CLI + the annotation codebook. Public-bound |
-| `docs/` | Documentation — start at `docs/README.md` (the map); `docs/specs/` governs |
-| `prompts/` | Extractor prompts (`extract_v1.md` is current) |
-| `scripts/` | Build (esbuild), schema-validator precompile, CWS packaging, key-exposure audit |
-| `spikes/` | Historical feasibility spikes with results (evidence, not gospel) |
+## running it
 
-## Development
+you'll need node, plus uv if you want to run the analysis tests.
 
 ```bash
-npm install && npm run build     # bundles the extension into dist/
-npm test                         # engine tests (vitest)
+npm install
+npm run build      # bundles the extension into dist/
+npm test           # engine tests (vitest)
 npm run typecheck
-cd eval && uv sync && uv run pytest -q   # evaluation harness tests
 ```
 
-Load `dist/` unpacked at `chrome://extensions` (Developer mode). Set your Gemini key in the extension's options page — keys live only in `chrome.storage.local`, never in source.
+then open chrome://extensions, turn on developer mode, and load the `dist/` folder unpacked. if you want the ai analysis, paste your gemini key into the extension's options page. keys only ever live in chrome.storage.local, never in the repo.
 
-- Capture: open your TikTok Favorites, **Alt+Shift+A** to scroll+capture
-- Analyze/ground: **Alt+Shift+E** starts the resumable queue (survives service-worker kills)
-- Export: **Alt+Shift+S** emits the library in the open schema format
+the analysis side is python:
 
-## Where things stand
+```bash
+cd eval && uv sync && uv run pytest -q
+```
 
-See `docs/strategy/roadmap.md` (status log at the bottom) and `docs/decisions/decision-log.md` for how we got here.
+## using it
+
+open your tiktok profile, go to likes or favorites, then:
+
+- `alt+shift+a`: scroll and capture
+- `alt+shift+e`: analyze and ground the captured items (a queue that survives the service worker getting killed)
+- `alt+shift+s`: export the whole library as json
+
+## where stuff lives
+
+- `src/`: the extension. capture is in `content.js` and `main-world.js`, the engine is in `src/lib` (analysis lanes, resolvers, grounding, storage, the queue, exporters)
+- `schema/`: the data format everything conforms to (json schema, shacl, fixtures). this one is meant to stay stable
+- `eval/`: how we measure whether the analysis is any good. python, open source
+- `docs/`: start at `docs/README.md`. the specs in `docs/specs/` are the source of truth
+- `prompts/`: the prompts the analyzer uses
+- `scripts/`: build, packaging, and a check that no api keys snuck into the bundle
+- `spikes/`: old experiments and what they found
+
+## why
+
+saved videos disappear. accounts get banned, posts get taken down, links break, and the thing you meant to come back to is just gone. this keeps your own copy, organized well enough that you can find it again later. and the accuracy of the analysis is measured out in the open in `eval/`, so it isn't just a vibe.
