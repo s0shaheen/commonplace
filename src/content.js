@@ -9,12 +9,16 @@ import { arrivalDrivesRun } from "./lib/capture/supervisor.js";
 import { classifyOverlay } from "./lib/capture/overlayClassifier.js";
 import { assessPreflight } from "./lib/capture/preflight.js";
 import { stepRecovery, initialRecoveryState } from "./lib/capture/sessionRecovery.js";
-// The re-founded motion: the geometry-driven MODE + completion decision lives in scrollDrive.ts; the
-// physical scroll WRITE lives in the SERVICE WORKER as trusted wheels (chrome.debugger) — TikTok's profile
-// grid ignores ALL programmatic scrolling (window.scrollBy/scrollTop=/scrollIntoView/synthetic WheelEvent
-// all move it ZERO px; only a real trusted wheel scrolls it). The discrete step-then-dwell machine
-// (scrollMotion/pacing/scrollState in the hot path, plus the requestsIssued→backoff discriminator) is gone.
-import { initialDriveState, stepDrive, MAX_STUCK_RETRIGGERS } from "./lib/capture/scrollDrive.js";
+// The re-founded motion (trusted-wheel lane, live-observed 2026-07-13): the decision is NETWORK-driven
+// now, not geometry. The physical scroll WRITE lives in the SERVICE WORKER as continuous trusted DOWN-
+// wheels (chrome.debugger) — TikTok's profile grid ignores ALL programmatic scrolling (window.scrollBy/
+// scrollTop=/scrollIntoView/synthetic WheelEvent all move it ZERO px; only a real trusted wheel scrolls
+// it), and its custom/virtualized geometry is UNRELIABLE — so scrollDrive's frontier/hold/retrigger
+// (geometry) misread "stuck" and fired UP-jiggles that dragged the scroll back up. The wheel lane just
+// keeps wheeling DOWN and decides done/giveup on NETWORK arrivals: the pure `scrollWatch` reducer.
+// (scrollDrive.ts is retired from this lane but kept; the discrete step-then-dwell machine — scrollMotion/
+// pacing/scrollState in the hot path, plus the requestsIssued→backoff discriminator — is gone.)
+import { initialWatchState, stepWatch } from "./lib/capture/scrollWatch.js";
 
 let lastSource = null;
 let lastHasMore = null; // latest coerced paging signal from the message path (Task 1)
@@ -272,12 +276,13 @@ function removeHud() {
 // pixels. Only a REAL TRUSTED wheel scrolls it (a trusted wheel flew the grid 32→110 tiles in ~5s). Content
 // scripts cannot send trusted events, so the physical scroll WRITE moved to the SERVICE WORKER, which
 // dispatches trusted wheels via chrome.debugger + Input.dispatchMouseEvent. This module keeps only the
-// GEOMETRY READS (window.scrollY / scrollHeight DO reflect trusted-wheel scrolling — reads work; only the
-// WRITE needed a trusted event) and the thin messaging that tells the SW which way to wheel each observer
-// tick; scrollDrive.ts still owns the MODE decision.
+// thin messaging that tells the SW to keep wheeling DOWN each observer tick, and the NETWORK-arrival
+// tracking that decides done/giveup; the pure `scrollWatch` reducer owns the MODE decision. (Geometry
+// reads DO reflect trusted-wheel scrolling, but TikTok's virtualized geometry is unreliable for the
+// motion decision — so the wheel lane ignores it and drives off healthy item_list arrivals instead.)
 
-/** The observer cadence (ms): the slow intelligence loop (overlay guard, eviction, growth tracking,
- *  session recovery, the stepDrive verdict). The SW's trusted-wheel loop owns the fast, smooth motion —
+/** The observer cadence (ms): the slow intelligence loop (overlay guard, eviction, arrival tracking,
+ *  session recovery, the scrollWatch verdict). The SW's trusted-wheel loop owns the fast, smooth motion —
  *  this is the brain, re-deciding the mode the SW should wheel in every OBSERVER_MS. */
 const OBSERVER_MS = 250;
 
@@ -295,26 +300,11 @@ function wheelTarget(scroller) {
   return scroller || document.scrollingElement || document.documentElement || document.body;
 }
 
-// The effective scroll target's geometry (inner scroller's if we have one, else the document/window).
-// stepDrive + growth tracking read scrollTop/scrollHeight/clientHeight + the frontier through this so it
-// stays correct whether we're on an inner or a document scroller (FIX 1). On TikTok getScroller() is null
-// (its test-scroll is a no-op), so this reads the window/document — whose scrollY/scrollHeight correctly
-// reflect the SW's trusted-wheel scrolling.
-function scrollerMetrics(scroller) {
-  if (scroller) {
-    return { scrollTop: scroller.scrollTop, scrollHeight: scroller.scrollHeight, clientHeight: scroller.clientHeight };
-  }
-  const se = document.scrollingElement || document.documentElement;
-  return {
-    scrollTop: window.scrollY || (se ? se.scrollTop : 0),
-    scrollHeight: se ? se.scrollHeight : document.body ? document.body.scrollHeight : 0,
-    clientHeight: window.innerHeight || (se ? se.clientHeight : 0),
-  };
-}
-
 // ── Trusted-wheel driver messaging (the moat) ──────────────────────────────────────────────────────
 // The SW holds the chrome.debugger attach and runs a continuous trusted-wheel loop; content.js just tells
-// it the aim point + the current mode. The observer maps scrollDrive's verdict → these messages each tick.
+// it the aim point + the current mode. The observer maps scrollWatch's verdict → these messages each tick.
+// (No geometry read feeds the motion decision anymore — the wheel lane drives off healthy network arrivals;
+// the geometry helper that used to feed the geometry reducer was removed with that reducer's role.)
 
 /** Set by the content message handler when the SW reports its debugger detached (banner Cancel / DevTools
  *  opened / attach failed). The observer ends the run honestly on its next tick — a reported incomplete,
@@ -344,8 +334,12 @@ async function startScrollDriver() {
   }
 }
 
-// Tell the SW's wheel loop how to move THIS tick: advance→wheel down · hold→idle · retrigger→UP-burst then
-// resume down. (x,y) re-aims the wheel each tick (cheap; keeps it over the grid if the layout shifts).
+// Tell the SW's wheel loop how to move THIS tick. The wheel lane sends only two modes: advance→wheel DOWN
+// continuously (the normal path), and hold→idle (ONLY during a legitimate pause — enterPause / the
+// http_error slowdown). retrigger (an UP-burst) is NEVER sent from the normal path anymore — it was the
+// geometry era's frontier machinery, wrong for a real continuous down-wheel (the SW still understands it,
+// but nothing here emits it). (x,y) re-aims the wheel each tick (cheap; keeps it over the grid if the
+// layout shifts).
 function sendScrollMode(mode) {
   const p = wheelPoint();
   try {
@@ -660,14 +654,16 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     return;
   }
 
-  // MOTION IS NOW A SLOW OBSERVER (the brain) + the SW's TRUSTED-WHEEL LOOP (the smooth motion). The
-  // motion/completion DECISION lives in the pure `scrollDrive` reducer (geometry + growth in → mode +
-  // completion out); this observer maps that verdict to scroll_mode messages the SW's wheel loop obeys
-  // (advance→wheel down · hold→idle · retrigger→UP-burst). Completion is a VERIFIED terminal only
-  // (isTerminalPage on a healthy transport); reaching the bottom with the loader dead is `exhausted` — a
-  // DISTINCT reported-incomplete, never a false `done`.
-  let driveState = initialDriveState(Date.now());
-  let driveMode = driveState.mode; // the mode the observer last decided — mapped to a scroll_mode message
+  // MOTION IS NOW A SLOW OBSERVER (the brain) + the SW's TRUSTED-WHEEL LOOP (the smooth continuous DOWN
+  // motion). The motion/completion DECISION lives in the pure `scrollWatch` reducer (NETWORK arrivals in →
+  // advance/done/giveup out — NO geometry); this observer maps that verdict to scroll_mode messages the
+  // SW's wheel loop obeys (advance→keep wheeling down · done/giveup→stop+detach). There is NO hold and NO
+  // retrigger from this normal path (they were the geometry era's frontier machinery, WRONG for a real
+  // continuous down-wheel). Completion is a VERIFIED terminal only (isTerminalPage on a healthy transport);
+  // a stall — no healthy arrival for STALL_MS with no terminal — is `giveup`, a DISTINCT reported-
+  // incomplete, never a false `done`.
+  let watchState = initialWatchState(Date.now());
+  let watchMode = watchState.mode; // the mode the observer last decided — mapped to a scroll_mode message
   let running = true;
   let reloadingAway = false; // set when we location.reload() a flagged session — teardown then skips scroll_done
   let outcome = { status: "giveup", reason: "capture ended before a verified terminal" }; // finalized at each terminal
@@ -686,11 +682,11 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   let overlayChurn = 0;
   let lastOverlaySig = null;
 
-  // The scroller is resolved by the observer each tick; the heavy getScroller() query runs at most every
-  // OBSERVER_MS. Geometry is READ here (window/document on TikTok, since getScroller() is null); the
-  // physical WRITE is the SW's trusted-wheel loop, steered by the scroll_mode messages this observer sends.
+  // The scroller is resolved by the observer each tick (getScroller() is used by the overlay input-swallow
+  // probe; the heavy query runs at most every OBSERVER_MS). The physical scroll is the SW's continuous
+  // trusted DOWN-wheel loop, steered by the scroll_mode messages this observer sends — NO geometry read
+  // feeds the motion decision anymore (the wheel lane drives off healthy network arrivals).
   let currentScroller = getScroller();
-  let lastScrollHeight = scrollerMetrics(currentScroller).scrollHeight; // growth baseline (network is the robust signal)
 
   // Enter a user-visible, resumable PAUSE (CHAL-UX): freeze the giveup ladder (we stop feeding the
   // reducer while paused), notify the SW (chrome notification + popup reason), and watch for recovery.
@@ -726,8 +722,8 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       }
     }
     console.log(`[commonplace] capture RESUMED (was paused: ${level})`);
-    // The caller `continue`s; the next observer tick's stepDrive re-issues the real scroll_mode (advance/
-    // hold), so the SW's wheel loop resumes where it left off — no explicit resume message needed here.
+    // The caller `continue`s; the next observer tick's scrollWatch re-issues the real scroll_mode (advance),
+    // so the SW's wheel loop resumes wheeling down where it left off — no explicit resume message needed here.
     return true;
   }
 
@@ -798,14 +794,12 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     //    means this can never lose data.
     evictedTotal += pruneGrid();
 
-    // ── 3. GROWTH TRACKING — grewSinceLast = scrollHeight grew OR healthy arrivals grew since the last
-    //    tick. Healthy arrivals are the ROBUST signal (eviction can shrink scrollHeight even as new pages
-    //    land). `arrived` (any arrival) feeds the recovery classifier; `healthyArrived` is real progress.
-    const m = scrollerMetrics(scroller);
+    // ── 3. ARRIVAL TRACKING — the wheel lane decides motion purely on NETWORK arrivals (geometry on
+    //    TikTok's virtualized grid is unreliable). `arrived` (any arrival) feeds the recovery classifier;
+    //    `healthyArrived` (a transport:"ok" page) is real progress — it drives scrollWatch and re-anchors
+    //    its stall timer.
     const arrived = pageArrivals > arrivalsSeen;
     const healthyArrived = healthyArrivals > healthyArrivalsSeen;
-    const grewSinceLast = m.scrollHeight > lastScrollHeight || healthyArrived;
-    lastScrollHeight = m.scrollHeight;
     arrivalsSeen = pageArrivals;
     healthyArrivalsSeen = healthyArrivals;
     if (healthyArrived) {
@@ -818,7 +812,7 @@ async function autoScroll({ source = null, resuming = false } = {}) {
 
     // ── 4. SESSION RECOVERY — classify the transport and act. A pause here holds the SW's trusted-wheel
     //    loop (enterPause sends scroll_mode "hold") and takes precedence over the motion decision this tick
-    //    (it `continue`s before stepDrive). Unchanged ladder (offline / empty_ok flagged-refresh /
+    //    (it `continue`s before scrollWatch). Unchanged ladder (offline / empty_ok flagged-refresh /
     //    challenge); the modest http_error slowdown replaces the old exponential backoff for a real 429/5xx.
     let recSignal = null;
     if (navigator.onLine === false) recSignal = "offline";
@@ -872,8 +866,6 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       httpErrorStreak++;
       if (httpErrorStreak >= HTTP_ERROR_GIVEUP) {
         outcome = { status: "giveup", reason: HTTP_ERROR_REASON };
-        driveState = { ...driveState, mode: "exhausted" };
-        driveMode = "exhausted";
         running = false;
         console.warn(`[commonplace] capture INCOMPLETE — ${HTTP_ERROR_REASON}`);
         break;
@@ -885,9 +877,12 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       continue;
     }
 
-    // ── 5. COMPLETION / MOTION — compute the VERIFIED terminal on a healthy arrival, then run the pure
-    //    geometry driver. `done` comes ONLY from isTerminalPage on a healthy transport; `exhausted` is
-    //    the stuck-at-bottom honest-incomplete. Every other mode just tells the rAF driver how to move.
+    // ── 5. COMPLETION / MOTION — the wheel lane is NETWORK-driven (geometry is gone). Compute the VERIFIED
+    //    terminal on a healthy arrival, then run the pure `scrollWatch` reducer off healthy arrivals + the
+    //    terminal. `done` comes ONLY from isTerminalPage on a healthy transport; a stall (no healthy arrival
+    //    for STALL_MS with no terminal) is `giveup`, the honest reported-incomplete. Otherwise: keep wheeling
+    //    down. NO frontier/hold/retrigger — with a real continuous down-wheel you can't overshoot and the
+    //    loader re-fires from continuous transit, so up-jiggles and holds are never needed.
     let terminal = false;
     if (healthyArrived) {
       // `done` fires ONLY on a genuine terminal per a HEALTHY transport (isTerminalPage). A hasMore:false
@@ -901,31 +896,29 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     }
     const { count = 0 } = await chrome.storage.local.get("count");
     prevCount = Math.max(prevCount, count);
-    const drive = stepDrive(driveState, {
+    const watch = stepWatch(watchState, {
       nowMs: Date.now(),
-      scrollTop: m.scrollTop,
-      scrollHeight: m.scrollHeight,
-      clientHeight: m.clientHeight,
-      grewSinceLast,
+      healthyArrivedSince: healthyArrived,
       terminal,
     });
-    driveState = drive.state;
-    driveMode = drive.mode;
-    // Steer the SW's trusted-wheel loop from the geometry verdict — the physical scroll WRITE lives in the
-    // SW now (TikTok's grid ignores ALL programmatic scrolling; only trusted wheels move it). advance→wheel
-    // down · hold→idle at the frontier while the next page loads · retrigger→a short UP-burst so the loader's
-    // edge-triggered sentinel leaves→re-enters. done/exhausted→stop the loop + detach the debugger now.
-    if (driveMode === "advance" || driveMode === "hold" || driveMode === "retrigger") {
-      sendScrollMode(driveMode);
+    watchState = watch.state;
+    watchMode = watch.mode;
+    // Steer the SW's trusted-wheel loop from the NETWORK verdict — the physical scroll WRITE lives in the
+    // SW now (TikTok's grid ignores ALL programmatic scrolling; only trusted wheels move it). advance→keep
+    // wheeling DOWN continuously · done/giveup→stop the loop + detach the debugger now. We NEVER send hold or
+    // retrigger from this normal path (those were the geometry-era frontier machinery; a pause still sends a
+    // legitimate hold via enterPause / the http_error slowdown).
+    if (watchMode === "advance") {
+      sendScrollMode("advance");
     } else {
-      sendScrollStop(); // done / exhausted — teardown also stops, idempotently
+      sendScrollStop(); // done / giveup — teardown also stops, idempotently
     }
-    if (driveMode === "done") {
+    if (watchMode === "done") {
       outcome = { status: "done", reason: null };
       running = false;
       console.log(`[commonplace] capture COMPLETE — TikTok reported a verified terminal (hasMore:false); ${prevCount} captured`);
-    } else if (driveMode === "exhausted") {
-      outcome = { status: "giveup", reason: "reached the bottom but TikTok stopped loading with more expected" };
+    } else if (watchMode === "giveup") {
+      outcome = { status: "giveup", reason: "TikTok stopped loading new pages" };
       running = false;
       console.warn(`[commonplace] capture INCOMPLETE — ${outcome.reason}`);
     }
@@ -938,15 +931,13 @@ async function autoScroll({ source = null, resuming = false } = {}) {
       domNodes: document.getElementsByTagName("*").length,
       heap: performance.memory,
     });
-    const hudState =
-      driveMode === "retrigger" ? `retrigger ${driveState.stuckRetriggers}/${MAX_STUCK_RETRIGGERS}` : driveMode;
-    updateHud(formatHudLine(sample, { source: lastSource, hasMore: lastHasMore, state: hudState, evicted: evictedTotal }));
+    updateHud(formatHudLine(sample, { source: lastSource, hasMore: lastHasMore, state: watchMode, evicted: evictedTotal }));
     if (shouldLogSample(lastSampleLogTs, sample.ts, 5000)) {
       lastSampleLogTs = sample.ts;
       console.log("[commonplace] capture sample", sample);
     }
     console.log(
-      `[commonplace] ${driveMode}… captured ${count} (hasMore ${lastHasMore}, mode ${driveMode}, stuck ${driveState.stuckRetriggers}, DOM ${domCount})`,
+      `[commonplace] ${watchMode}… captured ${count} (hasMore ${lastHasMore}, mode ${watchMode}, DOM ${domCount})`,
     );
 
     if (!running) break; // done / exhausted / giveup — fall through to scroll_done
