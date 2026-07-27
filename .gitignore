@@ -26,6 +26,9 @@ results/vault/
 
 # personal platform exports (never commit)
 instagram-*.zip
+TikTok_Data_*.zip
+user_data_tiktok*.json
+tiktok-dyd*/
 *-export/
 ig-export/
 
