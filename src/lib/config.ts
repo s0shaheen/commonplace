@@ -26,7 +26,9 @@ export interface CpConfig {
   engineLane: "managed" | "local"; // default "managed"
   localModel: string; // default "qwen3-vl:8b"
   localEndpoint: string; // default "http://localhost:11434"
-  managedModel: string; // default "gemini-3.6-flash" (recommended; user-selectable in options)
+  managedModel: string; // default "gemini-3.5-flash-lite" (bake-off winner: 77% cheaper, no measured loss)
+  /** Inference tier for analysis (DEC-036). "flex" = 50% off, 1-15min, sheddable; the queue retries. */
+  serviceTier: "standard" | "flex";
   // default "native" (extractor-v2, 2026-07-27): on gemini-3.6-flash native video is ~300 tok/sec
   // (cents) and gives the model the real audio + full visual stream instead of sampled frames + a
   // separate VTT — the old 2.5-era cost reason for keyframes_vtt is gone. The LOCAL lane ignores this
@@ -97,7 +99,8 @@ export const DEFAULT_CONFIG: CpConfig = {
   engineLane: "managed",
   localModel: "qwen3-vl:8b",
   localEndpoint: "http://localhost:11434",
-  managedModel: "gemini-3.6-flash",
+  managedModel: "gemini-3.5-flash-lite",
+  serviceTier: "flex",
   ingestion: "native",
   escalateNative: false,
   placesEnabled: false,

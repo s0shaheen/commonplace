@@ -25,9 +25,20 @@ export interface FileDataPart {
   mimeType: string;
 }
 
+/**
+ * Inference service tier (DEC-036). `flex` is 50% off standard at a 1–15 min target latency and is
+ * "sheddable" (may 503 under load) — the right default for analysis, which is inherently background
+ * work, because the resumable job queue already owns retry/backoff/checkpointing. Batch is the same
+ * 50% but asynchronous with 24h turnaround + job/polling management, which buys us nothing here.
+ * Benchmarks and experiments run at `standard` for clean, unthrottled comparison.
+ */
+export type ServiceTier = "standard" | "flex";
+
 export interface GeminiBody {
   contents: { parts: Array<{ text: string } | { inlineData: MediaPart } | { fileData: FileDataPart }> }[];
   generationConfig: GeminiGenerationConfig;
+  /** Omitted for `standard` (the API default); emitted only to opt into flex. */
+  serviceTier?: "flex";
 }
 
 // ── Generation config (constrained decoding is best-effort; the parser is the gate) ──
@@ -74,21 +85,27 @@ export function buildGenerationConfig(): GeminiGenerationConfig {
   };
 }
 
-export function buildTextBody(prompt: string): GeminiBody {
-  return { contents: [{ parts: [{ text: prompt }] }], generationConfig: buildGenerationConfig() };
+export function buildTextBody(prompt: string, tier: ServiceTier = "standard"): GeminiBody {
+  return { contents: [{ parts: [{ text: prompt }] }], generationConfig: buildGenerationConfig(), ...tierField(tier) };
 }
 
-export function buildMediaBody(prompt: string, media: MediaPart[]): GeminiBody {
+export function buildMediaBody(prompt: string, media: MediaPart[], tier: ServiceTier = "standard"): GeminiBody {
   const parts = [...media.map((m) => ({ inlineData: m })), { text: prompt }];
-  return { contents: [{ parts }], generationConfig: buildGenerationConfig() };
+  return { contents: [{ parts }], generationConfig: buildGenerationConfig(), ...tierField(tier) };
+}
+
+/** `standard` is the API default, so it is expressed by OMITTING the field (never sending "standard"). */
+function tierField(tier: ServiceTier): { serviceTier?: "flex" } {
+  return tier === "flex" ? { serviceTier: "flex" } : {};
 }
 
 /** Native-video body: the File API `fileData` part FIRST, then the prompt (media-before-text is the
  *  documented best practice). Used instead of inline base64, which fails on larger videos. */
-export function buildFileDataBody(prompt: string, file: FileDataPart): GeminiBody {
+export function buildFileDataBody(prompt: string, file: FileDataPart, tier: ServiceTier = "standard"): GeminiBody {
   return {
     contents: [{ parts: [{ fileData: file }, { text: prompt }] }],
     generationConfig: buildGenerationConfig(),
+    ...tierField(tier),
   };
 }
 

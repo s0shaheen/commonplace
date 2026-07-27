@@ -10,7 +10,8 @@ function memStorage(seed: Record<string, unknown> = {}): StorageLike & { data: R
 
 describe("cp_config", () => {
   it("pins the frozen defaults", () => {
-    expect(DEFAULT_CONFIG.managedModel).toBe("gemini-3.6-flash");
+    expect(DEFAULT_CONFIG.managedModel).toBe("gemini-3.5-flash-lite");
+    expect(DEFAULT_CONFIG.serviceTier).toBe("flex"); // DEC-036: 50% off, sheddable; the queue retries
     expect(DEFAULT_CONFIG.ingestion).toBe("native"); // extractor-v2: native video is the managed default
     expect(DEFAULT_CONFIG.escalateNative).toBe(false);
     expect(DEFAULT_CONFIG.placesEnabled).toBe(false);
@@ -31,7 +32,7 @@ describe("cp_config", () => {
     const c = await loadConfig(s);
     expect(c.engineLane).toBe("local");
     expect(c.geminiKey).toBe("k");
-    expect(c.managedModel).toBe("gemini-3.6-flash"); // default survives
+    expect(c.managedModel).toBe("gemini-3.5-flash-lite"); // default survives
   });
   it("saveConfig round-trips a patch under the cp_config key", async () => {
     const s = memStorage();

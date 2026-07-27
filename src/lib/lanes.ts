@@ -14,6 +14,7 @@ import {
   parseExtractorResponse,
   type GeminiBody,
   type MediaPart,
+  type ServiceTier,
 } from "./geminiClient.js";
 import { buildOllamaBody, parseOllamaResponse } from "./ollamaClient.js";
 import { buildExtractorPrompt } from "./prompts.js";
@@ -49,7 +50,10 @@ export function createGeminiLane(deps: {
   basePrompt: string;
   /** Upload video bytes via the File API and resolve once the file is ACTIVE. Absent ⇒ no native path. */
   fileUpload?(bytes: MediaPart, mimeType: string): Promise<{ fileUri: string }>;
+  /** Inference tier (DEC-036). Defaults to "standard"; production analysis passes "flex" (50% off). */
+  serviceTier?: ServiceTier;
 }): EngineLane {
+  const tier: ServiceTier = deps.serviceTier ?? "standard";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${deps.model}:generateContent`;
   return {
     id: "managed",
@@ -63,10 +67,10 @@ export function createGeminiLane(deps: {
         const mimeType = input.videoBytes.mimeType || "video/mp4";
         const { fileUri } = await deps.fileUpload(input.videoBytes, mimeType);
         const prompt = buildExtractorPrompt(deps.basePrompt, input.item, "");
-        body = buildFileDataBody(prompt, { fileUri, mimeType });
+        body = buildFileDataBody(prompt, { fileUri, mimeType }, tier);
       } else {
         const prompt = buildExtractorPrompt(deps.basePrompt, input.item, input.transcript);
-        body = buildMediaBody(prompt, input.keyframes);
+        body = buildMediaBody(prompt, input.keyframes, tier);
       }
       const json = await deps.fetchJson(url, {
         method: "POST",

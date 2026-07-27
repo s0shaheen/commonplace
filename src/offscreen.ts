@@ -164,6 +164,7 @@ function buildLanes(cfg: CpConfig, basePrompt: string): Record<LaneId, EngineLan
       model: cfg.managedModel,
       basePrompt,
       fileUpload: (bytes, mimeType) => uploadFileToGemini(cfg.geminiKey ?? "", bytes, mimeType),
+      serviceTier: cfg.serviceTier,
     }),
     local: createOllamaLane({
       fetchJson: (url, init) => postJson(url, init),
