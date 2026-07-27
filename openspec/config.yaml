@@ -1,0 +1,87 @@
+schema: spec-driven
+
+# Inherited by every /opsx:propose. This is the durable context so a fresh
+# session never re-derives the product, the stack, or the locked decisions.
+context: |
+  PRODUCT — Commonplace: a local-first Chrome extension + MCP server that captures and
+  imports the videos a person saved/liked on TikTok and Instagram, understands each one
+  (transcript, on-screen text, entities with receipts), and makes the whole library
+  searchable by content and readable by the user's own AI agent over MCP. Tagline: a
+  commonplace book for the video age. It is NOT a downloader, NOT an AI brand, NOT a
+  chatbot, NOT a feed.
+
+  WHAT IT IS AT THE CORE (settled 2026-07-13): the capture instrument for personalized
+  feeds — the first mass medium with no archive and no independent measurement. The
+  durable assets are the raw capture corpus, capture depth on surfaces platform exports
+  omit, and the user-owns-it consent structure. The schema is a CODEBOOK (cheap to
+  regenerate with today's LLMs), NOT the moat. Do not sell the schema as defensible IP.
+
+  HERO USE CASE (backtested on the founder's real 4,661-item corpus, 2026-07-22): only
+  ~12% of saves are actionable entities (food/place/product); ~51% is "dark matter" that
+  metadata/tag search misses but content-reading finds (shows tagged in other languages,
+  proper nouns not categories, transcript-only). So the product leads with CONTENT SEARCH
+  over transcript/description/on-screen-text (not titles/tags) plus an MCP surface where
+  the user's own Claude makes sense of the pile. Entity resolution + a published accuracy
+  page are the PROOF OF RIGOR, not the pitch. Do NOT lead with "map every restaurant"
+  (a 12% cherry-pick).
+
+  TECH STACK: TypeScript; Chrome MV3 extension built with esbuild; IndexedDB library;
+  an offscreen document hosting a resumable, checkpointed job queue. Engine in src/lib
+  with two lanes: Gemini (bring-your-own-key) and Ollama (local). Grounding resolves to
+  MusicBrainz / Wikidata / Google Places with calibrated confidence and an explicit NIL
+  ("no match") state. Eval harness in Python under eval/ (pytest + promptfoo). Vitest for
+  the extension (519 tests green, typecheck clean, as of 2026-07-26). Node 24.
+
+  CAPTURE POSTURE (non-negotiable — this is the moat and the trust story): read-only
+  interception of the platform's OWN already-signed responses from the user's logged-in
+  session. No forged requests, no request signing, no credential sharing, no third-party
+  scraping on the free path. Human-cadence pacing. An account-safety kill-switch halts on
+  any ban/challenge signal. Capture policy is DETERMINISTIC and reproducible; an LLM is
+  used only where classification is genuinely fuzzy. Governing detail: capture-resilience.md.
+
+  ENRICHMENT (decided 2026-07-22 / provider locked 2026-07-26): a platform data-export ZIP
+  is a complete INDEX (every saved URL + your relationship + date) but the TikTok export
+  carries NO content; Instagram's is richer (caption/title/hashtags/owner). A single tiered
+  enrichment lane fills content: (0) TikTok oEmbed — free, official, returns caption+hashtags
+  +author+poster, the free default that makes imports searchable; (1) own-session permalink
+  open — free, full envelope including transcript, runs SLOW through the capture control
+  plane because a sequential permalink sweep carries the same ban risk as scrolling, so it
+  is the depth lane over the delta, never a brute-force pass; (2) paid fast lane — tikwm
+  PRIMARY (free tier ~5k/day, 1 req/s), Apify BACKUP (~$0.30–1.70 / 1k). Keep paid lanes
+  opt-in and off the free/default path (they send public URLs to a third party).
+
+  THE "AGENT" FRAMING (founder is explicit): this is an honest agent project, not a chatbot.
+  The claimable agents are (a) the capture control plane — perception, state estimation,
+  bounded recovery, human escalation, external ground-truth reconciliation against the ZIP;
+  and (b) the grounding pipeline — per-item multi-step research with receipts and published
+  accuracy. The user-facing "agent" is the user's own Claude driving our MCP server, with
+  shipped prompts. Do NOT build a captive in-extension chatbot or rebrand the product as AI.
+
+  LOCKED PRODUCT DECISIONS: name = Commonplace. Prices (deferred until post-launch): Free /
+  $39 one-time Deep Scan / $7-mo managed — "you pay for our compute, never for your data."
+  Design direction "Paper & Proof" (Literata + IBM Plex Mono, rubrication-red accent,
+  provenance-strip as the signature component) — pending the founder's G2 pick. Open-core:
+  the engine, schema, and eval harness are public. Distribution: Chrome Web Store search
+  first; Reddit second; a published-eval + one Show HN third; no Product Hunt.
+
+  FOUNDER + BAR: solo founder, ~10–20 hr/wk; his attention is the scarce resource. Goal is a
+  career-defining artifact that recruiters and peers respect AND that strangers pay for
+  (5–20 paying users is the bar, not an MRR figure). Precedence: quality/trust > usefulness
+  > revenue. No slop, no dark patterns, no unaudited accuracy claims.
+
+  GOVERNING REFERENCE DOCS (deep detail behind these specs): docs/specs/product-specification.md
+  (v5), knowledge-ontology.md, evaluation-methodology.md, knowledge-organization-standard.md,
+  capture-resilience.md. The single roadmap and progress narrative:
+  docs/strategy/2026-07-26-release-plan.md. Decisions ledger: docs/decisions/decision-log.md.
+
+rules:
+  proposal:
+    - "State the user-facing outcome and how it moves the launchable product (see the release plan)."
+    - "Name the capture/trust invariants it must preserve: read-only own-session, no forged requests, deterministic capture, honest incompleteness, account-safety halt."
+    - "Keep it under ~500 words. Link the governing reference doc instead of restating it."
+  design:
+    - "Reuse the capture control plane for anything that navigates or fetches at volume (the enrichment lanes are consumers of it, not parallel machinery)."
+    - "Pure decision core behind thin IO glue; inject now()/rng(); the core is unit-tested."
+  tasks:
+    - "Every change ends green: `npm test` (vitest) and `npm run typecheck` pass, and a real run or committed fixture exercises the new behavior."
+    - "Never fabricate a 'done': incompleteness is a visible, persisted, reason-labeled state."

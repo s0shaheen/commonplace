@@ -78,6 +78,16 @@ Governing precedence when entries conflict with docs: `specs/` govern; this log 
 
 ---
 
+## First-iteration re-cut (2026-07-21)
+
+**DEC-029 · Milestone 1 re-cut: MCP + minimal inspection UI before the full library; import lanes become a first-class front door (founder, 2026-07-21).** Order: capture control plane (ratified same day) → import lanes (IG ZIP importer + TikTok DYD onboarding/reconciliation) → pilot gold set + tuning → MCP server with shipped prompts + plain inspection UI → public artifacts (open-core carve + accuracy page) → full Paper & Proof library (G2 unchanged as a gate, no longer on the demo's critical path). Rationale + full order: `docs/strategy/2026-07-21-first-iteration-decision.md`. Founder's stated driver: an agent project he can demo and write about, and a pipeline not gated on the live extension.
+
+**DEC-030 · Publishing: hybrid build-in-public (founder, 2026-07-21).** Safe posts start now (framing essay, receipts/NIL, eval methodology); capture forensics (fake-done, trusted scroll, throttle behavior) are embargoed until after launch — best story we have, also the playbook.
+
+**DEC-031 · Agencies: discovery calls only, zero code, zero gating (founder, 2026-07-21).** Founder is arranging calls with agency operators he knows; question kit in the decision doc §5. Nothing in the build accommodates agencies until someone tries to pay. Reaffirms the 2026-07-02 tertiary/deferred posture.
+
+---
+
 ## Open founder decisions (blocking or pre-publish)
 
 | ID | Decision needed | Blocks |
@@ -88,3 +98,15 @@ Governing precedence when entries conflict with docs: `specs/` govern; this log 
 | DEC-026 | Permanent schema domain | The 1.0.0 schema freeze |
 | DEC-014 | Published-benchmark type scope + macro semantics | The accuracy page (Phase 7) |
 | G3 | Pricing sign-off (recommended: defer until after launch) | Phase 10 only |
+
+---
+
+## Operating system + first-iteration re-cut (2026-07-26)
+
+**DEC-032 · Spec-driven development via OpenSpec (founder-directed).** Adopted `@fission-ai/openspec` (v1.6.0) as the execution system. `openspec init . --tools claude` generated 6 Claude Code skills + 6 `/opsx:*` slash commands. Roadmap = 10 tracked changes under `openspec/changes/` (capture-control-plane, zip-import-and-upload, enrichment-lane, content-search, pilot-gold-set, engine-tuning, mcp-server, accuracy-page-and-open-core, library-ui, launch). Locked context lives in `openspec/config.yaml` (inherited by every proposal). Progress surface = `openspec list` / `openspec view` — no more plan pile. Per-change loop: `/opsx:propose` → `/opsx:apply` → `/opsx:verify` → `/opsx:archive`. The single narrative doc is `docs/strategy/2026-07-26-release-plan.md`.
+
+**DEC-033 · OpenSpec dashboard (ToruAI/openspec-ui, MIT) as mission control.** `tools/openspec-ui/run.sh` (self-downloading v0.2.0 binary, gitignored) serves a read-only kanban + specs browser at `localhost:4599`, watching `openspec/`. Optional; the terminal equivalent is `openspec view`.
+
+**DEC-034 · Enrichment providers locked (founder, 2026-07-26): tikwm PRIMARY, Apify BACKUP.** Cheaper default, redundancy, and a lower customer price. Free path stays oEmbed + own-session (through the control plane). Detail folded into `openspec/config.yaml` and `docs/archive/superseded/2026-07-22-zip-and-enrichment.md`.
+
+**DEC-035 · Doc consolidation.** The interim strategy/decision docs (2026-07-21 first-iteration, 2026-07-22 interface backtest, 2026-07-22 zip+enrichment) moved to `docs/archive/superseded/`; their decisions now live in `openspec/config.yaml` + the release plan + this log. `docs/strategy/roadmap.md` is a redirect. `session-handoff.md` top points at the release plan + OpenSpec. The 2026-07-13 framing investigation stays in `docs/research/` as the "why."
