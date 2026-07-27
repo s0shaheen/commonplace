@@ -129,3 +129,51 @@ Ship **Flex** immediately (pure win, no quality question). Fold **media_resoluti
 **tiered-depth policy** into the gold-set measurement, because both are quality-vs-cost tradeoffs
 that should be decided with the instrument rather than by argument. Then set pricing against
 measured COGS, not the 2.5-era model.
+
+---
+
+## 5. Do public video benchmarks answer our model question? (Video-MME-v2 assessed)
+
+**Verdict: use them to SHORTLIST, never to DECIDE.** Video-MME-v2 (launched 2026-04-07, 3,300
+human-hours, grouped non-linear scoring) is the strongest current general video-understanding
+benchmark, and its **Level 1 — "multi-point information aggregation," retrieving and integrating
+cues scattered across frames, audio, and subtitles** — is genuinely close to what our extractor
+does. That makes its leaderboard a legitimate prior for which models can *see and hear* well.
+
+But it cannot decide our question, for four concrete reasons:
+
+1. **Format mismatch.** It is multiple-choice QA. We do open-ended structured extraction against
+   a closed vocabulary, with per-element evidence and calibrated confidence. Picking the right
+   option from four is not the same skill as emitting a schema-valid record with grounded quotes.
+2. **It cannot measure abstention — the thing we care most about.** Our product bar is *honest
+   NIL*: a confidently wrong restaurant name is worse than "couldn't verify." In a multiple-choice
+   benchmark there is always a correct option to pick, so hallucination-under-uncertainty is
+   structurally invisible. This is the single biggest gap.
+3. **Content mismatch.** Their corpus is general/long-form video. Ours is short-form social —
+   median 42s, vertical, dense overlaid text, licensed music, hard cuts, non-English captions.
+   Reading a menu board off a 3-second cut is our load-bearing skill and is barely represented.
+4. **Capability mismatch.** Their Levels 2–3 (temporal understanding, cross-temporal causal
+   reasoning) are most of the benchmark's difficulty and near-irrelevant to us — we need "what
+   is in this and what is it about," not multi-event causal chains.
+
+**Therefore:** shortlist candidate models from public leaderboards (they answer "can this model
+watch video at all"), then decide with **our own bake-off on our own corpus**, scored against the
+**gold set** for accuracy and abstention. This is the project's own instrument-before-experiment
+rule: a public benchmark is a prior; the gold set is the instrument.
+
+## 6. The cheaper-model option (gemini-3.5-flash-lite), and what it would fix
+
+| Model | Input /1M | Output /1M | ~$/video* | **~$/5,000-item library** |
+|---|---|---|---|---|
+| gemini-3.6-flash (current) | $1.50 | $7.50 | $0.029 | **$147** standard · **$73** flex |
+| gemini-3.5-flash | $1.50 | $9.00 | $0.032 | $161 · $80 |
+| **gemini-3.5-flash-lite** | **$0.30** | **$2.50** | **$0.0079** | **$39** standard · **~$20** flex |
+
+<sub>*at the measured ~9.6k input / ~2k output per video; the total is measured, the split estimated.</sub>
+
+Flash-lite (GA 2026-07-21, native video to ~45 min, 1M context) is ~**3.7× cheaper end-to-end**
+and is the difference between COGS ~2× the $39 price and COGS comfortably under it — before the
+`media_resolution` lever, which could halve it again. Google positions it as a replacement for
+"less complex Gemini 3 Flash workloads," which is exactly the open question: **our task is
+multimodal-demanding (read fine on-screen text, name specific entities, abstain honestly), so
+"cheap enough" is settled and "good enough" is not.** That is what the bake-off measures.

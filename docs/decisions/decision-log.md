@@ -110,3 +110,13 @@ Governing precedence when entries conflict with docs: `specs/` govern; this log 
 **DEC-034 · Enrichment providers locked (founder, 2026-07-26): tikwm PRIMARY, Apify BACKUP.** Cheaper default, redundancy, and a lower customer price. Free path stays oEmbed + own-session (through the control plane). Detail folded into `openspec/config.yaml` and `docs/archive/superseded/2026-07-22-zip-and-enrichment.md`.
 
 **DEC-035 · Doc consolidation.** The interim strategy/decision docs (2026-07-21 first-iteration, 2026-07-22 interface backtest, 2026-07-22 zip+enrichment) moved to `docs/archive/superseded/`; their decisions now live in `openspec/config.yaml` + the release plan + this log. `docs/strategy/roadmap.md` is a redirect. `session-handoff.md` top points at the release plan + OpenSpec. The 2026-07-13 framing investigation stays in `docs/research/` as the "why."
+
+---
+
+## Engine economics + business model (2026-07-27)
+
+**DEC-036 · Flex service tier for production analysis; standard for testing (founder, 2026-07-27).** Gemini Flex is 50% off (identical to Batch) but **synchronous** with a 1–15 min target, versus Batch's async 24h job/polling. Flex is "sheddable" (503s under load) — already handled by the resumable job queue's retry/backoff/checkpointing. One parameter (`service_tier: "flex"`). Benchmarks and experiments run at **standard** for clean comparison.
+
+**DEC-037 · Moving away from pure open-source; MCP becomes part of the managed/SaaS offering (founder, 2026-07-27).** The MCP server is no longer planned as an open-source npm package — it is a paid/managed product surface. ⚠️ SCOPE PENDING: whether the engine, schema, and eval harness remain open (the credibility/accuracy-page artifacts) or also close. This affects `accuracy-page-and-open-core`, the mcp-server change (npm-first distribution was written on the open-source assumption), SPEC v5's "Open where it counts" commitment, DEC-001, and the career-artifact story.
+
+**DEC-038 · Model choice is an open bake-off, not an assumption (founder, 2026-07-27).** gemini-3.6-flash at ~$73/5,000-item library (flex) is ~2× the planned $39 Deep Scan price. gemini-3.5-flash-lite is ~3.7× cheaper (~$20/5k at flex) and natively multimodal. Public benchmarks (Video-MME-v2) shortlist but cannot decide — they are multiple-choice QA on general/long-form video and structurally cannot measure honest abstention, our core bar. Decision comes from a bake-off on the real corpus, scored against the gold set. Analysis: `docs/research/2026-07-27-extractor-architecture-and-unit-economics.md` §5–6.
