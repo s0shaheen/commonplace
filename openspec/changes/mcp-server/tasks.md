@@ -10,11 +10,12 @@
 - [ ] 2.3 Shipped MCP prompts: restaurant-map, recipe-collect, topic-pull, quote-find
 
 ## 3. Packaging
-- [ ] 3.1 esbuild bundle to a single node file; publish-ready **npm package with a `bin` entrypoint** (the universal `npx -y @commonplace/mcp` path) + a README with copy-paste config for Claude Desktop/Code, Cursor, VS Code, Cline, Windsurf, Zed
+- [ ] 3.1 esbuild bundle to a single node file; **licensed/closed distribution** (DEC-037) with a README carrying copy-paste stdio config for Claude Desktop/Code, Cursor, VS Code, Cline, Windsurf, Zed — standard MCP, just not public source
 - [ ] 3.1b **MCPB** wrapper for Claude Desktop one-click: readOnlyHint on all tools + local-only privacy policy + setup docs + working examples
 - [ ] 3.2 Boot-on-fixture integration test: server answers a search_library call end to end
 
 ## 4. Green
 - [ ] 4.1 `npm test` + `npm run typecheck` green
 - [ ] 4.2 `openspec validate mcp-server --strict` passes
-- [ ] 4.3 (founder step) Directory submission — account + submit click; note it, don't block
+- [ ] 4.3 (founder step) Claude Desktop extension listing — account + submit click; note it, don't block
+- [ ] 4.4 (founder decision, deferred) Local-licensed (default, preserves local-first) vs hosted/remote (reaches web clients, breaks "we cannot read your library") — see design.md
