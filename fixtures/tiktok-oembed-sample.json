@@ -1,0 +1,18 @@
+{
+  "__fixture_provenance": "Shape verified live 2026-07-26 against https://www.tiktok.com/oembed?url=<a real saved video>. Field names are VERBATIM from the official oEmbed response; author handle/title text and the thumbnail URL are illustrative (the real thumbnail_url is a signed p16-sign CDN URL that expires). oEmbed returns caption(title)+author+poster+hashtags-in-title only — no transcript, no stats.",
+  "version": "1.0",
+  "type": "video",
+  "title": "3-ingredient weeknight pasta you'll actually make #pasta #weeknightdinner #easyrecipe",
+  "author_url": "https://www.tiktok.com/@chefanna",
+  "author_name": "Chef Anna",
+  "author_unique_id": "chefanna",
+  "width": "100%",
+  "height": "100%",
+  "html": "<blockquote class=\"tiktok-embed\" cite=\"https://www.tiktok.com/@chefanna/video/7300000000000000000\" data-video-id=\"7300000000000000000\"></blockquote>",
+  "thumbnail_width": 576,
+  "thumbnail_height": 1024,
+  "thumbnail_url": "https://p16-sign.tiktokcdn-us.com/obj/EXAMPLE-SIGNED-POSTER~tplv-photomode-image.jpeg",
+  "provider_url": "https://www.tiktok.com",
+  "provider_name": "TikTok",
+  "embed_product_id": "7300000000000000000"
+}

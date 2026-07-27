@@ -32,6 +32,13 @@ import { createMusicBrainzResolver } from "./lib/resolvers/musicbrainz.js";
 import { createWikidataResolver } from "./lib/resolvers/wikidata.js";
 import { createPlacesResolver } from "./lib/resolvers/places.js";
 import { reviveJobs, enqueueMissing, runQueue, type QueueDeps } from "./lib/queue.js";
+import { enrichItem, type LaneRunner } from "./lib/enrich/enrichItem.js";
+import { needsEnrichment } from "./lib/enrich/missing.js";
+import { fetchOembed } from "./lib/enrich/oembed.js";
+import { fetchTikwm } from "./lib/enrich/tikwm.js";
+import { fetchApify } from "./lib/enrich/apify.js";
+import { fetchOwnSession, enqueuePermalink, emptyWorklist, type OwnSessionWorklist } from "./lib/enrich/ownSession.js";
+import type { Lane } from "./lib/enrich/types.js";
 import { PROMPT_VERSION } from "./lib/prompts.js";
 import { toOpenSchemaItem, OPEN_SCHEMA_VERSION, type ExportDeps } from "./lib/exporters/openSchema.js";
 import { validateItem } from "./lib/generated/validators.js";
@@ -120,6 +127,60 @@ function buildResolvers(cfg: CpConfig): KbResolver[] {
   return resolvers;
 }
 
+// ── Enrichment lane wiring (config → lane runners) ──────────────────────────────────
+// The pure cores (tierPolicy, merge) + the adapter parsers are tested; this is the thin IO glue that
+// binds each lane to a real (rate-limited) fetch. oEmbed is conservatively paced (it 400s intermittently);
+// tikwm is a hard 1 req/s (their free-tier rule); Apify posts to its REST API with the config token.
+// own_session enqueues the permalink onto a control-plane worklist (meta key) and DEFERS — the live open
+// is driven by the capture control plane at pilot time, not in this build env.
+const OWN_SESSION_WORKLIST_KEY = "enrich:ownSessionWorklist";
+
+function buildEnrichLanes(cfg: CpConfig, store: CpStore): Partial<Record<Lane, LaneRunner>> {
+  const lanes: Partial<Record<Lane, LaneRunner>> = {};
+  if (cfg.enrichTier === "off") return lanes;
+
+  // oEmbed — the free official base, on every non-off tier. Conservative ~1 req/s pacing + it may 400.
+  const oembedLimiter = createRateLimiter(1000);
+  lanes.oembed = (item) => fetchOembed(item, { fetchJson: (url) => oembedLimiter(() => getJson(url)) });
+
+  if (cfg.enrichTier === "depth") {
+    // The user's own logged-in session — enqueue the permalink onto the control-plane worklist, deferred.
+    lanes.own_session = (item) =>
+      fetchOwnSession(item, {
+        enqueue: async (url) => {
+          const wl = (await store.getMeta<OwnSessionWorklist>(OWN_SESSION_WORKLIST_KEY)) ?? emptyWorklist();
+          await store.setMeta(OWN_SESSION_WORKLIST_KEY, enqueuePermalink(wl, url));
+        },
+      });
+  }
+
+  if (cfg.enrichTier === "paid") {
+    const tikwmLimiter = createRateLimiter(1000); // tikwm free tier: 1 req/s
+    lanes.tikwm = (item) => fetchTikwm(item, { fetchJson: (url) => tikwmLimiter(() => getJson(url)) });
+    if (cfg.apifyToken) {
+      lanes.apify = (item) => fetchApify(item, { token: cfg.apifyToken!, fetchJson: (url, init) => postJson(url, init) });
+    }
+  }
+  return lanes;
+}
+
+// Eager poster fetch (signed cover URLs expire in hours): once enrichment fills a cover, capture its
+// BYTES now via the same credentialed fetch the poster pass uses. Best-effort + idempotent (an already-
+// stored poster short-circuits). Subtitle/media bytes are fetched by analyze, which runs in this same job
+// right after enrichment — before the freshly-filled signed URLs expire.
+async function eagerPoster(itemId: string, coverUrl: string | null, store: CpStore): Promise<void> {
+  if (!coverUrl) return;
+  if (await store.getPoster(itemId)) return;
+  try {
+    const res = await fetch(coverUrl, { credentials: "include" });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    await store.putPoster(itemId, blob);
+  } catch {
+    // A signed URL may already have expired — a miss is just a miss (the poster pass / re-enrich retries).
+  }
+}
+
 // The selector's `callModel` is a RAW text generation on the active lane — NOT the constrained
 // extractor call. Gemini: a plain generateContent (no responseSchema); Ollama: /api/chat. It
 // returns the model's text; selector.ts parses `{index, confidence}` out of it and abstains on junk.
@@ -180,9 +241,38 @@ interface EngineCtx {
   lanes: Record<LaneId, EngineLane>;
   resolvers: KbResolver[];
   select: ReturnType<typeof createLlmSelector>;
+  /** The enrichment lane runners (empty when enrichTier is "off"). */
+  enrichLanes: Partial<Record<Lane, LaneRunner>>;
 }
 
-// The per-item unit of work, injected into runQueue as `processItem`. capture → analyze → ground.
+// The pre-analyze enrich stage: for a content-poor item, run the tiered enrichment lane, persisting a
+// resumable checkpoint (saveEnrichment) after each successful lane and eagerly capturing the poster
+// bytes. Returns the (possibly enriched) item to analyze. A content-rich item is returned untouched with
+// no network call. Never throws — an enrichment miss leaves an honest partial that analyze still runs on.
+async function enrichIfNeeded(itemId: string, item: CapturedItem, ctx: EngineCtx): Promise<CapturedItem> {
+  if (ctx.cfg.enrichTier === "off" || !needsEnrichment(item)) return item;
+  try {
+    const outcome = await enrichItem(item, {
+      setting: ctx.cfg.enrichTier,
+      lanes: ctx.enrichLanes,
+      apifyAvailable: !!ctx.cfg.apifyToken,
+      persist: async (filled) => {
+        await ctx.store.saveEnrichment(itemId, filled, new Date().toISOString());
+        await eagerPoster(itemId, filled.cover, ctx.store);
+      },
+    });
+    if (outcome.status !== "skipped") {
+      console.log(`[commonplace] enrich ${itemId}: ${outcome.status} via [${outcome.filled.join(", ") || "none"}]`);
+    }
+    return outcome.item;
+  } catch (e) {
+    // Enrichment is best-effort — never let it block analysis. The item proceeds as-is (honest partial).
+    console.warn(`[commonplace] enrich ${itemId} failed (non-fatal):`, (e as Error)?.message ?? e);
+    return item;
+  }
+}
+
+// The per-item unit of work, injected into runQueue as `processItem`. enrich → analyze → ground.
 // Throws bubble up to runEngine's wrapper, which classifies 429 → rateLimited (retry) vs hard error.
 async function processItemLive(
   itemId: string,
@@ -190,7 +280,13 @@ async function processItemLive(
 ): Promise<{ ok: true } | { ok: false; error: string; rateLimited?: boolean }> {
   const rec = await ctx.store.getRecord(itemId);
   if (!rec) return { ok: false, error: "record_missing" };
-  const item = rec.item;
+
+  // Enrich stage — runs BEFORE analyze for a content-poor (skeleton / caption-or-poster-missing) item.
+  // A live-captured, content-rich item is classified `skip` and never hits the network. The queue has
+  // already checkpointed this job to "analyzing", so a mid-enrich service-worker death reverts it to
+  // pending → retry; the per-lane saveEnrichment checkpoint + monotonic merge make that retry idempotent
+  // (already-filled fields are re-derived as present, so spent lanes are not re-called needlessly).
+  const item = await enrichIfNeeded(itemId, rec.item, ctx);
 
   const ingestion = routeIngestion(item, ctx.cfg);
   let keyframes: MediaPart[] = [];
@@ -250,6 +346,7 @@ async function runEngine(): Promise<void> {
       lanes: buildLanes(cfg, basePrompt),
       resolvers: buildResolvers(cfg),
       select: createLlmSelector(buildCallModel(cfg)),
+      enrichLanes: buildEnrichLanes(cfg, store),
     };
 
     // Recover anything left mid-flight by a previous (killed) run, then enqueue any new raw items.

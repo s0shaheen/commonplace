@@ -1,0 +1,30 @@
+{
+  "__fixture_provenance": "REPRESENTATIVE-FROM-DOCS (not a live capture). Modeled on the TikTok item-detail response the own-session lane intercepts (itemInfo.itemStruct, the SAME per-item shape as an item_list element, so extractItems parses it unchanged). The load-bearing bit is video.subtitleInfos → subtitleUrl (the transcript the depth lane exists for). URLs illustrative; real ones are signed+expiring.",
+  "itemInfo": {
+    "itemStruct": {
+      "id": "7300000000000000000",
+      "desc": "3-ingredient weeknight pasta you'll actually make",
+      "createTime": 1730000000,
+      "author": { "uniqueId": "chefanna", "nickname": "Chef Anna" },
+      "music": { "title": "original sound", "authorName": "Chef Anna" },
+      "video": {
+        "id": "7300000000000000000",
+        "duration": 47,
+        "cover": "https://p16-sign.tiktokcdn-us.com/obj/EXAMPLE~cover.jpeg",
+        "playAddr": "https://v16-webapp.tiktok.com/EXAMPLE.mp4",
+        "downloadAddr": "https://v16-webapp.tiktok.com/EXAMPLE-dl.mp4",
+        "subtitleInfos": [
+          { "LanguageCodeName": "eng-US", "Url": "https://v16-webapp.tiktok.com/EXAMPLE-eng.vtt" },
+          { "LanguageCodeName": "spa-ES", "Url": "https://v16-webapp.tiktok.com/EXAMPLE-spa.vtt" }
+        ]
+      },
+      "stats": {
+        "playCount": 2100000,
+        "diggCount": 128400,
+        "commentCount": 812,
+        "shareCount": 3300,
+        "collectCount": 45200
+      }
+    }
+  }
+}

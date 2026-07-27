@@ -99,6 +99,7 @@ export interface CpStore {
   upsertItems(items: CapturedItem[], nowIso: string): Promise<{ added: number; merged: number }>;
   getRecord(id: string): Promise<LibraryRecord | undefined>;
   allRecords(): Promise<LibraryRecord[]>;
+  saveEnrichment(id: string, item: CapturedItem, nowIso: string): Promise<void>; // fills content fields; status stays "raw"
   saveAnalysis(id: string, analysis: Analysis): Promise<void>; // status → "analyzed"
   saveGroundings(id: string, g: GroundedEntity[], pending: NamedEntityType[]): Promise<void>; // status → "grounded"
   putPoster(id: string, blob: Blob): Promise<string>; // returns `poster:${id}`; also stamps record.posterRef
@@ -253,6 +254,22 @@ function makeStore(db: IDBPDatabase<CommonplaceDB>): CpStore {
 
     allRecords() {
       return db.getAll("items");
+    },
+
+    async saveEnrichment(id, item, nowIso) {
+      // Single-transaction RMW (see saveAnalysis): write the enriched item onto the record, leaving the
+      // analysis lifecycle (status "raw" until analyze), poster pointer, and groundings untouched. The
+      // enrich glue computes the monotonic merge (enrich/merge.ts); this only persists the checkpoint.
+      // Missing record → no-op (never creates one — enrichment only fills captured items).
+      const tx = db.transaction("items", "readwrite");
+      const store = tx.objectStore("items");
+      const rec = await store.get(id);
+      if (rec) {
+        rec.item = item;
+        rec.updatedAt = nowIso;
+        await store.put(rec);
+      }
+      await tx.done;
     },
 
     async saveAnalysis(id, analysis) {

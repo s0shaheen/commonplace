@@ -54,6 +54,24 @@ describe("CpStore", () => {
     expect(await s.count()).toBe(2);
   });
 
+  it("saveEnrichment writes the enriched item, preserving status raw + lifecycle, and bumps updatedAt", async () => {
+    const s = await openStore("t1-enrich");
+    await s.upsertItems([mkItem("a", { desc: "" })], "2026-07-08T00:00:00Z");
+    const enriched = mkItem("a", { desc: "filled caption", cover: "https://cdn/c.jpg", sources: ["favorites"] });
+    await s.saveEnrichment("a", enriched, "2026-07-08T00:02:00Z");
+    const rec = (await s.getRecord("a"))!;
+    expect(rec.item.desc).toBe("filled caption");
+    expect(rec.item.cover).toBe("https://cdn/c.jpg");
+    expect(rec.status).toBe("raw"); // still raw — enrichment fills content, analysis flips the status
+    expect(rec.updatedAt).toBe("2026-07-08T00:02:00Z");
+  });
+
+  it("saveEnrichment is a no-op for a missing record (never creates one)", async () => {
+    const s = await openStore("t1-enrich-missing");
+    await s.saveEnrichment("ghost", mkItem("ghost", { desc: "x" }), "2026-07-08T00:02:00Z");
+    expect(await s.getRecord("ghost")).toBeUndefined();
+  });
+
   it("upsertItems keeps the freshest fields on merge and bumps updatedAt", async () => {
     const s = await openStore("t1-fresh");
     await s.upsertItems([mkItem("a", { desc: "old", playUrl: "u1" })], "2026-07-08T00:00:00Z");

@@ -15,6 +15,12 @@ export type CaptureSources = Record<CaptureSource, boolean>;
 /** Scroll cadence preset the capture engine paces to. Normal is the tested default. */
 export type CaptureSpeed = "conservative" | "normal" | "fast";
 
+/** Enrichment tier (see src/lib/enrich). A ladder of the maximum lane a run may reach:
+ *  off — no enrichment; free — official oEmbed only (the default, zero cost, no third party);
+ *  depth — oEmbed + the user's own logged-in session (adds transcript via the control plane);
+ *  paid — oEmbed + tikwm PRIMARY, Apify BACKUP on tikwm error/quota (third-party, opt-in). */
+export type EnrichTier = "off" | "free" | "depth" | "paid";
+
 export interface CpConfig {
   geminiKey: string | null;
   engineLane: "managed" | "local"; // default "managed"
@@ -52,6 +58,16 @@ export interface CpConfig {
   // the emulation and fall back to the old pause-on-hidden safety net. The tab must still EXIST (backgrounded/
   // minimized is fine; a CLOSED tab is the separate DYD import lane).
   captureBackground: boolean;
+  // Enrichment tier (2026-07-26 provider lock). Default "free" = official TikTok oEmbed only — makes
+  // imported skeletons searchable at zero cost with no third party. "depth" additionally opens the
+  // user's own session for transcripts (paced through the capture control plane); "paid" additionally
+  // uses tikwm PRIMARY → Apify BACKUP. Paid lanes are OPT-IN and send only the public saved URL to the
+  // third party (invariant). "off" disables enrichment entirely.
+  enrichTier: EnrichTier;
+  // OPTIONAL Apify API token for the paid BACKUP lane (used only on tikwm error/quota failover). Lives
+  // here at runtime only — never in source, never in a web_accessible_resource (SPEC §25). null = the
+  // Apify failover lane is unavailable (the policy never reaches it).
+  apifyToken: string | null;
 }
 
 /** Frozen default: every lane on. */
@@ -88,6 +104,8 @@ export const DEFAULT_CONFIG: CpConfig = {
   captureSpeed: "normal",
   captureKeepForeground: false,
   captureBackground: true,
+  enrichTier: "free",
+  apifyToken: null,
 };
 
 /** Read the stored partial and merge it over the frozen defaults. `captureSources` is deep-merged so

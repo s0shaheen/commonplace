@@ -1,0 +1,30 @@
+{
+  "__fixture_provenance": "REPRESENTATIVE-FROM-DOCS (not a live run). Modeled on the standard Apify TikTok scraper dataset item shape (text, authorMeta{name,nickName}, musicMeta{musicName,musicAuthor}, videoMeta{duration,coverUrl,subtitleLinks}, videoUrl/webVideoUrl, digg/play/comment/share/collect counts). Values illustrative. Pins the PURE normalizer only; a live Apify run is the founder/pilot-time gate. Apify is the BACKUP, used only on tikwm error/quota failover.",
+  "id": "7300000000000000000",
+  "text": "3-ingredient weeknight pasta you'll actually make #pasta #weeknightdinner",
+  "createTime": 1730000000,
+  "authorMeta": {
+    "id": "6723005858453881861",
+    "name": "chefanna",
+    "nickName": "Chef Anna"
+  },
+  "musicMeta": {
+    "musicName": "original sound",
+    "musicAuthor": "Chef Anna"
+  },
+  "videoUrl": "https://v16-webapp.tiktok.com/EXAMPLE.mp4",
+  "webVideoUrl": "https://www.tiktok.com/@chefanna/video/7300000000000000000",
+  "videoMeta": {
+    "duration": 47,
+    "coverUrl": "https://p16-sign.tiktokcdn-us.com/obj/EXAMPLE~cover.jpeg",
+    "subtitleLinks": [
+      { "language": "eng-US", "downloadLink": "https://v16-webapp.tiktok.com/EXAMPLE-eng.vtt" },
+      { "language": "spa-ES", "downloadLink": "https://v16-webapp.tiktok.com/EXAMPLE-spa.vtt" }
+    ]
+  },
+  "diggCount": 128400,
+  "shareCount": 3300,
+  "playCount": 2100000,
+  "commentCount": 812,
+  "collectCount": 45200
+}

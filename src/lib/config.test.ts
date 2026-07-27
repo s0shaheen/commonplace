@@ -16,6 +16,15 @@ describe("cp_config", () => {
     expect(DEFAULT_CONFIG.placesEnabled).toBe(false);
     expect(DEFAULT_CONFIG.concurrency).toBe(2);
     expect(DEFAULT_CONFIG.autonomousCapture).toBe(false); // opt-in, off by default (account-risk)
+    expect(DEFAULT_CONFIG.enrichTier).toBe("free"); // free official-oEmbed default (paid lanes opt-in)
+    expect(DEFAULT_CONFIG.apifyToken).toBe(null); // no third-party token until the founder sets one
+  });
+  it("enrichTier + apifyToken round-trip and merge over defaults", async () => {
+    const s = memStorage({ cp_config: { enrichTier: "paid", apifyToken: "apify_xyz" } });
+    const c = await loadConfig(s);
+    expect(c.enrichTier).toBe("paid");
+    expect(c.apifyToken).toBe("apify_xyz");
+    expect(c.enrichTier).not.toBe(DEFAULT_CONFIG.enrichTier); // stored override wins
   });
   it("loadConfig merges a stored partial over defaults", async () => {
     const s = memStorage({ cp_config: { engineLane: "local", geminiKey: "k" } });
