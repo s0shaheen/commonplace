@@ -108,9 +108,11 @@ comparisons. Everything else is eliminated and never re-tested.
 ### Phase 2 — Optimize: small factorial over survivors only · full 60-video gold set
 
 Only the factors that actually moved the needle get combined. Realistically that's 2–3 factors →
-**4–8 cells × 60 videos ≈ 240–480 calls (~$6–12)**. This is also where the **open-weight arm**
-enters *if and only if* the split architecture survived Phase 1 — because Qwen3-VL can only be a
-perception stage (Move 1), so testing it before knowing the split works would be wasted spend.
+**4–8 cells × 60 videos ≈ 240–480 calls (~$6–12)**. This is also where the **open-weight arm** enters
+(§1a): `qwen3-omni-30b-a3b-instruct` as a one-shot arm, run together with its
+**compression-matched flash-lite control** so the model effect is separable from the compression
+the payload limits force. Its cost is recorded as a *measured* throughput figure ($7/GPU-hour ÷
+videos-per-hour), not a per-token lookup.
 
 **Interactions, handled honestly.** One-factor-at-a-time's real weakness is that it misses
 interactions. Rather than pretend otherwise, we pre-declare the two we have a *mechanistic* reason
