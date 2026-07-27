@@ -129,6 +129,64 @@ describe("scrollState.step — completion is hasMore:false ONLY", () => {
   });
 });
 
+// ── capture-control-plane: a hasMore:false at FULL VELOCITY is a CLAIM, not a done ──────────────
+// The §2.1 bug: line 163 sent EVERY hasMore:false straight to `done`, blindly trusting the platform.
+// The fix: the branch now consults corroboration. An uncorroborated claim (arrived at full velocity,
+// unreconciled) yields a NEW non-terminal `claimed` status the glue routes to the recovery spine —
+// never `done`. Corroborated/normal paths (decelerated, reconciled, or NO velocity signal at all) still
+// complete exactly as before, so every existing test above is untouched.
+describe("scrollState.step — completion requires corroboration (capture-control-plane)", () => {
+  it("hasMore:false at FULL velocity, unreconciled ⇒ `claimed` (non-terminal), NOT done", () => {
+    let s = initialScrollState();
+    ({ state: s } = step(s, { kind: "page_captured", newCount: 5100, hasMore: true }, deps));
+    const { state, action } = step(
+      s,
+      { kind: "page_captured", newCount: 5191, hasMore: false, atFullVelocity: true },
+      deps,
+    );
+    expect(action).toEqual({ kind: "claimed" });
+    expect(state.status).toBe("claimed");
+    expect(state.status).not.toBe("done");
+  });
+
+  it("hasMore:false at full velocity but RECONCILED ⇒ done (reconciliation corroborates)", () => {
+    const { state, action } = step(
+      initialScrollState(),
+      { kind: "page_captured", newCount: 5989, hasMore: false, atFullVelocity: true, reconciled: true },
+      deps,
+    );
+    expect(action).toEqual({ kind: "done" });
+    expect(state.status).toBe("done");
+  });
+
+  it("hasMore:false with the stream DECELERATED (atFullVelocity:false) ⇒ done", () => {
+    const { state, action } = step(
+      initialScrollState(),
+      { kind: "page_captured", newCount: 60, hasMore: false, atFullVelocity: false },
+      deps,
+    );
+    expect(action).toEqual({ kind: "done" });
+    expect(state.status).toBe("done");
+  });
+
+  it("hasMore:false with NO velocity signal ⇒ done (backward-compatible — today's behavior)", () => {
+    const { state, action } = step(initialScrollState(), { kind: "page_captured", newCount: 60, hasMore: false }, deps);
+    expect(action).toEqual({ kind: "done" });
+    expect(state.status).toBe("done");
+  });
+
+  it("`claimed` is NON-absorbing: a subsequent growth page resumes scrolling (the wall was fake)", () => {
+    let s = initialScrollState();
+    ({ state: s } = step(s, { kind: "page_captured", newCount: 5100, hasMore: true }, deps));
+    ({ state: s } = step(s, { kind: "page_captured", newCount: 5191, hasMore: false, atFullVelocity: true }, deps));
+    expect(s.status).toBe("claimed");
+    // The glue reloads/resumes and a real page with new items arrives → back to scrolling.
+    const { state, action } = step(s, { kind: "page_captured", newCount: 5230, hasMore: true }, deps);
+    expect(action).toEqual({ kind: "scroll" });
+    expect(state.status).toBe("scrolling");
+  });
+});
+
 // ── Carry-forward (1): the resume-stall distinction (Task-5, BINDING; bounded in fix round 1) ───
 // A crash-resume re-scroll walks the ALREADY-captured prefix first: every page ARRIVES with
 // hasMore:true but its items all dedupe away (count never grows). Under the normal reducer each such

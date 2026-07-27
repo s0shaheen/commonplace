@@ -10,7 +10,10 @@
 // optional `backoffMs(stall)` lets Task 2's pacing.ts supply the real schedule. The backoff here is
 // a minimal exponential PLACEHOLDER — the human-cadence constants land in Task 2 (`pacing.ts`).
 
-export type ScrollStatus = "scrolling" | "waiting" | "done" | "giveup";
+// `claimed` (capture-control-plane): the platform reported hasMore:false but the claim is UNcorroborated
+// (it arrived at full velocity and was not reconciled) — a NON-terminal state the glue routes to the
+// recovery spine, NEVER a `done`. Distinct from `done`/`giveup`, which stay absorbing terminals.
+export type ScrollStatus = "scrolling" | "waiting" | "done" | "giveup" | "claimed";
 
 export interface ScrollState {
   /** Highest captured count observed so far (monotonic). */
@@ -47,14 +50,31 @@ export interface ScrollState {
 }
 
 export type ScrollEvent =
-  | { kind: "page_captured"; newCount: number; hasMore: boolean; cursor?: string | null }
+  | {
+      kind: "page_captured";
+      newCount: number;
+      hasMore: boolean;
+      cursor?: string | null;
+      /**
+       * capture-control-plane: the stream was at FULL VELOCITY going into this page (the immediately
+       * prior page had hasMore:true while the count was still climbing) — the fake-done fingerprint.
+       * OPTIONAL: omitted/false ⇒ NOT at velocity ⇒ a hasMore:false completes exactly as before, so
+       * every existing caller and test is unchanged. Only an explicit `true` (with no reconciliation)
+       * turns a hasMore:false into a non-terminal `claimed` routed to the spine.
+       */
+      atFullVelocity?: boolean;
+      /** capture-control-plane: the captured count reconciles with declared/ZIP ground truth. A reconciled
+       *  terminal is trusted even at full velocity. OPTIONAL; defaults to not-reconciled. */
+      reconciled?: boolean;
+    }
   | { kind: "tick" };
 
 export type ScrollAction =
   | { kind: "scroll" }
   | { kind: "wait"; ms: number }
   | { kind: "done" }
-  | { kind: "giveup"; reason: string };
+  | { kind: "giveup"; reason: string }
+  | { kind: "claimed" };
 
 export interface ScrollDeps {
   now(): number;
@@ -159,12 +179,36 @@ export function step(state: ScrollState, event: ScrollEvent, deps: ScrollDeps): 
 
   if (event.kind === "page_captured") {
     const cursor = event.cursor ?? null;
-    // Completion — the ONLY `done`. hasMore:false wins even if this final page also brought items.
+    // Completion — a hasMore:false is EVIDENCE, not truth (capture-control-plane, §2.1 fix). It is a real
+    // `done` ONLY when corroborated: reconciled against ground truth, OR NOT at full velocity (a genuine
+    // end-of-list decelerates first). An UNcorroborated claim (arrived mid-velocity, unreconciled) is the
+    // well-formed fake-done — it yields a NON-terminal `claimed` the glue routes to the recovery spine,
+    // never `done`. Callers that pass no `atFullVelocity` (every pre-existing caller/test) corroborate by
+    // default, so the historical `hasMore:false ⇒ done` behavior is preserved verbatim.
     if (event.hasMore === false) {
       const lastCount = Math.max(state.lastCount, event.newCount);
+      const corroborated = event.reconciled === true || event.atFullVelocity !== true;
+      if (corroborated) {
+        return {
+          state: { ...state, lastCount, hasMore: false, stall: 0, status: "done", reason: null, updatedAt: now },
+          action: { kind: "done" },
+        };
+      }
+      // Uncorroborated: reject the false claim. Keep hasMore:true (we still think more may exist) so the
+      // reducer's tick invariant holds, and emit a non-terminal `claimed`. `claimed` is NOT absorbing —
+      // if the spine's reload-resume gets past the wall, a later growth page resumes scrolling below.
       return {
-        state: { ...state, lastCount, hasMore: false, stall: 0, status: "done", reason: null, updatedAt: now },
-        action: { kind: "done" },
+        state: {
+          ...state,
+          lastCount,
+          hasMore: true,
+          stall: 0,
+          status: "claimed",
+          reason: null,
+          updatedAt: now,
+          lastPageCursor: cursor ?? state.lastPageCursor,
+        },
+        action: { kind: "claimed" },
       };
     }
     // New items → progress. Reset the stall counter and keep scrolling. `grew` flips permanently:

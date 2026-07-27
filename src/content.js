@@ -92,6 +92,15 @@ let activeRunSource = null;
 // arrivalDrivesRun) contribute, so this is a clean per-source measure. Reset at each run start.
 let runCapturedIds = new Set();
 
+// capture-control-plane: the VELOCITY fingerprint of the fake-done. We track, across driving arrivals,
+// whether the IMMEDIATELY PRIOR page reported hasMore:true (`priorDrivingHasMore`) while its unique-item
+// count was still CLIMBING (`priorDrivingGrew`). A hasMore:false that lands while both were true arrived
+// mid-velocity — the well-formed fake-done — so it is a CLAIM to corroborate, not a `done`. `lastDrivingGrew`
+// holds the current arrival's growth so the next arrival can shift it into `priorDrivingGrew`.
+let priorDrivingHasMore = true;
+let priorDrivingGrew = false;
+let lastDrivingGrew = false;
+
 // SUP-02: the freshest intercepted item_list URL (carries the profile owner's secUid). Threaded to
 // own-identity capture; never used to drive the run.
 let lastItemListUrl = null;
@@ -132,6 +141,10 @@ window.addEventListener("message", (e) => {
     // page delivered during the likes run must not bump likes' arrival count or inject favorites' state.
     if (!arrivalDrivesRun(activeRunSource, e.data.source)) return;
     lastSource = e.data.source ?? lastSource;
+    // capture-control-plane: shift the velocity fingerprint BEFORE overwriting this run's signals — the
+    // page we are about to record becomes "current", so the values it is replacing describe the PRIOR page.
+    priorDrivingHasMore = lastHasMore === true;
+    priorDrivingGrew = lastDrivingGrew;
     // main-world forwards RAW hasMore; coerce it through the tested pure module (missing/unknown →
     // more-may-exist, NEVER false). We coerce the tiny forwarded field rather than re-normalizing
     // the whole envelope on the page thread (§2.3: keep heavy work off the renderer).
@@ -141,11 +154,13 @@ window.addEventListener("message", (e) => {
     lastItemsLen = Array.isArray(e.data.items) ? e.data.items.length : 0; // FIX 5: real page item count
     // COMPL-07 (item 2): accumulate DISTINCT captured ids for THIS run (only driving arrivals reach here,
     // so this is the per-source new-id delta). An empty/challenge transport carries items:[] → no-op.
+    const capturedBefore = runCapturedIds.size;
     if (Array.isArray(e.data.items)) {
       for (const it of e.data.items) {
         if (it && typeof it.id === "string" && it.id) runCapturedIds.add(it.id);
       }
     }
+    lastDrivingGrew = runCapturedIds.size > capturedBefore; // did THIS page climb the unique-item count?
     if (lastTransport === "ok") healthyArrivals++;
     pageArrivals++;
   }
@@ -911,6 +926,10 @@ async function autoScroll({ source = null, resuming = false } = {}) {
   let running = true;
   let reloadingAway = false; // set when we location.reload() a flagged session — teardown then skips scroll_done
   let outcome = { status: "giveup", reason: "capture ended before a verified terminal" }; // finalized at each terminal
+  // capture-control-plane: remembered across the run so the FINAL scroll_done can tell background.ts the
+  // completion claim arrived at full velocity (the fake-done fingerprint) → the completeness gate marks it
+  // suspicious, never done, even when the captured/declared ratio is inside tolerance.
+  let runTerminalAtVelocity = false;
   let rec = initialRecoveryState(Date.now());
   let pageClearState = initialPageClearState(); // FIX 3 — tracks the populated→empty transition of a mid-run clear
   let httpErrorStreak = 0; // consecutive http_error arrivals — a persistent 429/5xx ends the run honestly
@@ -1318,6 +1337,42 @@ async function autoScroll({ source = null, resuming = false } = {}) {
         lastTransport ?? "ok",
       );
     }
+    // capture-control-plane: a hasMore:false is EVIDENCE, not truth. Corroborate before it can become
+    // `done`. UNcorroborated = the completion arrived at FULL VELOCITY (the prior driving page had
+    // hasMore:true while its unique-item count was still climbing) AND the captured count is not reconciled
+    // against the declared ground truth. An uncorroborated claim routes to the recovery spine — reload-
+    // resume ONCE (reusing the flagged-session reload primitives, bounded to one per source per run), then
+    // an honest `suspicious` incomplete if it re-walls — never `done`. (The pure gate lives in
+    // scrollState.ts/captureState.ts; this glue only gathers the velocity + reconciliation facts.)
+    if (terminal) {
+      const atFullVelocity = priorDrivingHasMore === true && priorDrivingGrew === true;
+      const reconciled = declaredCount != null && declaredCount > 0 && runCapturedIds.size >= declaredCount;
+      if (atFullVelocity && !reconciled) {
+        terminal = false; // reject the false claim — scrollWatch must NOT mark this `done`
+        runTerminalAtVelocity = true; // surfaced in the final scroll_done → suspicious, never done
+        const shortfall = `${runCapturedIds.size}${declaredCount ? ` of ~${declaredCount}` : ""}`;
+        if (source && !reloadedThisRun) {
+          // reload_resume: the supervisor's `current` checkpoint is already persisted; reload once and it
+          // re-drives this source with resuming:true, resuming from the last cursor past the wall.
+          reloadedThisRun = true;
+          reloadingAway = true;
+          running = false;
+          if (__DEV_DIAG__) diag({ kind: "event", t: Date.now(), type: "reload", detail: { source: source ?? "manual", reason: "uncorroborated completion at full velocity" } });
+          sendScrollStop(); // detach BEFORE navigating away — never leave a dangling attach
+          await chrome.storage.local.set({ captureReloadedSource: source });
+          console.warn(`[commonplace] platform reported done at FULL VELOCITY (uncorroborated, ${shortfall}) — reloading ONCE to resume from the cursor`);
+          location.reload();
+          return;
+        }
+        // Reload already spent (re-walled at the wall) or a manual run → conclude HONESTLY as suspicious,
+        // never done. background.ts's completeness gate also enforces this from terminalAtVelocity.
+        outcome = { status: "suspicious", reason: "platform reported done but the count could not be corroborated (full velocity, unreconciled)" };
+        running = false;
+        try { chrome.runtime.sendMessage({ kind: "capture_notice", level: "incomplete", reason: outcome.reason }); } catch (_) {}
+        console.warn(`[commonplace] capture INCOMPLETE (uncorroborated done) — ${shortfall} captured`);
+        break;
+      }
+    }
     const { count = 0 } = await chrome.storage.local.get("count");
     prevCount = Math.max(prevCount, count);
     const watch = stepWatch(watchState, {
@@ -1438,6 +1493,9 @@ async function autoScroll({ source = null, resuming = false } = {}) {
     cursor: lastCursor,
     source, // Task 5: which source this run drove — lets background.ts's supervisor advance the sequence
     declared: declaredCount, // COMPL-07: the source's declared saved count (null if unread) → completeness
+    // capture-control-plane: the completion-corroboration facts for background.ts's final completeness gate.
+    terminalAtVelocity: runTerminalAtVelocity, // a completion claim arrived at full velocity (fake-done tell)
+    reconciled: declaredCount != null && declaredCount > 0 && runCapturedIds.size >= declaredCount,
   });
   activeRunSource = null; // disarm the carry-forward-2 filter; the run is over
   console.log(

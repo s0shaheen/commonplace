@@ -34,6 +34,7 @@ import {
   type CaptureLease,
 } from "./lib/capture/lease.js";
 import type { CapturedItem } from "./lib/types.js";
+import { reconcile } from "./lib/capture/importReconcile.js";
 
 // DEV-ONLY hot-reload. `__DEV_RELOAD__` is an esbuild `define`: "true" under `npm run dev`, "false"
 // for `npm run build`. In prod the whole block (and the dynamic import) is dead-code-eliminated, so
@@ -305,6 +306,8 @@ interface ScrollDoneMsg {
   cursor?: string | null;
   source?: string | null; // Task 5: the source this run drove (null = manual Alt+Shift+A) — advances the supervisor
   declared?: number | null; // COMPL-07: the source's declared saved count read from the profile UI (null = unread)
+  terminalAtVelocity?: boolean; // capture-control-plane: the completion claim arrived at full velocity (fake-done fingerprint)
+  reconciled?: boolean; // capture-control-plane: the captured count reconciles with declared/ZIP ground truth
 }
 // DYD import lane (SECOND capture lane, additive): the options page parsed a TikTok "Download your
 // data" export off the SW thread (via parseTikTokDyd) and sends the already-normalized, source-tagged
@@ -312,6 +315,20 @@ interface ScrollDoneMsg {
 interface ImportDydMsg { kind: "import_dyd"; items: CapturedItem[] }
 type ImportDydResult =
   | { ok: true; added: number; merged: number; total: number }
+  | { ok: false; error: string };
+// Generalized import lane (XPLAT-01): carries the source `platform` alongside the already-normalized,
+// source-tagged CapturedItems the options page parsed off the SW thread (TikTok DYD or Instagram saved).
+// `declared` is the export's declared index size (raw entries seen before dedup/skip) — the fake-done
+// ground truth the reconciliation report compares against. Lands identically to import_dyd (upsert +
+// count refresh) but returns a full reconciliation so options can show what the export recovered.
+interface ImportItemsMsg {
+  kind: "import_items";
+  platform: "tiktok" | "instagram";
+  items: CapturedItem[];
+  declared?: number;
+}
+type ImportItemsResult =
+  | { ok: true; added: number; merged: number; alreadyPresent: number; parsed: number; declaredInZip: number; total: number }
   | { ok: false; error: string };
 interface SyncStartMsg { kind: "sync_start" } // popup Sync button → begin/continue the source sequence
 interface SyncStatusMsg { kind: "sync_status" } // popup poll → responds with live supervisor + capture status
@@ -348,6 +365,7 @@ interface ExportOpenSchemaMsg { kind: "export_open_schema" }
 type Msg =
   | ItemListMsg
   | ImportDydMsg
+  | ImportItemsMsg
   | ScrollDoneMsg
   | ExportEnrichedMsg
   | DownloadTestMsg
@@ -642,6 +660,10 @@ chrome.runtime.onMessage.addListener((msg: Msg, sender, sendResponse) => {
     // show a result line. Mirrors the sync_status response pattern.
     void handleImportDyd(msg).then(sendResponse);
     return true;
+  } else if (msg.kind === "import_items") {
+    // Generalized (cross-platform) import — respond async with a full reconciliation report.
+    void handleImportItems(msg).then(sendResponse);
+    return true;
   } else if (msg.kind === "scroll_done") {
     void handleScrollDone(msg);
   } else if (msg.kind === "sync_start") {
@@ -895,6 +917,42 @@ async function handleImportDyd(msg: ImportDydMsg): Promise<ImportDydResult> {
     return { ok: true, added, merged, total: count };
   } catch (e) {
     // A swallowed write must halt, not present as done (invariant 4). Latch + surface the reason.
+    haltCapture(e);
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+// Generalized import intake (XPLAT-01): the options page parsed a TikTok DYD or an Instagram saved
+// export off the SW thread (via the pure importRouter) and sends the already-normalized, platform- and
+// source-tagged CapturedItems here. This reconciles the parsed items against the CURRENT library BEFORE
+// upserting — so the report reflects what the export recovered — then upserts (id-keyed, sources +
+// collections UNION-merged) and refreshes the count mirror. Honest by construction: the added/merged
+// numbers come from the pure `reconcile` reducer over the pre-import snapshot, never claiming more
+// imported than parsed. `declaredInZip` is the export's declared index size (the fake-done ground truth).
+async function handleImportItems(msg: ImportItemsMsg): Promise<ImportItemsResult> {
+  if (captureHalt) return { ok: false, error: `storage ${captureHalt.reason}` };
+  const raw = msg.items ?? [];
+  // SHAPE GATE (mirrors handleItemList): re-assert the non-empty string id an id-less item would throw on.
+  const incoming = raw.filter((i) => i && typeof i.id === "string" && i.id.length > 0);
+  if (incoming.length < raw.length) {
+    console.warn(`[commonplace] ${msg.platform} import: dropped ${raw.length - incoming.length} malformed item(s)`);
+  }
+  try {
+    const s = await store();
+    // Reconcile against the library snapshot BEFORE writing (so alreadyPresent = the prior size).
+    const existingIds = (await s.allRecords()).map((r) => r.id);
+    const rec = reconcile(incoming, existingIds);
+    await s.upsertItems(incoming, new Date().toISOString());
+    const total = await s.count();
+    await chrome.storage.local.set({ count: total }); // keep the content.js scroll-idle contract in sync
+    // The declared index size is the export's own count when the parser supplied it (raw entries seen);
+    // otherwise fall back to the parsed list length. Never let it read below `parsed` (honesty clamp).
+    const declaredInZip = Math.max(msg.declared ?? rec.declaredInZip, rec.parsed);
+    console.log(
+      `[commonplace] ${msg.platform} import: +${rec.added} (merged ${rec.merged}), parsed ${rec.parsed}, declared ${declaredInZip}, total ${total}`,
+    );
+    return { ok: true, added: rec.added, merged: rec.merged, alreadyPresent: rec.alreadyPresent, parsed: rec.parsed, declaredInZip, total };
+  } catch (e) {
     haltCapture(e);
     return { ok: false, error: (e as Error).message };
   }
@@ -1509,7 +1567,16 @@ async function handleScrollDone(msg: ScrollDoneMsg): Promise<void> {
     const declared =
       typeof msg.declared === "number" && Number.isFinite(msg.declared) ? msg.declared : null;
     const captured = msg.captured ?? 0;
-    const status = assessCompleteness({ terminalDone, captured, declared });
+    // capture-control-plane: the final completeness gate. A completion claim that arrived at full velocity
+    // and is not reconciled is `suspicious`, never `done` — even when the captured/declared ratio is inside
+    // the 85% tolerance (the live fake-done was 86.7%). Omitting these keeps the pre-existing behavior.
+    const status = assessCompleteness({
+      terminalDone,
+      captured,
+      declared,
+      terminalAtVelocity: msg.terminalAtVelocity === true,
+      reconciled: msg.reconciled === true,
+    });
     if (status === "suspicious") {
       notifyCapture(
         "incomplete",

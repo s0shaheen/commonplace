@@ -52,6 +52,41 @@ describe("assessCompleteness — the ratio boundary", () => {
   });
 });
 
+describe("assessCompleteness — a terminal at full velocity is not blindly trusted (capture-control-plane)", () => {
+  it("a terminal that arrived at FULL velocity and is UNreconciled ⇒ suspicious, not done", () => {
+    // The live fake-done: hasMore:false at 5,191/5,989 (86.7% — ABOVE the 85% ratio) at full velocity.
+    // The ratio guard would pass it; the velocity signal makes it suspicious instead of a false done.
+    expect(
+      assessCompleteness({ terminalDone: true, captured: 5191, declared: 5989, terminalAtVelocity: true }),
+    ).toBe("suspicious");
+  });
+
+  it("a terminal after the stream DECELERATED (terminalAtVelocity:false) ⇒ done", () => {
+    expect(
+      assessCompleteness({ terminalDone: true, captured: 5191, declared: 5989, terminalAtVelocity: false }),
+    ).toBe("done");
+  });
+
+  it("a terminal at full velocity but RECONCILED against declared/ZIP ⇒ done (reconciliation corroborates)", () => {
+    expect(
+      assessCompleteness({ terminalDone: true, captured: 5989, declared: 5989, terminalAtVelocity: true, reconciled: true }),
+    ).toBe("done");
+  });
+
+  it("a caller that omits terminalAtVelocity gets TODAY's behavior (terminal ⇒ done — backward compatible)", () => {
+    expect(assessCompleteness({ terminalDone: true, captured: 10, declared: 1000 })).toBe("done");
+  });
+
+  it("an uncorroborated claim that RE-WALLED (terminalDone:false, terminalAtVelocity:true) ⇒ suspicious even inside the ratio", () => {
+    // The live shape after a failed reload-resume: content reports a non-done outcome but flags the
+    // completion arrived at velocity. 86.7% is inside the 85% ratio (would be a bland giveup) — the
+    // velocity flag must still surface it as suspicious, never let it read as a benign giveup.
+    expect(
+      assessCompleteness({ terminalDone: false, captured: 5191, declared: 5989, terminalAtVelocity: true }),
+    ).toBe("suspicious");
+  });
+});
+
 describe("purity", () => {
   it("the module source has no Date.now / Math.random / DOM references (grep-verified)", () => {
     const src = readFileSync(fileURLToPath(new URL("./completeness.ts", import.meta.url)), "utf8");
