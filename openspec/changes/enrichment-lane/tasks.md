@@ -22,3 +22,6 @@
 
 ## 5. Live provider verification (founder/pilot-time)
 - [ ] 5.1 Verify oEmbed/tikwm/Apify against real saved URLs on the founder's corpus (live calls not runnable in the build env; adapters are fixture-tested here)
+
+## 6. Follow-up (review finding, 2026-07-27 — verify + fix when paid lanes are productionized)
+- [ ] 6.1 The coarse `needsEnrichment` entry gate (caption OR poster missing) is tier-agnostic, so on the paid/depth tiers a mid-ladder crash AFTER oEmbed fills caption+poster makes the queue-revive retry SKIP re-enrichment — the remaining lanes (tikwm/stats/transcript) never run, defeating enrichItem's "resume re-derives the next missing lane" durability promise. Free/oEmbed tier is unaffected. Fix: make the entry/re-entry gate tier-aware (needs enrichment if the tier's target fields are missing), or have the pipeline re-enter enrichItem's loop and let tierPolicy decide `skip`. Verify against the actual offscreen re-entry path.

@@ -54,6 +54,16 @@ Publishing runs alongside, not after: the framing essay ("the feed is the first 
 
 ---
 
+## 2b. Validated on the real corpus (2026-07-27)
+
+Search was built against fixtures; it has since been run against the founder's real 4,661-item
+favorites corpus: **index build 80ms, queries 0.7–3.3ms**, sensible top hits. That run used
+caption + hashtags + author only (no analysis yet), which demonstrates the load-bearing product
+claim on real data: **an imported library is searchable immediately — before any engine call.**
+It also bounds what caption-only search can do (3 hits for "sourdough", 9 for "pasta" across
+4,661 saves): with ~51% of the corpus being dark matter, transcripts + entities from the extractor
+are what make the rest findable. That is the extractor's job, and why `extractor-v2-gemini3` matters.
+
 ## 3. How much I run autonomously
 
 Most of it. Seven of the ten changes (1, 2, 3, 4, 6, 7, 8) I can propose, build, verify, and archive without you, because every decision they need is already locked in `openspec/config.yaml` (the product, the stack, the capture posture, the tikwm/Apify call, the enrichment tiers). The loop per change is: `/opsx:propose` drafts the proposal, design, spec deltas, and task list; `/opsx:apply` implements until `npm test` and `npm run typecheck` are green and a real run or fixture exercises it; `/opsx:verify` checks it against its own spec; `/opsx:archive` folds the result into the specs. You say "run the roadmap" and I go change by change, stopping only at the three gates.
