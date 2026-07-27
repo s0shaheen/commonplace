@@ -26,7 +26,7 @@ export interface CpConfig {
   engineLane: "managed" | "local"; // default "managed"
   localModel: string; // default "qwen3-vl:8b"
   localEndpoint: string; // default "http://localhost:11434"
-  managedModel: string; // default "gemini-2.5-flash-lite" (recommended; user-selectable in options)
+  managedModel: string; // default "gemini-3.6-flash" (recommended; user-selectable in options)
   ingestion: "keyframes_vtt" | "native"; // default "keyframes_vtt" — PROVISIONAL (Phase-4 ablation decides)
   escalateNative: boolean; // default false — cascade retracted (SPEC §13)
   placesEnabled: boolean; // default false — key not provisioned
@@ -93,7 +93,7 @@ export const DEFAULT_CONFIG: CpConfig = {
   engineLane: "managed",
   localModel: "qwen3-vl:8b",
   localEndpoint: "http://localhost:11434",
-  managedModel: "gemini-2.5-flash-lite",
+  managedModel: "gemini-3.6-flash",
   ingestion: "keyframes_vtt",
   escalateNative: false,
   placesEnabled: false,

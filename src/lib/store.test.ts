@@ -34,7 +34,7 @@ function mkAnalysis(over: Partial<Analysis> = {}): Analysis {
     output: { mentions: [], concepts: [], facets: [], claims: [], structured: [] },
     lane: "managed",
     ingestion: "keyframes_vtt",
-    model: "gemini-2.5-flash-lite",
+    model: "gemini-3.6-flash",
     promptVersion: "extract@v1",
     analyzedAt: "2026-07-08T00:00:00Z",
     ...over,

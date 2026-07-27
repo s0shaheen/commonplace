@@ -88,13 +88,13 @@ const headerOf = (init: RequestInit, k: string) => (init.headers as Record<strin
 describe("createGeminiLane", () => {
   test("keyframes_vtt: 6 inlineData images then 1 text part (with transcript); key in header; temp 0", async () => {
     const { calls, fetchJson } = geminiFake(JSON.stringify(validOutput));
-    const lane = createGeminiLane({ fetchJson, key: "k", model: "gemini-2.5-flash-lite", basePrompt: "BASE" });
+    const lane = createGeminiLane({ fetchJson, key: "k", model: "gemini-3.6-flash", basePrompt: "BASE" });
     const res = await lane.analyze(makeInput(), "keyframes_vtt");
 
     expect(res.ok).toBe(true);
     expect(calls).toHaveLength(1);
     const { url, init } = calls[0]!;
-    expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent");
+    expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent");
     expect(headerOf(init, "x-goog-api-key")).toBe("k");
 
     const body = bodyOf(init);
@@ -108,7 +108,7 @@ describe("createGeminiLane", () => {
 
   test("native: exactly 1 video inlineData + 1 text part, and the transcript is NOT inline", async () => {
     const { calls, fetchJson } = geminiFake(JSON.stringify(validOutput));
-    const lane = createGeminiLane({ fetchJson, key: "k", model: "gemini-2.5-flash-lite", basePrompt: "BASE" });
+    const lane = createGeminiLane({ fetchJson, key: "k", model: "gemini-3.6-flash", basePrompt: "BASE" });
     const res = await lane.analyze(makeInput({ item: makeItem({ hasSubtitles: false }) }), "native");
 
     expect(res.ok).toBe(true);
@@ -122,7 +122,7 @@ describe("createGeminiLane", () => {
 
   test("the hard gate holds through the lane: a 'restaurant' mention → schema_invalid", async () => {
     const { fetchJson } = geminiFake(JSON.stringify(restaurantOutput));
-    const lane = createGeminiLane({ fetchJson, key: "k", model: "gemini-2.5-flash-lite", basePrompt: "BASE" });
+    const lane = createGeminiLane({ fetchJson, key: "k", model: "gemini-3.6-flash", basePrompt: "BASE" });
     expect(await lane.analyze(makeInput(), "keyframes_vtt")).toEqual({ ok: false, error: "schema_invalid" });
   });
 });
@@ -177,7 +177,7 @@ describe("routeIngestion", () => {
 describe("analyzeItem", () => {
   test("selects the configured lane + routed ingestion and returns both", async () => {
     const { fetchJson } = geminiFake(JSON.stringify(validOutput));
-    const managed = createGeminiLane({ fetchJson, key: "k", model: "gemini-2.5-flash-lite", basePrompt: "BASE" });
+    const managed = createGeminiLane({ fetchJson, key: "k", model: "gemini-3.6-flash", basePrompt: "BASE" });
     const { fetchJson: ollamaJson } = ollamaFake(JSON.stringify(validOutput));
     const local = createOllamaLane({ fetchJson: ollamaJson, endpoint: "http://localhost:11434", model: "qwen3-vl:8b", basePrompt: "BASE" });
 

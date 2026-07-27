@@ -44,7 +44,7 @@ function readForm(): Partial<CpConfig> {
   const captureSpeed = (document.querySelector<HTMLInputElement>('input[name="captureSpeed"]:checked')?.value ??
     "normal") as CpConfig["captureSpeed"];
   // The model <select> only offers vetted values, but fall back to the pinned default defensively.
-  const managedModel = $<HTMLSelectElement>("managedModel").value || "gemini-2.5-flash-lite";
+  const managedModel = $<HTMLSelectElement>("managedModel").value || "gemini-3.6-flash";
   const geminiKey = $<HTMLInputElement>("geminiKey").value.trim();
   const placesKey = $<HTMLInputElement>("placesKey").value.trim();
   return {
