@@ -45,6 +45,17 @@ eval/.venv/
 __pycache__/
 .pytest_cache/
 
+# Gold-set working artifacts. Every one of these is derived from
+# attic-favorites*.json (gitignored PII) and carries real captions, creator
+# handles and URLs — the sample, the pre-annotation payload, and the founder's
+# adjudicated gold alike. The gold set itself is the artifact we intend to
+# publish, but only after a deliberate review pass, never by accident.
+# eval/gold/fixtures/ is exempt: those are synthetic by construction.
+eval/gold/out/
+eval/gold/*.jsonl
+eval/gold/*.json
+!eval/gold/fixtures/**
+
 # promptfoo replay slice — esbuild prebundle of the TS grounding engine (build artifact)
 eval-promptfoo/.bundle/
 .scratch/

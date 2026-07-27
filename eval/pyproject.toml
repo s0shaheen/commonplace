@@ -17,7 +17,20 @@ dependencies = [
 commonplace-eval = "commonplace_eval.cli:main"
 [dependency-groups]
 dev = ["pytest>=8.3"]
+# Only operators who actually RUN pre-annotation need the Anthropic SDK, and
+# they are a different audience from anyone reproducing the published scores.
+# Keeping it out of the default groups means `npm run eval:test` installs
+# nothing extra and the scoring harness stays dependency-light; gold/preannotate.py
+# imports it lazily and explains this if it is missing.
+#   cd eval && uv sync --group preannotate
+preannotate = ["anthropic"]
 [tool.pytest.ini_options]
+# `gold/` (the gold-set apparatus: sampler, pre-annotator, review tool) lives
+# beside the harness rather than inside the installed `commonplace_eval`
+# package — it is operator tooling that PRODUCES gold, not part of the scoring
+# library that CONSUMES it. Adding the eval root to the path makes `gold.*`
+# importable from tests and from `python -m gold.sample` without installing it.
+pythonpath = ["."]
 # Scoped silence for rdflib's json-ld parser instantiating a (deprecated)
 # ConjunctiveGraph internally — nothing we call or can fix. Matched by exact
 # message + category so any OTHER DeprecationWarning still surfaces.

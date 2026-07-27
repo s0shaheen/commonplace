@@ -64,6 +64,59 @@ uv run commonplace-eval validate-matcher --pairs tests/fixtures/matcher_pairs.js
 `--bootstrap` (B, default 2000), `--c` (Φ_c penalty, default 10), `--k` (concept
 top-k, default 5).
 
+## Producing gold — `gold/`
+
+The harness above *consumes* gold. `gold/` is the other half: the apparatus that
+*produces* it, per `docs/specs/evaluation-methodology.md` §3 and §5. Three steps,
+one of which is human.
+
+```bash
+cd eval
+
+# 1. Sample the corpus (never the union of system outputs — that inflates recall).
+#    Prints the realized strata distribution; writes a manifest recording the seed.
+uv run python -m gold.sample \
+  --corpus ../attic-favorites.json --out gold/out/sample.jsonl --n 60 --seed 20260727
+
+# 2. Pre-annotate with Claude — a DIFFERENT model family than the Gemini pipeline
+#    under evaluation (§5.1). Needs ANTHROPIC_API_KEY in .env.local.
+uv sync --group preannotate
+uv run python -m gold.preannotate \
+  --sample gold/out/sample.jsonl --out gold/out/suggestions.json
+
+#    No key yet? --dry-run emits the same payload with empty suggestions, so the
+#    review tool can be exercised end to end. It stamps preannotator_family=none.
+uv run python -m gold.preannotate \
+  --sample gold/out/sample.jsonl --out gold/out/suggestions.json --dry-run
+
+# 3. Adjudicate. Open gold/review.html directly in a browser (no server, no build)
+#    and load the suggestions file. It writes gold.jsonl + gold.manifest.jsonl.
+open gold/review.html            # or: file:///…/eval/gold/review.html
+```
+
+Then score as usual: `uv run commonplace-eval score --gold gold.jsonl --pred …`.
+
+To see the tool before any real data exists, load
+`gold/fixtures/suggestions.sample.json` — a synthetic 4-item demo.
+
+**Three properties worth knowing before you trust the output:**
+
+- **An ID cannot be accepted on name similarity.** The reviewer will not let you
+  mark an identifier verified until you have opened its authoritative record
+  (`o`, then `v`). This is enforced in code, not by discipline, because a
+  confidently wrong durable ID is what Φ_c punishes hardest.
+- **NIL is a first-class answer, not an absence.** `NIL_NO_ID` (a real entity the
+  KB genuinely lacks) requires the failed searches that justify it; `NON_ENTITY`
+  (proposed but not a rigid individual) is recorded, never deleted.
+- **15–20% of rows are blind.** Suggestions are withheld from them and never sent
+  to the pre-annotator at all, so the assisted-vs-blind recall gap measures
+  pre-annotation bias instead of assuming it away.
+
+`gold.jsonl` stays in the frozen `gold.schema.json` shape. The stratum, design
+weight, blind flag and per-item timing ride in the `gold.manifest.jsonl` sidecar,
+joined on `item_id` — the gold schema is closed, and a second gold format would
+be worse than a sidecar.
+
 ## Formulae & citations
 
 Every metric traces to named prior art; the harness reuses reference

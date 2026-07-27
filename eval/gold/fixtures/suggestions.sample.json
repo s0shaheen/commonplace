@@ -1,0 +1,182 @@
+{
+  "version": "1.0",
+  "n": 4,
+  "blind_n": 1,
+  "seed": 20260727,
+  "dry_run": false,
+  "preannotator_family": "anthropic",
+  "preannotator_model": "claude-opus-5",
+  "family_substituted": false,
+  "_note": "SYNTHETIC demo fixture — every field is invented. It exists so the review tool can be opened and exercised before a real pre-annotated file exists. It contains no user data: the real corpus is gitignored PII and is never committed.",
+  "items": [
+    {
+      "item_id": "demo_0001",
+      "blind": false,
+      "stratum": { "has_vtt": true, "is_slideshow": false, "duration_tercile": 2 },
+      "stratum_key": "vtt=1|slide=0|dur=2",
+      "content_bucket": "food_place",
+      "weight": 74.92,
+      "hard_case_seeds": ["chain_restaurant"],
+      "preannotator_family": "anthropic",
+      "item": {
+        "id": "demo_0001",
+        "desc": "the best slice in the city is not where you think #foodtok #nyc",
+        "hashtags": ["foodtok", "nyc"],
+        "author": "demo_creator",
+        "authorName": "Demo Creator",
+        "durationSec": 42,
+        "hasSubtitles": true,
+        "isSlideshow": false,
+        "music": { "name": "a studio track", "author": "Demo Artist" },
+        "url": "https://example.invalid/video/demo_0001"
+      },
+      "content": {
+        "transcript": "Everyone says Joe's on Bleecker but the Starbucks on 5th does a better espresso to go with it. Honestly the queue is worth it."
+      },
+      "suggestions": {
+        "mentions": [
+          {
+            "surface": "Joe's Pizza",
+            "type": "place",
+            "aliases": ["Joe's on Bleecker"],
+            "candidates": [
+              {
+                "authority": "google_places",
+                "id": "ChIJrw7QBK9YwokRVs3v7O8oULU",
+                "label": "Joe's Pizza — 7 Carmine St"
+              }
+            ],
+            "confidence": 0.72,
+            "evidence": "channel=VERBAL_AUDIO; quote=\"Joe's on Bleecker\""
+          },
+          {
+            "surface": "the Starbucks on 5th",
+            "type": "place",
+            "aliases": [],
+            "candidates": [],
+            "confidence": 0.41,
+            "evidence": "channel=VERBAL_AUDIO; quote=\"the Starbucks on 5th\""
+          },
+          {
+            "surface": "the best slice",
+            "type": "product",
+            "aliases": [],
+            "candidates": [],
+            "confidence": 0.2,
+            "evidence": "channel=VERBAL_TEXT; quote=\"the best slice in the city\""
+          }
+        ],
+        "concepts": [
+          { "concept_id": "Q177", "authority": "wikidata", "label": "pizza" }
+        ],
+        "facets": { "topic": "food", "intent": "recommendation" },
+        "claims": [{ "statement": "the queue at Joe's is worth it" }]
+      }
+    },
+    {
+      "item_id": "demo_0002",
+      "blind": false,
+      "stratum": { "has_vtt": false, "is_slideshow": false, "duration_tercile": 1 },
+      "stratum_key": "vtt=0|slide=0|dur=1",
+      "content_bucket": "music",
+      "weight": 75.45,
+      "hard_case_seeds": ["cover_song"],
+      "preannotator_family": "anthropic",
+      "item": {
+        "id": "demo_0002",
+        "desc": "",
+        "hashtags": [],
+        "author": "demo_two",
+        "authorName": "Demo Two",
+        "durationSec": 14,
+        "hasSubtitles": false,
+        "isSlideshow": false,
+        "music": { "name": "original sound - demo_two", "author": "demo_two" },
+        "url": "https://example.invalid/video/demo_0002"
+      },
+      "content": {},
+      "suggestions": {
+        "mentions": [
+          {
+            "surface": "original sound - demo_two",
+            "type": "music_recording",
+            "aliases": [],
+            "candidates": [],
+            "confidence": 0.15,
+            "evidence": "channel=STRUCTURED_METADATA; attached sound name"
+          }
+        ],
+        "concepts": [],
+        "facets": { "topic": "entertainment" },
+        "claims": []
+      }
+    },
+    {
+      "item_id": "demo_0003",
+      "blind": false,
+      "stratum": { "has_vtt": true, "is_slideshow": false, "duration_tercile": 3 },
+      "stratum_key": "vtt=1|slide=0|dur=3",
+      "content_bucket": "film_tv",
+      "weight": 78.33,
+      "hard_case_seeds": ["ambiguous_title"],
+      "preannotator_family": "anthropic",
+      "item": {
+        "id": "demo_0003",
+        "desc": "nobody talks about how good this scene is #theoffice",
+        "hashtags": ["theoffice"],
+        "author": "demo_three",
+        "authorName": "Demo Three",
+        "durationSec": 96,
+        "hasSubtitles": true,
+        "isSlideshow": false,
+        "music": { "name": "a licensed track", "author": "Someone" },
+        "url": "https://example.invalid/video/demo_0003"
+      },
+      "content": {
+        "transcript": "This cold open still holds up years later. Michael has no idea what is coming."
+      },
+      "suggestions": {
+        "mentions": [
+          {
+            "surface": "The Office",
+            "type": "screen_work",
+            "aliases": [],
+            "candidates": [
+              { "authority": "wikidata", "id": "Q15087", "label": "The Office (American TV series)" },
+              { "authority": "wikidata", "id": "Q378684", "label": "The Office (British TV series)" }
+            ],
+            "confidence": 0.55,
+            "evidence": "channel=STRUCTURED_METADATA; hashtag #theoffice; cast name in transcript"
+          }
+        ],
+        "concepts": [],
+        "facets": { "topic": "entertainment", "genre": "edit" },
+        "claims": [{ "statement": "the cold open still holds up" }]
+      }
+    },
+    {
+      "item_id": "demo_0004",
+      "blind": true,
+      "stratum": { "has_vtt": false, "is_slideshow": true, "duration_tercile": 1 },
+      "stratum_key": "vtt=0|slide=1|dur=1",
+      "content_bucket": "dark_matter",
+      "weight": 80.6,
+      "hard_case_seeds": [],
+      "preannotator_family": "anthropic",
+      "item": {
+        "id": "demo_0004",
+        "desc": "",
+        "hashtags": [],
+        "author": "demo_four",
+        "authorName": "Demo Four",
+        "durationSec": null,
+        "hasSubtitles": false,
+        "isSlideshow": true,
+        "music": { "name": "original sound - demo_four", "author": "demo_four" },
+        "url": "https://example.invalid/video/demo_0004"
+      },
+      "content": {},
+      "suggestions": null
+    }
+  ]
+}
