@@ -12,9 +12,9 @@ This is the agent surface and the payoff the founder cares about: the point of a
   - `list_by_type(type)` — entities of a NamedEntity type (place, music_recording, product, …).
   - `resolve_item(id)` — one item's full record + analysis.
 - **Shipped MCP prompts** (curated deep queries so the demo works out of the box): "map every restaurant in my saves," "pull every recipe into one list," "what did I save about <topic>," "find the video where someone said <X>."
-- **Packaged as an MCPB desktop extension** for Claude Desktop, directory-submission-ready: mandatory tool annotations (`readOnlyHint`), a privacy note (reads only the local export file — no network), setup docs.
+- **Published to npm** with a `bin` entrypoint so ANY MCP client (Claude Desktop/Code, Cursor, VS Code, Cline, Windsurf, Zed…) can add it with a standard stdio config — the universal path. **Plus an `.mcpb`** wrapper for Claude Desktop one-click + the gallery: `readOnlyHint` on every tool, a local-only privacy note, setup docs.
 
-Non-goals: no server that sees plaintext internals (the export file is the boundary); no write tools; no hosted/remote server in v1 (local stdio only); no ChatGPT app (weak discovery today — deferred).
+Non-goals: no server that sees plaintext internals (the export file is the boundary); no write tools; no hosted/remote server (that would put the user's library on our servers — contradicts local-first; a user wanting remote access self-hosts the same package). Web-only clients (claude.ai browser, ChatGPT web) therefore aren't supported in v1 — an honest, deliberate limit.
 
 ## Capabilities
 
