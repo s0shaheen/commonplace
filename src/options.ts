@@ -2,7 +2,8 @@
 // (which satisfies StorageLike). Keys entered here live only in local storage (SPEC §25).
 
 import { loadConfig, saveConfig, type CpConfig, type StorageLike } from "./lib/config.js";
-import { parseTikTokDydResult } from "./lib/capture/dydImport.js";
+import { unzipSync } from "fflate";
+import { routeZipImport, routeBareJson, type RoutedImport } from "./lib/capture/importRouter.js";
 
 // chrome.storage.local satisfies StorageLike (get(key) -> object, set(object) -> void).
 const storage: StorageLike = {
@@ -66,15 +67,21 @@ function readForm(): Partial<CpConfig> {
   };
 }
 
-// ── DYD import lane ───────────────────────────────────────────────────────────────────────────────
-// Read the user's extracted user_data.json, parse it OFF the SW thread via the pure parseTikTokDyd,
-// and hand the normalized CapturedItems to the SW to upsert. The pure parser is unit-tested; this is
-// thin glue (file read → parse → send → show result), the same split the live lane uses.
+// ── Import lane (cross-platform, ZIP or extracted JSON) ─────────────────────────────────────────────
+// Accept the platform's RAW data-export .zip (TikTok or Instagram) — or an already-extracted .json —
+// decompress + route + parse entirely OFF the SW thread via the pure importRouter, then hand the
+// normalized, platform-tagged CapturedItems to the SW to upsert + reconcile. fflate.unzipSync reads the
+// zip CONTAINER (central directory + many entries) — DecompressionStream cannot (it's a single-stream
+// codec). The pure router/parsers/reducer are all unit-tested; this is thin glue (read → route → send →
+// show), the same split the live lane uses. Invariant: a local file read — no network, nothing uploaded.
 
-interface DydImportResponse {
+interface ImportItemsResponse {
   ok: boolean;
   added?: number;
   merged?: number;
+  alreadyPresent?: number;
+  parsed?: number;
+  declaredInZip?: number;
   total?: number;
   error?: string;
 }
@@ -85,34 +92,66 @@ function setDydResult(text: string, kind: "ok" | "err"): void {
   el.className = kind;
 }
 
-async function handleDydFile(file: File): Promise<void> {
+/** A dropped file is a zip if its name ends `.zip` or its first bytes are the PK\x03\x04 signature. */
+function looksLikeZip(name: string, bytes: Uint8Array): boolean {
+  if (/\.zip$/i.test(name)) return true;
+  return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
+}
+
+/** Decompress + route a raw export .zip. Decodes only the entries the router chooses to read. */
+function routeZipFile(bytes: Uint8Array): RoutedImport | null {
+  const files = unzipSync(bytes); // { entryPath: Uint8Array } — off the SW thread
+  const decoder = new TextDecoder();
+  const readJson = (path: string): unknown => JSON.parse(decoder.decode(files[path]!));
+  return routeZipImport(Object.keys(files), readJson);
+}
+
+async function handleImportFile(file: File): Promise<void> {
   setDydResult("Reading…", "ok");
-  let json: unknown;
+  let route: RoutedImport | null;
   try {
-    json = JSON.parse(await file.text());
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    route = looksLikeZip(file.name, bytes)
+      ? routeZipFile(bytes)
+      : routeBareJson(JSON.parse(new TextDecoder().decode(bytes)));
   } catch {
-    setDydResult("Couldn't read that file — pick the extracted user_data.json (JSON format), not the .zip.", "err");
+    setDydResult("Couldn't read that file — drop the export .zip the platform gave you, or an extracted .json.", "err");
     return;
   }
-  const { items, favoritesSeen, likesSeen, skipped } = parseTikTokDydResult(json);
-  if (items.length === 0) {
+  if (!route) {
     setDydResult(
-      `No liked or favorited videos found in that file (favorites seen: ${favoritesSeen}, likes seen: ${likesSeen}). ` +
-        "Make sure you exported JSON with the Activity data selected.",
+      "That .zip didn't contain a recognized export (looked for TikTok user_data.json or Instagram saved_posts.json).",
       "err",
     );
     return;
   }
-  setDydResult(`Importing ${items.length}…`, "ok");
+  const { platform, items, declared, skipped } = route;
+  const label = platform === "instagram" ? "Instagram" : "TikTok";
+  if (items.length === 0) {
+    setDydResult(
+      `No saved posts found in that ${label} export (${declared} entries seen). ` +
+        "Make sure you exported JSON with your saved/activity data selected.",
+      "err",
+    );
+    return;
+  }
+  setDydResult(`Importing ${items.length} from ${label}…`, "ok");
   try {
-    const res = (await chrome.runtime.sendMessage({ kind: "import_dyd", items })) as DydImportResponse | undefined;
+    const res = (await chrome.runtime.sendMessage({
+      kind: "import_items",
+      platform,
+      items,
+      declared,
+    })) as ImportItemsResponse | undefined;
     if (!res || !res.ok) {
       setDydResult(`Import failed${res?.error ? `: ${res.error}` : ""}.`, "err");
       return;
     }
-    const skip = skipped ? `, skipped ${skipped} URL-less` : "";
+    // The reconciliation report: what the export recovered vs the library vs the export's declared index.
+    const skip = skipped ? `, skipped ${skipped} unparseable` : "";
     setDydResult(
-      `Imported ${items.length} (added ${res.added}, merged ${res.merged}${skip}) — library total ${res.total}.`,
+      `Imported ${res.parsed} from ${label} (added ${res.added} new, merged ${res.merged}${skip}) — ` +
+        `your library already held ${res.alreadyPresent}; the export listed ${res.declaredInZip}. Library total ${res.total}.`,
       "ok",
     );
   } catch (err) {
@@ -154,7 +193,7 @@ async function main() {
   const dydInput = $<HTMLInputElement>("dydFile");
   dydInput.addEventListener("change", () => {
     const file = dydInput.files?.[0];
-    if (file) void handleDydFile(file);
+    if (file) void handleImportFile(file);
   });
 
   // Export the whole library via the existing offscreen open-schema export path (fire-and-forget; the

@@ -305,6 +305,65 @@ describe("toOpenSchemaItem — a raw record with no analysis (F4)", () => {
   });
 });
 
+// ── XPLAT-01: cross-platform tagging threads through the open-schema export ──────────────────
+const igRec: LibraryRecord = {
+  id: "CxAMPLE001",
+  status: "raw",
+  updatedAt: "2026-07-08T00:00:00.000Z",
+  item: {
+    id: "CxAMPLE001",
+    platform: "instagram",
+    sources: ["saved"],
+    collections: ["Recipes"],
+    desc: "brown butter pasta in one pan",
+    createTime: null,
+    author: "example.kitchen",
+    authorName: null,
+    url: "https://www.instagram.com/reel/CxAMPLE001/",
+    playUrl: null,
+    downloadUrl: null,
+    cover: null,
+    durationSec: null,
+    hasSubtitles: false,
+    subtitleUrl: null,
+    isSlideshow: false,
+    music: null,
+    hashtags: ["pasta"],
+    stats: { plays: null, likes: null, comments: null, shares: null, collects: null },
+    savedAt: "2025-07-02T23:46:40.000Z",
+  },
+};
+
+describe("toOpenSchemaItem — cross-platform tagging (XPLAT-01)", () => {
+  const out = toOpenSchemaItem(igRec, deps) as any;
+
+  test("an Instagram item validates against the REAL frozen schema", () => {
+    const ok = validateItem(out);
+    if (!ok) console.error(validateItem.errors);
+    expect(ok).toBe(true);
+  });
+
+  test("origin.platform carries the item's platform tag (instagram)", () => {
+    expect(out.origin.platform).toBe("instagram");
+    expect(out.origin.profile).toBe("instagram/1.0");
+  });
+
+  test("the IG 'saved' source maps to the frozen 'bookmark' save kind", () => {
+    expect(out.saves[0].sources[0].kind).toBe("bookmark");
+  });
+
+  test("collection membership rides on the save", () => {
+    expect(out.saves[0].collections).toEqual(["Recipes"]);
+  });
+
+  test("an existing TikTok item with NO platform field still exports as tiktok (the default)", () => {
+    const ttOut = toOpenSchemaItem(rec, deps) as any; // `rec` carries no `platform` field
+    expect(ttOut.origin.platform).toBe("tiktok");
+    expect(ttOut.origin.profile).toBe("tiktok/1.0");
+    expect("collections" in ttOut.saves[0]).toBe(false); // no collections key when absent
+  });
+});
+
 describe("toOpenSchemaExport — the bundle wrapper", () => {
   test("stamps the frozen schemaVersion and carries every record's item", () => {
     const bundle = JSON.parse(toOpenSchemaExport([rec], deps));

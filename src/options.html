@@ -228,14 +228,16 @@
       <p class="section-sub">Your library is yours. Export is always free.</p>
 
       <div class="group">
-        <p class="g-label">Import from TikTok "Download your data"</p>
+        <p class="g-label">Import from a platform "Download your data" export</p>
         <p class="hint" style="margin-bottom: 8px;">
-          Load your entire liked &amp; favorited history in one shot, no scrolling. In TikTok:
-          <strong>Profile → ☰ → Settings and privacy → Account → Download your data</strong>, choose
-          <strong>JSON</strong>, request it, download the ZIP, unzip, then pick <code>user_data.json</code> below.
+          Load your entire saved history in one shot, no scrolling. Request your data export
+          (TikTok: <strong>Settings → Account → Download your data</strong>, choose <strong>JSON</strong>;
+          Instagram: <strong>Settings → Accounts Center → Your information and permissions → Download your information</strong>),
+          then drop the <strong>whole <code>.zip</code></strong> below — no need to unzip. An already-extracted
+          <code>.json</code> works too.
         </p>
-        <label>user_data.json
-          <input type="file" id="dydFile" accept=".json,application/json" />
+        <label>Export .zip or .json
+          <input type="file" id="dydFile" accept=".zip,application/zip,.json,application/json" />
         </label>
         <p class="hint">Parsed locally in your browser. Nothing is uploaded.</p>
         <span id="dydResult" role="status" aria-live="polite"></span>

@@ -35,6 +35,17 @@ export interface CapturedItem {
   // Download-your-data (DYD) import lane DOES carry it (the export's per-entry `Date`), so it is set
   // only for imported items. Distinct from `createTime` (when the VIDEO was posted, epoch seconds).
   savedAt?: string;
+  // OPTIONAL cross-platform tag (XPLAT-01 seam). Which platform the item was saved on. ABSENT means
+  // "tiktok" — the whole live-scroll lane + the DYD import lane predate this field, so every existing
+  // item and fixture reads as TikTok with no migration. The Instagram import lane sets "instagram".
+  // Threaded to the open-schema export's `origin.platform` (which is already an open string). Ids stay
+  // per-platform and naturally disjoint (TikTok = 19-digit numeric, IG = base64url shortcode), so no
+  // key-prefixing is needed for the store to keep them apart.
+  platform?: "tiktok" | "instagram";
+  // OPTIONAL collection membership — the named saved-collections/boards a user filed this item under
+  // (e.g. Instagram's "Recipes"). Carried from the export's saved_collections; unset when the item is
+  // in no collection. Threaded to the open-schema export's `saves[].collections`.
+  collections?: string[];
 }
 
 // ── The frozen extractor contract (rc.6) ─────────────────────────────────────────

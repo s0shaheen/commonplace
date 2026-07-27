@@ -51,6 +51,8 @@ function saveKind(source: string): string {
       return "upload";
     case "reposts":
       return "repost";
+    case "saved": // Instagram's single saved surface → the frozen `bookmark` kind
+      return "bookmark";
     default:
       return "other";
   }
@@ -225,11 +227,20 @@ export function toOpenSchemaItem(rec: LibraryRecord, deps: ExportDeps): object {
     identity.permalinkStatus = "live";
   }
 
+  // XPLAT-01: carry the item's platform tag through to the frozen `origin.platform` (an open string).
+  // Absent ⇒ "tiktok" — every pre-XPLAT item and fixture reads as TikTok with no migration.
+  const platform = item.platform ?? "tiktok";
+  // The save carries the honest capture `at` we have (platform save-times are not in item_list) plus,
+  // for imported items, any named collection membership (`saves[].collections` is a frozen field).
+  const save: Record<string, unknown> = {
+    sources: item.sources.map((src) => ({ kind: saveKind(src), at: deps.nowIso })),
+  };
+  if (item.collections && item.collections.length) save.collections = [...item.collections];
+
   const out: Record<string, unknown> = {
     identity,
-    origin: { platform: "tiktok", profile: "tiktok/1.0" },
-    // The capture time is the honest `at` we have — platform save-times are not in item_list.
-    saves: [{ sources: item.sources.map((src) => ({ kind: saveKind(src), at: deps.nowIso })) }],
+    origin: { platform, profile: `${platform}/1.0` },
+    saves: [save],
     capturedAt: { value: rec.updatedAt, source: "inferred", confidence: 0.9 },
     mediaKind: item.isSlideshow ? "photo" : "video",
     platformExtras: {

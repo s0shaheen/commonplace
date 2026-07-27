@@ -147,6 +147,25 @@ describe("CpStore", () => {
     expect(await s.getMeta("missing")).toBeUndefined();
   });
 
+  it("round-trips the optional platform + collections tags (XPLAT-01) through upsert", async () => {
+    const s = await openStore("t-xplat");
+    await s.upsertItems(
+      [mkItem("CxAMPLE001", { platform: "instagram", collections: ["Recipes"], sources: ["saved"] })],
+      "2026-07-08T00:00:00Z",
+    );
+    const ig = (await s.getRecord("CxAMPLE001"))!;
+    expect(ig.item.platform).toBe("instagram");
+    expect(ig.item.collections).toEqual(["Recipes"]);
+
+    // A pre-XPLAT TikTok item carries no platform field — it stays absent (defaults to tiktok on export).
+    await s.upsertItems([mkItem("7111111111111111111", { sources: ["favorites"] })], "2026-07-08T00:00:00Z");
+    const tt = (await s.getRecord("7111111111111111111"))!;
+    expect(tt.item.platform).toBeUndefined();
+
+    // A TikTok numeric id and an IG shortcode are naturally disjoint — both coexist, no key collision.
+    expect(await s.count()).toBe(2);
+  });
+
   it("allRecords returns every stored record", async () => {
     const s = await openStore("t5");
     await s.upsertItems([mkItem("a"), mkItem("b")], "2026-07-08T00:00:00Z");
