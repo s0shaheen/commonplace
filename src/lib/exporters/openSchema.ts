@@ -58,6 +58,16 @@ function saveKind(source: string): string {
   }
 }
 
+// rc.7: evidence timestamps arrive as MM:SS strings (the model's native video-time form). Parse to
+// integer seconds for the W3C Media-Fragments selector (`t=<start>,<end>`). TOTAL + tolerant: any
+// non-`^\d{1,2}:\d{2}$` input returns null so the caller omits the selector (honest degradation)
+// rather than emitting a corrupt fragment. Pure — unit-tested.
+export function mmssToSeconds(v: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v);
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
 // Strongest assertion mode wins (STATED > SHOWN > REPORTED > INFERRED); confidence is the max.
 const MODE_RANK: Record<AssertionMode, number> = { STATED: 0, SHOWN: 1, REPORTED: 2, INFERRED: 3 };
 
@@ -85,11 +95,16 @@ function mapEvidence(ev: EvidenceOut, deps: ExportDeps): Record<string, unknown>
   if (ev.source_role !== undefined) out.source_role = ev.source_role;
   if (ev.quote !== undefined) out.quote = ev.quote;
   if (ev.t_start !== undefined && ev.t_end !== undefined) {
-    out.selector = {
-      type: "FragmentSelector",
-      value: `t=${ev.t_start},${ev.t_end}`,
-      conformsTo: "http://www.w3.org/TR/media-frags/",
-    };
+    // rc.7: MM:SS strings → seconds. A malformed span (parse null) omits the selector, never a corrupt one.
+    const start = mmssToSeconds(ev.t_start);
+    const end = mmssToSeconds(ev.t_end);
+    if (start !== null && end !== null) {
+      out.selector = {
+        type: "FragmentSelector",
+        value: `t=${start},${end}`,
+        conformsTo: "http://www.w3.org/TR/media-frags/",
+      };
+    }
   }
   return out;
 }

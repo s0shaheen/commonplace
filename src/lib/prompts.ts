@@ -1,10 +1,14 @@
 import type { CapturedItem } from "./types.js";
 
-export const PROMPT_VERSION = "extract@v1";
+// extractor-v2 (2026-07-27): the shipped base prompt is prompts/extract_v2.md — tighter (3.x
+// over-analyzes on verbose prompts), framed for a model that watches+listens to the video natively,
+// MM:SS timestamps. extract_v1.md is kept on disk for rollback.
+export const PROMPT_VERSION = "extract@v2";
 
 // Appends a CONTEXT block (caption, hashtags, creator, music, transcript-if-present)
-// to the frozen extract_v1.md base prompt. The base prompt owns the output contract;
-// this only feeds the model the post's known metadata.
+// to the frozen base prompt. The base prompt owns the output contract; this only feeds
+// the model the post's known metadata. (Native ingestion passes an empty transcript —
+// the audio is in the video itself.)
 export function buildExtractorPrompt(base: string, item: CapturedItem, transcript: string): string {
   const lines: string[] = ["CONTEXT:"];
   lines.push(`Caption: ${item.desc}`);

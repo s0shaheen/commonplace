@@ -1,5 +1,6 @@
-import { describe, test, expect } from "vitest";
-import { parseVtt } from "./mediaFetch.js";
+import { describe, test, expect, afterEach } from "vitest";
+import { parseVtt, fetchVideoBytes, VIDEO_BYTES_LIMIT, INLINE_LIMIT } from "./mediaFetch.js";
+import type { CapturedItem } from "./types.js";
 
 describe("parseVtt", () => {
   test("extracts caption text from a basic cue list with numeric ids", () => {
@@ -59,5 +60,50 @@ real text`;
   test("returns empty string for empty or header-only input", () => {
     expect(parseVtt("WEBVTT\n\n")).toBe("");
     expect(parseVtt("")).toBe("");
+  });
+});
+
+// The native lane uploads video through the FILE API, so the video ceiling is no longer the
+// ~18MB inline-base64 limit. The pilot's real clips ran 8.7–33.8MB — 4 of 6 exceeded the old
+// inline cap, so keeping it would have silently degraded most native runs to keyframes.
+describe("fetchVideoBytes — the File API ceiling (not the inline one)", () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => { globalThis.fetch = realFetch; });
+
+  const item = (over: Partial<CapturedItem> = {}) =>
+    ({ id: "1", sources: [], desc: "", createTime: null, author: null, authorName: null, url: null,
+       playUrl: "https://v16.example.com/play.mp4", downloadUrl: null, cover: null, durationSec: 20,
+       hasSubtitles: false, subtitleUrl: null, isSlideshow: false, music: null, hashtags: [],
+       stats: { plays: null, likes: null, comments: null, shares: null, collects: null }, ...over }) as CapturedItem;
+
+  const serve = (size: number) => {
+    globalThis.fetch = (async () => ({
+      ok: true, status: 200,
+      blob: async () => new Blob([new Uint8Array(size)], { type: "video/mp4" }),
+    })) as unknown as typeof fetch;
+  };
+
+  test("the video ceiling is well above the inline-base64 limit", () => {
+    expect(VIDEO_BYTES_LIMIT).toBeGreaterThan(INLINE_LIMIT);
+    expect(VIDEO_BYTES_LIMIT).toBeGreaterThanOrEqual(64 * 1024 * 1024);
+  });
+
+  test("a 30MB video — over the old inline cap — still yields bytes for the File API path", async () => {
+    serve(30 * 1024 * 1024);
+    const parts = await fetchVideoBytes(item());
+    expect(parts).toHaveLength(1);
+    expect(parts[0]!.mimeType).toBe("video/mp4");
+  });
+
+  test("a video beyond the ceiling yields [] so the caller falls back honestly", async () => {
+    serve(VIDEO_BYTES_LIMIT + 1);
+    expect(await fetchVideoBytes(item())).toEqual([]);
+  });
+
+  test("no playUrl → [] with no fetch at all", async () => {
+    let called = 0;
+    globalThis.fetch = (async () => { called++; return { ok: true, blob: async () => new Blob([]) }; }) as unknown as typeof fetch;
+    expect(await fetchVideoBytes(item({ playUrl: null }))).toEqual([]);
+    expect(called).toBe(0);
   });
 });

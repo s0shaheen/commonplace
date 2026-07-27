@@ -85,6 +85,77 @@ async function postJson(url: string, init: RequestInit): Promise<unknown> {
 
 // ── Wiring builders (config → lanes / resolvers / selector) ─────────────────────────
 
+// ── Gemini File API (the native-video path) ─────────────────────────────────────────
+// Inline base64 breaks above ~20MB, so a native-ingestion video goes through the File API:
+// POST the bytes to the /upload endpoint, then POLL the returned file until `state === "ACTIVE"`
+// (the model cannot read a PROCESSING file). Uploaded files are ephemeral on Google's side (~48h),
+// which is exactly the lifetime we need — one analyze call.
+//
+// CHECKPOINT DISCIPLINE: this runs INSIDE processItemLive, after the queue has already checkpointed
+// the job to "analyzing". A service-worker death mid-upload therefore reverts the job to pending on
+// revive and the item is retried from the top — we deliberately do NOT persist a half-uploaded
+// fileUri (a stale/expired URI would be worse than re-uploading; the upload is idempotent-by-retry).
+const FILE_POLL_INTERVAL_MS = 1000;
+const FILE_POLL_MAX_ATTEMPTS = 60; // ~60s ceiling — a longer processing time fails honestly, not silently
+
+function base64ToBlob(data: string, mimeType: string): Blob {
+  const bin = atob(data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mimeType });
+}
+
+async function uploadFileToGemini(
+  key: string,
+  bytes: MediaPart,
+  mimeType: string,
+): Promise<{ fileUri: string }> {
+  const blob = base64ToBlob(bytes.data, mimeType);
+  // The documented RESUMABLE upload protocol (ai.google.dev/gemini-api/docs/files): a `start` request
+  // that returns an upload URL in the `x-goog-upload-url` response header, then the bytes in an
+  // `upload, finalize` request. (A plain multipart POST is rejected: "Multipart body contains
+  // multiple files" — verified against the live API, 2026-07-27.)
+  const start = await fetch("https://generativelanguage.googleapis.com/upload/v1beta/files", {
+    method: "POST",
+    headers: {
+      "x-goog-api-key": key,
+      "X-Goog-Upload-Protocol": "resumable",
+      "X-Goog-Upload-Command": "start",
+      "X-Goog-Upload-Header-Content-Length": String(blob.size),
+      "X-Goog-Upload-Header-Content-Type": mimeType,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ file: { display_name: "commonplace-video" } }),
+  });
+  if (!start.ok) throw httpError(start.status, "file_upload_start");
+  const uploadUrl = start.headers.get("x-goog-upload-url");
+  if (!uploadUrl) throw new Error("file_upload_no_url");
+
+  const res = await fetch(uploadUrl, {
+    method: "POST",
+    headers: { "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize" },
+    body: blob,
+  });
+  if (!res.ok) throw httpError(res.status, "file_upload");
+  const uploaded = (await res.json()) as { file?: { uri?: string; name?: string; state?: string } };
+  const uri = uploaded.file?.uri;
+  const name = uploaded.file?.name;
+  if (!uri || !name) throw new Error("file_upload_no_uri");
+
+  // Poll until ACTIVE — a PROCESSING file is not yet readable by the model.
+  let state = uploaded.file?.state ?? "PROCESSING";
+  for (let i = 0; i < FILE_POLL_MAX_ATTEMPTS && state !== "ACTIVE"; i++) {
+    if (state === "FAILED") throw new Error("file_upload_failed");
+    await new Promise((r) => setTimeout(r, FILE_POLL_INTERVAL_MS));
+    const poll = (await getJson(`https://generativelanguage.googleapis.com/v1beta/${name}`, {
+      "x-goog-api-key": key,
+    })) as { state?: string };
+    state = poll.state ?? state;
+  }
+  if (state !== "ACTIVE") throw new Error("file_upload_timeout");
+  return { fileUri: uri };
+}
+
 function buildLanes(cfg: CpConfig, basePrompt: string): Record<LaneId, EngineLane> {
   return {
     managed: createGeminiLane({
@@ -92,6 +163,7 @@ function buildLanes(cfg: CpConfig, basePrompt: string): Record<LaneId, EngineLan
       key: cfg.geminiKey ?? "",
       model: cfg.managedModel,
       basePrompt,
+      fileUpload: (bytes, mimeType) => uploadFileToGemini(cfg.geminiKey ?? "", bytes, mimeType),
     }),
     local: createOllamaLane({
       fetchJson: (url, init) => postJson(url, init),
@@ -208,8 +280,9 @@ function buildCallModel(cfg: CpConfig): (prompt: string) => Promise<string> {
   };
 }
 
+// extractor-v2: the shipped prompt is extract_v2.md (extract_v1.md stays bundled for rollback).
 async function loadBasePrompt(): Promise<string> {
-  const res = await fetch(chrome.runtime.getURL("prompts/extract_v1.md"));
+  const res = await fetch(chrome.runtime.getURL("prompts/extract_v2.md"));
   return res.text();
 }
 
@@ -288,19 +361,28 @@ async function processItemLive(
   // (already-filled fields are re-derived as present, so spent lanes are not re-called needlessly).
   const item = await enrichIfNeeded(itemId, rec.item, ctx);
 
-  const ingestion = routeIngestion(item, ctx.cfg);
+  const routed = routeIngestion(item, ctx.cfg);
   let keyframes: MediaPart[] = [];
   let videoBytes: MediaPart | null = null;
   let transcript = "";
-  if (ingestion === "native") {
+  // HONEST FALLBACK: native needs real video bytes. When they are unavailable (no playUrl, an expired
+  // signed URL, a slideshow), we do NOT fail and we do NOT pretend — we degrade to keyframes/caption
+  // for this item and record the ingestion ACTUALLY used, so provenance never overstates the input.
+  let effectiveCfg = ctx.cfg;
+  if (routed === "native") {
     videoBytes = (await fetchVideoBytes(item))[0] ?? null;
-  } else {
+    if (!videoBytes) {
+      console.warn(`[commonplace] analyze ${itemId}: no video bytes — falling back to keyframes_vtt`);
+      effectiveCfg = { ...ctx.cfg, ingestion: "keyframes_vtt", escalateNative: false };
+    }
+  }
+  if (routeIngestion(item, effectiveCfg) !== "native") {
     if (item.subtitleUrl) transcript = await fetchSubtitles(item.subtitleUrl);
     keyframes = await collectKeyframes(item);
   }
 
   const input: AnalyzeInput = { item, transcript, keyframes, videoBytes };
-  const { result, lane, ingestion: usedIngestion } = await analyzeItem(input, ctx.cfg, ctx.lanes);
+  const { result, lane, ingestion: usedIngestion } = await analyzeItem(input, effectiveCfg, ctx.lanes);
   if (!result.ok) return { ok: false, error: result.error };
 
   const analysis: Analysis = {
@@ -310,6 +392,8 @@ async function processItemLive(
     model: lane === "managed" ? ctx.cfg.managedModel : ctx.cfg.localModel,
     promptVersion: PROMPT_VERSION,
     analyzedAt: new Date().toISOString(),
+    // Persist a truncation-salvaged extraction AS partial — never fake-complete (honest incompleteness).
+    ...(result.partial ? { partial: true } : {}),
   };
   await ctx.store.saveAnalysis(itemId, analysis);
 

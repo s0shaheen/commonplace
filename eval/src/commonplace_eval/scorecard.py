@@ -60,7 +60,7 @@ from commonplace_eval.structured_metrics import structured_scores
 __all__ = ["build_scorecard", "render_markdown"]
 
 # The current frozen measurement-contract semver (schema/CHANGELOG.md).
-SCHEMA_VERSION = "1.0.0-rc.6"
+SCHEMA_VERSION = "1.0.0-rc.7"
 
 _CLAIM_NOTE = "faithfulness/coverage require validated judge (Phase 4)"
 

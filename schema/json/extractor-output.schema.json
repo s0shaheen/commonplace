@@ -34,8 +34,8 @@
                 },
                 "source_role": { "type": "string" },
                 "quote": { "type": "string" },
-                "t_start": { "type": "number" },
-                "t_end": { "type": "number" },
+                "t_start": { "type": "string", "pattern": "^\\d{1,2}:\\d{2}$" },
+                "t_end": { "type": "string", "pattern": "^\\d{1,2}:\\d{2}$" },
                 "assertion_mode": {
                   "type": "string",
                   "enum": ["STATED", "SHOWN", "REPORTED", "INFERRED"]
@@ -69,8 +69,8 @@
                 },
                 "source_role": { "type": "string" },
                 "quote": { "type": "string" },
-                "t_start": { "type": "number" },
-                "t_end": { "type": "number" },
+                "t_start": { "type": "string", "pattern": "^\\d{1,2}:\\d{2}$" },
+                "t_end": { "type": "string", "pattern": "^\\d{1,2}:\\d{2}$" },
                 "assertion_mode": {
                   "type": "string",
                   "enum": ["STATED", "SHOWN", "REPORTED", "INFERRED"]
@@ -108,8 +108,8 @@
                 },
                 "source_role": { "type": "string" },
                 "quote": { "type": "string" },
-                "t_start": { "type": "number" },
-                "t_end": { "type": "number" },
+                "t_start": { "type": "string", "pattern": "^\\d{1,2}:\\d{2}$" },
+                "t_end": { "type": "string", "pattern": "^\\d{1,2}:\\d{2}$" },
                 "assertion_mode": {
                   "type": "string",
                   "enum": ["STATED", "SHOWN", "REPORTED", "INFERRED"]
@@ -143,8 +143,8 @@
                 },
                 "source_role": { "type": "string" },
                 "quote": { "type": "string" },
-                "t_start": { "type": "number" },
-                "t_end": { "type": "number" },
+                "t_start": { "type": "string", "pattern": "^\\d{1,2}:\\d{2}$" },
+                "t_end": { "type": "string", "pattern": "^\\d{1,2}:\\d{2}$" },
                 "assertion_mode": {
                   "type": "string",
                   "enum": ["STATED", "SHOWN", "REPORTED", "INFERRED"]
@@ -202,8 +202,8 @@
                 },
                 "source_role": { "type": "string" },
                 "quote": { "type": "string" },
-                "t_start": { "type": "number" },
-                "t_end": { "type": "number" },
+                "t_start": { "type": "string", "pattern": "^\\d{1,2}:\\d{2}$" },
+                "t_end": { "type": "string", "pattern": "^\\d{1,2}:\\d{2}$" },
                 "assertion_mode": {
                   "type": "string",
                   "enum": ["STATED", "SHOWN", "REPORTED", "INFERRED"]

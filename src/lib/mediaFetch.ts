@@ -1,7 +1,15 @@
 import type { CapturedItem } from "./types.js";
 import type { MediaPart } from "./geminiClient.js";
 
-const INLINE_LIMIT = 18 * 1024 * 1024; // ~18 MB inline-base64 ceiling
+/** ~18 MB inline-base64 ceiling — applies to IMAGES (keyframes/posters), which are sent inline. */
+export const INLINE_LIMIT = 18 * 1024 * 1024;
+
+/** Video ceiling for the NATIVE lane. Video no longer goes inline: it is uploaded through the Gemini
+ *  File API, so the inline limit does not apply (the pilot's real clips ran 8.7–33.8 MB — 4 of 6 were
+ *  over the inline cap). This ceiling is a MEMORY bound for the offscreen document (the bytes are
+ *  base64'd in-process), not a protocol limit; short-form video sits far below it, and anything above
+ *  returns [] so the caller degrades honestly to keyframes rather than OOM-ing. */
+export const VIDEO_BYTES_LIMIT = 128 * 1024 * 1024;
 
 async function blobToBase64(blob: Blob): Promise<string> {
   const buf = new Uint8Array(await blob.arrayBuffer());
@@ -11,17 +19,16 @@ async function blobToBase64(blob: Blob): Promise<string> {
 }
 
 // Mirrors the page's own working video request (spike Path 2). Returns [] on any failure so the
-// orchestrator records `media_fetch_failed` rather than throwing.
-// TODO(file-api): an oversized-but-successful download also returns [] here, conflated with a real
-// fetch failure. When the File API path lands (runner task), distinguish "too big" so it can be
-// routed to resumable upload instead of being mislabeled media_fetch_failed.
+// caller falls back honestly (keyframes/caption) rather than throwing or faking an analysis.
+// The bytes feed the NATIVE lane, which uploads them via the Gemini File API — so the bound here is
+// VIDEO_BYTES_LIMIT (a memory bound), NOT the inline-base64 limit that applies to images.
 export async function fetchVideoBytes(item: CapturedItem): Promise<MediaPart[]> {
   if (!item.playUrl) return [];
   try {
     const res = await fetch(item.playUrl, { credentials: "include", headers: { Range: "bytes=0-" } });
     if (!res.ok && res.status !== 206) return [];
     const blob = await res.blob();
-    if (blob.size > INLINE_LIMIT) return []; // too big for inline; File API handled by the runner
+    if (blob.size > VIDEO_BYTES_LIMIT) return []; // beyond the memory bound → honest keyframe fallback
     return [{ mimeType: blob.type || "video/mp4", data: await blobToBase64(blob) }];
   } catch {
     return [];

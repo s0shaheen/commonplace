@@ -11,7 +11,7 @@ function memStorage(seed: Record<string, unknown> = {}): StorageLike & { data: R
 describe("cp_config", () => {
   it("pins the frozen defaults", () => {
     expect(DEFAULT_CONFIG.managedModel).toBe("gemini-3.6-flash");
-    expect(DEFAULT_CONFIG.ingestion).toBe("keyframes_vtt");
+    expect(DEFAULT_CONFIG.ingestion).toBe("native"); // extractor-v2: native video is the managed default
     expect(DEFAULT_CONFIG.escalateNative).toBe(false);
     expect(DEFAULT_CONFIG.placesEnabled).toBe(false);
     expect(DEFAULT_CONFIG.concurrency).toBe(2);

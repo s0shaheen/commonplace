@@ -13,7 +13,7 @@ const grounded: ExtractorOutput = {
     {
       surface: "Kill Bill",
       type: "music_recording",
-      evidence: [{ channel: "VERBAL_AUDIO", assertion_mode: "SHOWN", confidence: 0.9, t_start: 12, t_end: 19 }],
+      evidence: [{ channel: "VERBAL_AUDIO", assertion_mode: "SHOWN", confidence: 0.9, t_start: "0:12", t_end: "0:19" }],
     },
   ],
   concepts: [],
@@ -31,7 +31,8 @@ describe("buildTextBody / buildMediaBody", () => {
     const body = buildTextBody("HELLO");
     expect(body.contents[0]!.parts[0]).toEqual({ text: "HELLO" });
     expect(body.generationConfig.responseMimeType).toBe("application/json");
-    expect(body.generationConfig.temperature).toBe(0);
+    // Gemini 3.x: no temperature/top_p/top_k (default sampling; temp-0 is the numeric-loop trigger).
+    expect("temperature" in body.generationConfig).toBe(false);
     expect(typeof body.generationConfig.responseSchema).toBe("object");
   });
 
@@ -42,12 +43,29 @@ describe("buildTextBody / buildMediaBody", () => {
   });
 });
 
-describe("buildGenerationConfig", () => {
-  test("temperature 0, JSON mime, and a response schema", () => {
+describe("buildGenerationConfig — vendor-aligned for gemini-3.x (extractor-v2)", () => {
+  test("no temperature/top_p/top_k (default sampling; removes the numeric-loop trigger)", () => {
+    const cfg = buildGenerationConfig() as unknown as Record<string, unknown>;
+    expect("temperature" in cfg).toBe(false);
+    expect("top_p" in cfg).toBe(false);
+    expect("topP" in cfg).toBe(false);
+    expect("top_k" in cfg).toBe(false);
+    expect("topK" in cfg).toBe(false);
+  });
+  test("constrained JSON: responseMimeType + a response schema", () => {
     const cfg = buildGenerationConfig();
-    expect(cfg.temperature).toBe(0);
     expect(cfg.responseMimeType).toBe("application/json");
     expect(cfg.responseSchema).toBeTypeOf("object");
+  });
+  test("thinkingConfig.thinkingLevel 'low' (extraction is classification-shaped)", () => {
+    expect(buildGenerationConfig().thinkingConfig).toEqual({ thinkingLevel: "low" });
+  });
+  test("bounded maxOutputTokens so no run can spew a tens-of-thousands-token runaway", () => {
+    const cfg = buildGenerationConfig();
+    expect(cfg.maxOutputTokens).toBe(8192);
+  });
+  test("mediaResolution HIGH — the extractor reads fine on-screen text (menus/signs/prices)", () => {
+    expect(buildGenerationConfig().mediaResolution).toBe("MEDIA_RESOLUTION_HIGH");
   });
 });
 
@@ -178,5 +196,58 @@ describe("parseExtractorResponse", () => {
   test("schema_invalid when facets is a flat object, not an array of assignments", () => {
     const bad = { ...grounded, facets: { topic: "food" } };
     expect(parseExtractorResponse(wrap(JSON.stringify(bad)))).toEqual({ ok: false, error: "schema_invalid" });
+  });
+
+  test("schema_invalid when an evidence timestamp is a NUMBER (rc.7: t_start/t_end are MM:SS strings)", () => {
+    const bad = {
+      ...grounded,
+      mentions: [
+        { surface: "Kill Bill", type: "music_recording", evidence: [{ channel: "VERBAL_AUDIO", assertion_mode: "SHOWN", confidence: 0.9, t_start: 12, t_end: 19 }] },
+      ],
+    };
+    expect(parseExtractorResponse(wrap(JSON.stringify(bad)))).toEqual({ ok: false, error: "schema_invalid" });
+  });
+
+  test("a complete valid response is NOT marked partial", () => {
+    const res = parseExtractorResponse(wrap(JSON.stringify(grounded)));
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.partial).toBeFalsy();
+  });
+});
+
+describe("parseExtractorResponse — JSON-repair on truncation → honest partial (never a silent drop)", () => {
+  // A MAX_TOKENS envelope: finishReason set, text cut off mid-array partway through the 3rd mention.
+  const wrapTrunc = (text: string) => ({ candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text }] } }] });
+  const ev = `"evidence":[{"channel":"VISUAL_TEXT","assertion_mode":"SHOWN","confidence":0.9}]`;
+  // Two COMPLETE mentions, then a third cut off mid-token, and the remaining top-level keys never emitted.
+  const truncated =
+    `{"mentions":[` +
+    `{"surface":"Kasama","type":"place",${ev}},` +
+    `{"surface":"UPS","type":"brand_org",${ev}},` +
+    `{"surface":"Tony So`;
+
+  test("salvages the complete elements, drops the incomplete one, and marks the result partial", () => {
+    const res = parseExtractorResponse(wrapTrunc(truncated));
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.partial).toBe(true);
+      expect(res.output.mentions.map((m) => m.surface)).toEqual(["Kasama", "UPS"]);
+      // keys the model never reached become empty arrays (honest incompleteness, not a fabricated value)
+      expect(res.output.concepts).toEqual([]);
+      expect(res.output.structured).toEqual([]);
+    }
+  });
+
+  test("the salvaged partial still passes the hard gate (a would-be invalid element cannot slip in)", () => {
+    // The trailing incomplete element is discarded, so only gate-valid complete elements remain.
+    const res = parseExtractorResponse(wrapTrunc(truncated));
+    expect(res.ok).toBe(true);
+    if (res.ok) for (const m of res.output.mentions) expect(m.evidence.length).toBeGreaterThan(0);
+  });
+
+  test("genuine non-JSON is still parse_fail — an empty salvage is never dressed up as a partial", () => {
+    expect(parseExtractorResponse(wrapTrunc("not json at all"))).toEqual({ ok: false, error: "parse_fail" });
+    // truncation so early that no complete element exists → nothing to salvage → parse_fail
+    expect(parseExtractorResponse(wrapTrunc(`{"mentions":[{"surf`))).toEqual({ ok: false, error: "parse_fail" });
   });
 });

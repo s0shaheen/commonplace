@@ -3,6 +3,51 @@
 All schemas in `schema/json/` (and their SHACL/JSON-LD companions) are versioned
 together under one semver line. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-rc.7] — 2026-07-27
+
+Video-native timestamps in the **model-facing** `extractor-output.schema.json`:
+evidence `t_start`/`t_end` become `MM:SS` strings instead of float seconds. Scoped
+to the extractor-output schema and its gate/tests; **`extraction.schema.json`,
+`item.schema.json`, `gold.schema.json`, and `pred.schema.json` are untouched** (the
+open-schema export still emits a seconds-based Media-Fragments selector — it is now
+DERIVED by parsing `MM:SS`). No shipped data to migrate.
+
+### Changed
+- **`extractor-output.schema.json` — evidence `t_start`/`t_end`: `{"type":"number"}`
+  → `{"type":"string","pattern":"^\\d{1,2}:\\d{2}$"}`,** in all five inlined Evidence
+  blocks (mentions/concepts/facets/claims/structured). **Rationale:** Gemini 3 refers
+  to video time natively in `MM:SS` (`ai.google.dev/gemini-api/docs/video-understanding`),
+  so an unbounded float was both unnatural for the model and the literal representation
+  that degenerated — under `temperature: 0` + constrained decoding a timestamp looped as
+  `0.0101…` until the response blew its token budget, truncating the JSON and dropping
+  the analysis (4 of 6 pilot videos, 2026-07-26). Constraining the field to a bounded
+  `MM:SS` string removes that failure at the representation level, independent of the
+  decoding-config fix. Preserves the Gemini `response_schema` safety constraints (no
+  `$ref`/`oneOf`/`allOf`; the Evidence shape stays inlined verbatim; still no grounding
+  fields). Breaking for the extractor-output contract, permissible pre-`1.0.0`.
+- `geminiClient.ts` runtime gate (`isEvidenceArray`) — now type-checks `t_start`/`t_end`
+  as strings when present, so a legacy NUMERIC timestamp is rejected structurally rather
+  than passing the hand-written gate. Both fields stay OPTIONAL.
+- `openSchema.ts` — new pure `mmssToSeconds(v) -> number | null`; the evidence
+  Media-Fragments selector (`t=<start>,<end>`) is now derived by parsing the `MM:SS`
+  strings to integer seconds. A malformed span parses to `null` and the selector is
+  OMITTED (honest degradation) rather than emitting a corrupt fragment. The frozen
+  `extraction.schema.json` FragmentSelector value is unchanged (still seconds).
+- `src/lib/generated/validators.js` regenerated from the changed schema
+  (`scripts/build-validators.mjs`).
+- Tests updated for the intentional bump: `schemaConformance.test.ts` (MM:SS fixture +
+  two new negatives — a numeric timestamp and a malformed string are both rejected),
+  `geminiClient.test.ts` and `openSchema.test.ts` (fixtures to `MM:SS`; the selector
+  assertion now proves the `"1:05"/"1:12"` → `t=65,72` conversion), plus direct
+  `mmssToSeconds` unit tests.
+- Version line bumped to `1.0.0-rc.7` in `schema/README.md` and
+  `eval/src/commonplace_eval/scorecard.py` (`SCHEMA_VERSION`).
+
+### Unchanged (deliberately)
+- **The eval gold/pred contract and every eval fixture.** No gold/pred fixture carried
+  an evidence timestamp, so `validate_extractor_output` needed no fixture migration and
+  the Python schema-gate tests pass unchanged against the new schema.
+
 ## [1.0.0-rc.6] — 2026-07-08
 
 Provenance-first fix to the **model-facing** `extractor-output.schema.json`:

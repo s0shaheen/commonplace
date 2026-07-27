@@ -70,7 +70,8 @@ export function copyStatics() {
     ["src/popup.html", "popup.html"],
     ["src/library.html", "library.html"],
     ["src/offscreen.html", "offscreen.html"],
-    ["prompts/extract_v1.md", "prompts/extract_v1.md"],
+    ["prompts/extract_v1.md", "prompts/extract_v1.md"], // kept bundled for rollback
+    ["prompts/extract_v2.md", "prompts/extract_v2.md"], // the shipped extractor prompt
   ];
   for (const [from, to] of copies) {
     copyFileSync(resolve(ROOT, from), resolve(DIST, to));

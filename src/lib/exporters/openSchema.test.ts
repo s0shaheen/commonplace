@@ -3,7 +3,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { toOpenSchemaItem, toOpenSchemaExport, type ExportDeps } from "./openSchema.js";
+import { toOpenSchemaItem, toOpenSchemaExport, mmssToSeconds, type ExportDeps } from "./openSchema.js";
 import type { LibraryRecord } from "../store.js";
 import type { GroundedEntity } from "../grounding.js";
 
@@ -67,7 +67,7 @@ const rec: LibraryRecord = {
         {
           surface: "Kill Bill",
           type: "music_recording",
-          evidence: [{ channel: "VERBAL_AUDIO", assertion_mode: "SHOWN", confidence: 0.9, t_start: 12, t_end: 19 }],
+          evidence: [{ channel: "VERBAL_AUDIO", assertion_mode: "SHOWN", confidence: 0.9, t_start: "1:05", t_end: "1:12" }],
         },
         {
           surface: "Lilia",
@@ -134,9 +134,9 @@ describe("toOpenSchemaItem — maps a LibraryRecord onto the frozen item.schema.
     }
   });
 
-  test("t_start/t_end become a media-fragment selector value", () => {
+  test("MM:SS t_start/t_end parse to a seconds media-fragment selector value", () => {
     const music = findExt(out, (e: any) => e.kind === "named_entity" && e.surface === "Kill Bill");
-    expect(music.evidence[0].selector.value).toBe("t=12,19");
+    expect(music.evidence[0].selector.value).toBe("t=65,72"); // "1:05"→65, "1:12"→72
   });
 
   test("invalid-by-construction guard: nil:false with externalId:null is rejected by the schema", () => {
@@ -371,5 +371,20 @@ describe("toOpenSchemaExport — the bundle wrapper", () => {
     expect(bundle.exportedAt).toBe("2026-07-08T12:00:00Z");
     expect(bundle.items).toHaveLength(1);
     expect(validateItem(bundle.items[0])).toBe(true);
+  });
+});
+
+describe("mmssToSeconds — MM:SS video-time string → seconds (rc.7)", () => {
+  test("parses M:SS and MM:SS", () => {
+    expect(mmssToSeconds("0:12")).toBe(12);
+    expect(mmssToSeconds("1:05")).toBe(65);
+    expect(mmssToSeconds("10:00")).toBe(600);
+    expect(mmssToSeconds("12:34")).toBe(754);
+  });
+  test("returns null for malformed input (tolerant — the selector is then omitted)", () => {
+    expect(mmssToSeconds("12")).toBeNull();
+    expect(mmssToSeconds("1:2")).toBeNull();
+    expect(mmssToSeconds("")).toBeNull();
+    expect(mmssToSeconds("bad")).toBeNull();
   });
 });

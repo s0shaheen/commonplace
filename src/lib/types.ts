@@ -1,5 +1,5 @@
 // Shapes shared across the analysis engine. These mirror the FROZEN contract in
-// `schema/json/extractor-output.schema.json` (v1.0.0-rc.6) EXACTLY — field names are
+// `schema/json/extractor-output.schema.json` (v1.0.0-rc.7) EXACTLY — field names are
 // the schema's, not new inventions. CapturedItem matches the spike's normalizeItem output.
 
 export interface CapturedItem {
@@ -79,8 +79,9 @@ export interface EvidenceOut {
   confidence: number;
   source_role?: string;
   quote?: string;
-  t_start?: number;
-  t_end?: number;
+  // rc.7: MM:SS video-time strings (e.g. "0:12"), the model's native form — not float seconds.
+  t_start?: string;
+  t_end?: string;
 }
 
 export interface MentionOut {
@@ -143,6 +144,9 @@ export interface Analysis {
   model: string;
   promptVersion: string;
   analyzedAt: string;
+  // true when the extraction was truncation-salvaged (a valid prefix, run cut short) — a persisted,
+  // honest partial, never presented as complete. Absent ⇒ a complete extraction.
+  partial?: boolean;
 }
 
 export interface AnalyzedItem extends CapturedItem {
@@ -151,8 +155,11 @@ export interface AnalyzedItem extends CapturedItem {
 
 // Result-object convention (matches the parent codebase) — engine functions never
 // throw for expected failures. Invalid extractor output is `{ok:false, error:"schema_invalid"}`.
+// `partial:true` marks a truncation-salvaged extraction (finishReason MAX_TOKENS / unterminated JSON):
+// the valid prefix was recovered and gated, but the run did not finish — persisted as partial, never
+// presented as complete (honest incompleteness). Absent/false ⇒ a complete extraction.
 export type ExtractorResult =
-  | { ok: true; output: ExtractorOutput }
+  | { ok: true; output: ExtractorOutput; partial?: boolean }
   | { ok: false; error: string };
 
 // Cross-item mention index entry (replaces the old EntityIndexEntry).

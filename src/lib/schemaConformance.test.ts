@@ -12,9 +12,10 @@ addFormats(ajv);
 const validate = ajv.compile(load("extractor-output.schema.json"));
 
 const minimal: ExtractorOutput = { mentions: [], concepts: [], facets: [], claims: [], structured: [] };
+// rc.7: evidence timestamps are MM:SS strings (the model's native video-time form), not float seconds.
 const grounded: ExtractorOutput = {
   mentions: [{ surface: "Kill Bill", type: "music_recording",
-    evidence: [{ channel: "VERBAL_AUDIO", assertion_mode: "SHOWN", confidence: 0.9, t_start: 12, t_end: 19 }] }],
+    evidence: [{ channel: "VERBAL_AUDIO", assertion_mode: "SHOWN", confidence: 0.9, t_start: "0:12", t_end: "0:19" }] }],
   concepts: [], claims: [], structured: [],
   facets: [{ facet: "topic", value: "entertainment",
     evidence: [{ channel: "VISUAL_SCENE", assertion_mode: "INFERRED", confidence: 0.8 }] }],
@@ -22,12 +23,24 @@ const grounded: ExtractorOutput = {
 
 describe("ExtractorOutput conforms to the FROZEN extractor-output.schema.json", () => {
   it("accepts the empty-but-complete output", () => expect(validate(minimal)).toBe(true));
-  it("accepts a typed mention with evidence", () => expect(validate(grounded)).toBe(true));
+  it("accepts a typed mention with MM:SS evidence timestamps", () => expect(validate(grounded)).toBe(true));
   it("rejects a zero-evidence mention (hard gate)", () => {
     expect(validate({ ...minimal, mentions: [{ surface: "x", type: "place", evidence: [] }] })).toBe(false);
   });
   it("rejects the retired 'restaurant' type", () => {
     expect(validate({ ...minimal, mentions: [{ surface: "x", type: "restaurant",
       evidence: [{ channel: "VISUAL_TEXT", assertion_mode: "SHOWN", confidence: 1 }] }] })).toBe(false);
+  });
+  it("rejects a NUMERIC timestamp (rc.7 bump: t_start/t_end are MM:SS strings, not seconds)", () => {
+    const numeric = { mentions: [{ surface: "x", type: "place",
+      evidence: [{ channel: "VISUAL_TEXT", assertion_mode: "SHOWN", confidence: 1, t_start: 12, t_end: 19 }] }],
+      concepts: [], facets: [], claims: [], structured: [] };
+    expect(validate(numeric)).toBe(false);
+  });
+  it("rejects a malformed timestamp string (pattern ^\\d{1,2}:\\d{2}$)", () => {
+    const bad = { mentions: [{ surface: "x", type: "place",
+      evidence: [{ channel: "VISUAL_TEXT", assertion_mode: "SHOWN", confidence: 1, t_start: "12", t_end: "0:19" }] }],
+      concepts: [], facets: [], claims: [], structured: [] };
+    expect(validate(bad)).toBe(false);
   });
 });

@@ -47,3 +47,4 @@ __pycache__/
 
 # promptfoo replay slice — esbuild prebundle of the TS grounding engine (build artifact)
 eval-promptfoo/.bundle/
+.scratch/

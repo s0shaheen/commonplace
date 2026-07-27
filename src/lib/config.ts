@@ -27,7 +27,11 @@ export interface CpConfig {
   localModel: string; // default "qwen3-vl:8b"
   localEndpoint: string; // default "http://localhost:11434"
   managedModel: string; // default "gemini-3.6-flash" (recommended; user-selectable in options)
-  ingestion: "keyframes_vtt" | "native"; // default "keyframes_vtt" — PROVISIONAL (Phase-4 ablation decides)
+  // default "native" (extractor-v2, 2026-07-27): on gemini-3.6-flash native video is ~300 tok/sec
+  // (cents) and gives the model the real audio + full visual stream instead of sampled frames + a
+  // separate VTT — the old 2.5-era cost reason for keyframes_vtt is gone. The LOCAL lane ignores this
+  // and always uses keyframes_vtt (open VLMs are deaf).
+  ingestion: "keyframes_vtt" | "native";
   escalateNative: boolean; // default false — cascade retracted (SPEC §13)
   placesEnabled: boolean; // default false — key not provisioned
   placesKey: string | null; // default null
@@ -94,7 +98,7 @@ export const DEFAULT_CONFIG: CpConfig = {
   localModel: "qwen3-vl:8b",
   localEndpoint: "http://localhost:11434",
   managedModel: "gemini-3.6-flash",
-  ingestion: "keyframes_vtt",
+  ingestion: "native",
   escalateNative: false,
   placesEnabled: false,
   placesKey: null,

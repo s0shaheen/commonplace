@@ -8,7 +8,13 @@
 
 import type { CapturedItem, ExtractorResult } from "./types.js";
 import type { CpConfig } from "./config.js";
-import { buildMediaBody, parseExtractorResponse, type GeminiBody, type MediaPart } from "./geminiClient.js";
+import {
+  buildMediaBody,
+  buildFileDataBody,
+  parseExtractorResponse,
+  type GeminiBody,
+  type MediaPart,
+} from "./geminiClient.js";
 import { buildOllamaBody, parseOllamaResponse } from "./ollamaClient.js";
 import { buildExtractorPrompt } from "./prompts.js";
 
@@ -30,14 +36,19 @@ export interface EngineLane {
 const JSON_HEADERS = { "content-type": "application/json" };
 
 // ── Managed lane: Gemini ──────────────────────────────────────────────────────────
-// keyframes_vtt → N image parts + prompt WITH transcript; native → 1 video inlineData +
-// prompt WITHOUT the transcript inline (the audio is in the video). Key goes in the
-// `x-goog-api-key` HEADER, never the query string (URL keys leak into logs).
+// keyframes_vtt → N image parts (inlineData — small) + prompt WITH transcript; native → the video
+// uploaded through the FILE API and referenced as a `fileData` part + prompt WITHOUT the transcript
+// inline (the audio is in the video). Inline base64 is NOT used for video: it breaks above ~20MB.
+// The upload itself is IO (network + poll-until-ACTIVE), so it is INJECTED as `fileUpload` and owned
+// by the glue; this core stays pure-ish and testable. Key goes in the `x-goog-api-key` HEADER, never
+// the query string (URL keys leak into logs).
 export function createGeminiLane(deps: {
   fetchJson(url: string, init: RequestInit): Promise<unknown>;
   key: string;
   model: string;
   basePrompt: string;
+  /** Upload video bytes via the File API and resolve once the file is ACTIVE. Absent ⇒ no native path. */
+  fileUpload?(bytes: MediaPart, mimeType: string): Promise<{ fileUri: string }>;
 }): EngineLane {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${deps.model}:generateContent`;
   return {
@@ -46,8 +57,13 @@ export function createGeminiLane(deps: {
       let body: GeminiBody;
       if (ingestion === "native") {
         if (!input.videoBytes) return { ok: false, error: "media_fetch_failed" };
+        // No uploader wired ⇒ a typed failure BEFORE any model call — never a silent inline fallback
+        // (which would fail on real videos) and never a burned request.
+        if (!deps.fileUpload) return { ok: false, error: "file_upload_unavailable" };
+        const mimeType = input.videoBytes.mimeType || "video/mp4";
+        const { fileUri } = await deps.fileUpload(input.videoBytes, mimeType);
         const prompt = buildExtractorPrompt(deps.basePrompt, input.item, "");
-        body = buildMediaBody(prompt, [input.videoBytes]);
+        body = buildFileDataBody(prompt, { fileUri, mimeType });
       } else {
         const prompt = buildExtractorPrompt(deps.basePrompt, input.item, input.transcript);
         body = buildMediaBody(prompt, input.keyframes);
@@ -88,15 +104,16 @@ export function createOllamaLane(deps: {
   };
 }
 
-// The ingestion router. `ingestion:"native"` picks native — but only on the managed lane;
-// the local lane always falls back to keyframes_vtt (deaf VLMs). Otherwise keyframes_vtt,
-// except the ONE escalation heuristic: escalateNative && no-subtitles && managed → native.
-// The cascade is RETRACTED — with the default flag off this is always keyframes_vtt.
+// The ingestion router (extractor-v2). The LOCAL lane is ALWAYS keyframes_vtt — open VLMs are deaf,
+// so native (audio-bearing) ingestion is meaningless there, whatever the config says. On the managed
+// lane, `ingestion` decides and now DEFAULTS to native; keyframes_vtt stays available as an explicit
+// escape hatch, with the escalateNative heuristic kept for it (moot under the native default).
+// NOTE: routing to native does not guarantee native RUNS — the lane falls back honestly when the
+// video bytes or the File API uploader are unavailable (typed error, never a silent empty analysis).
 export function routeIngestion(item: CapturedItem, cfg: CpConfig): Ingestion {
-  if (cfg.ingestion === "native") {
-    return cfg.engineLane === "managed" ? "native" : "keyframes_vtt";
-  }
-  if (cfg.escalateNative && !item.hasSubtitles && cfg.engineLane === "managed") return "native";
+  if (cfg.engineLane !== "managed") return "keyframes_vtt";
+  if (cfg.ingestion === "native") return "native";
+  if (cfg.escalateNative && !item.hasSubtitles) return "native";
   return "keyframes_vtt";
 }
 
