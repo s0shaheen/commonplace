@@ -46,6 +46,7 @@ export const esmOptions = {
     offscreen: resolve(ROOT, "src/offscreen.ts"),
     options: resolve(ROOT, "src/options.ts"),
     popup: resolve(ROOT, "src/popup.ts"),
+    library: resolve(ROOT, "src/library.ts"),
   },
 };
 
@@ -67,6 +68,7 @@ export function copyStatics() {
     ["rules.json", "rules.json"],
     ["src/options.html", "options.html"],
     ["src/popup.html", "popup.html"],
+    ["src/library.html", "library.html"],
     ["src/offscreen.html", "offscreen.html"],
     ["prompts/extract_v1.md", "prompts/extract_v1.md"],
   ];

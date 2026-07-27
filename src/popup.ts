@@ -135,6 +135,11 @@ function main(): void {
   $("btnPause").addEventListener("click", () => command("sync_pause"));
   $("btnStop").addEventListener("click", () => command("sync_stop"));
 
+  // Open the (minimal) library search surface in its own tab — the content-search face of the product.
+  $("btnLibrary").addEventListener("click", () => {
+    void chrome.tabs.create({ url: chrome.runtime.getURL("library.html") });
+  });
+
   $("btnSettings").addEventListener("click", () => chrome.runtime.openOptionsPage());
   $("btnExport").addEventListener("click", () => {
     // The existing export path: the SW spins up the offscreen doc and downloads commonplace-export.json.
