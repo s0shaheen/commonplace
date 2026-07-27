@@ -28,9 +28,36 @@ The cheapest experiment is the one you don't run. Four dimensions collapse immed
 | **Service tier** (standard/flex/batch/priority) | **Not an experimental variable at all** | Same model, same weights, same output distribution. It changes only price and latency. Testing it for *quality* is a category error. Decided on cost: flex for production, standard for experiments. |
 | **gemini-3.5-flash** | **Eliminated** | Already measured, strictly dominated: 3.8× flash-lite's cost, fewer elements, worst VISUAL_TEXT of four arms, slowest. No further spend. |
 | **Keyframes+VTT ingestion (managed lane)** | **Eliminated** | Native video is now both cheaper and richer on 3.x. Keyframes survives only for the deaf local/Ollama lane, where it isn't a choice. |
-| **Qwen3-Omni as a drop-in** | **Eliminated (availability)** | Verified 2026-07-27: DeepInfra serves Qwen3-VL 30B/235B but **not** Qwen3-Omni. Qwen3-VL has no audio. So open-weight cannot be a one-shot swap — it can only enter as the *perception* stage of a split, paired with separate ASR. |
+| **Qwen3-Omni as a drop-in** | **NOT eliminated — corrected 2026-07-27** | An earlier version of this doc pruned it on DeepInfra's catalog (which has only the deaf Qwen3-VL). **Fireworks serves `qwen3-omni-30b-a3b-instruct` with video+audio+text in one request**, so open-weight *is* a legitimate one-shot arm. It carries operational constraints that change how it must be tested — see §1a. |
 
 **1,728 → 24 candidate configurations, for $0.**
+
+### 1a. The open-weight arm is real, but it is not a model-string swap
+
+Verified 2026-07-27 against Fireworks' docs and API:
+
+- **Availability:** yes — `qwen3-omni-30b-a3b-instruct` takes video, audio and text in a single
+  request (the only open model in reach that *hears*; Qwen3-VL and Molmo2 are video-only).
+- **Not serverless.** Video/audio models require a **dedicated deployment**. Confirmed empirically:
+  our key lists 6 serverless models, none of them Omni.
+- **Cost model changes shape.** Dedicated = **$7/GPU-hour (H100)**, not per-token. So its unit cost
+  is *throughput-dependent and unknown until measured*: at ~10 s/video single-stream it is
+  ≈$0.019/video ≈ **$97 per 5k library — worse than flash-lite's $36**; with ~8-way batching it
+  could be ≈**$12 per 5k — better**. Unlike the API arms, whose price is a lookup, this one's
+  economics are an experimental result. Measure throughput, don't assume it.
+- **Two limits collide with our corpus.** Payload must be **<10 MB base64** and video **≤~60 s
+  recommended**. Our corpus is median 42 s / mean 65 s, and 4 of the 6 pilot videos exceeded 18 MB
+  raw. So videos must be downscaled/compressed to be testable at all.
+
+**That compression is a confound, and it must be controlled.** Comparing Gemini-on-full-video with
+Qwen-on-compressed-video measures compression *and* model at once. The fix is a paired control:
+run **flash-lite on the identical compressed videos** alongside the Qwen arm. The Qwen-vs-control
+delta is then a clean model effect, and the control-vs-baseline delta separately prices what
+compression itself costs us. One extra arm buys an interpretable result.
+
+**Placement:** Phase 2, not Phase 1 — it needs a deployment spun up, a compression pipeline, and
+its own control arm. Running it during screening would spend setup cost before we know whether the
+factors it interacts with even matter.
 
 ---
 
