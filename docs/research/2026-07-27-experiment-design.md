@@ -108,7 +108,16 @@ comparisons. Everything else is eliminated and never re-tested.
 ### Phase 2 — Optimize: small factorial over survivors only · full 60-video gold set
 
 Only the factors that actually moved the needle get combined. Realistically that's 2–3 factors →
-**4–8 cells × 60 videos ≈ 240–480 calls (~$6–12)**. This is also where the **open-weight arm** enters
+**4–8 cells × 60 videos ≈ 240–480 calls (~$6–12)**. Two reference arms join here:
+
+- **Twelve Labs Pegasus 1.5 — the quality ceiling, at $0.** The video-understanding specialist,
+  run on the same paired videos via their free tier (600 cumulative minutes; our 60-item set is
+  ~65 min). It answers the question no internal comparison can: *how much quality are we giving up
+  by shipping a general-purpose model at ~1/9th the price?* Early n=1 signal is encouraging —
+  flash-lite found 8 venues on the Chicago steakhouse video where Pegasus found 6 unique
+  (`docs/research/2026-07-27-twelve-labs-assessment.md`). Not adopted as the pipeline: at $158 per
+  5k library (Analyze alone) it is 4–9× our price point.
+- **The open-weight arm** enters
 (§1a): `qwen3-omni-30b-a3b-instruct` as a one-shot arm, run together with its
 **compression-matched flash-lite control** so the model effect is separable from the compression
 the payload limits force. Its cost is recorded as a *measured* throughput figure ($7/GPU-hour ÷
